@@ -16,6 +16,9 @@ bool IsInitialized();
 void ResetRumble();
 void Shutdown();
 void SetAdapterCallback(std::function<void(void)> func);
+// Subspace: scan for and read the adapter even though no port is set to it in the active config
+// (a rollback session forces every port to a standard controller). Call before Init().
+void SetWantedOverride(bool wanted);
 
 // Buttons have PAD_GET_ORIGIN set on new connection
 // Netplay and CSIDevice_GCAdapter make use of this.

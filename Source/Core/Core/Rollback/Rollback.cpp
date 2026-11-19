@@ -39,6 +39,7 @@
 #include "Core/Orca/Status.h"
 #include "Core/Orca/UX/OrbCombo.h"
 #include "Core/Orca/UX/Controllers.h"
+#include "Core/Orca/UX/ControllerSource.h"
 #include "Core/Orca/UX/OverlayKey.h"
 #include "Core/PowerPC/JitCommon/JitBase.h"
 #include "Core/PowerPC/JitInterface.h"
@@ -651,6 +652,13 @@ void OnFrameBoundary(const Core::CPUThreadGuard& guard)
             *from_app, first_run, live || InputCommon::VirtualPadOnly()));
       if (!lead)
         return Orca::Net::EncodePad(Orca::UX::NeutralPad());
+      // The player's own GameCube adapter reads with or without focus, as it does offline.
+      if (const auto adapter = Orca::UX::OwnAdapterPad())
+      {
+        if (!IsResimulating())
+          Orca::Activity::NoteLocalPad(Orca::Activity::PAD_DOLPHIN, *adapter);
+        return Orca::Net::EncodePad(filter(*adapter, first_run, true));
+      }
       g_controller_interface.SetCurrentInputChannel(ciface::InputChannel::SerialInterface);
       g_controller_interface.UpdateInput();
       const GCPadStatus pad = Pad::GetStatus(0);
@@ -672,6 +680,11 @@ void OnFrameBoundary(const Core::CPUThreadGuard& guard)
       if (const auto from_app = Orca::Events::LocalPad(false))
       {
         Orca::UX::LocalPadWaiting(from_app->button);
+        return;
+      }
+      if (const auto adapter = Orca::UX::OwnAdapterPad())
+      {
+        Orca::UX::LocalPadWaiting(adapter->button);
         return;
       }
       g_controller_interface.SetCurrentInputChannel(ciface::InputChannel::SerialInterface);

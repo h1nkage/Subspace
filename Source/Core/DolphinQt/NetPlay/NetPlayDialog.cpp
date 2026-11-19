@@ -57,6 +57,7 @@
 #include "Core/System.h"
 
 #include "DolphinQt/NetPlay/ChunkedProgressDialog.h"
+#include "InputCommon/GCAdapter.h"
 #include "DolphinQt/NetPlay/ClickBlurLabel.h"
 #include "DolphinQt/NetPlay/GameDigestDialog.h"
 #include "DolphinQt/NetPlay/GameListDialog.h"
@@ -1520,6 +1521,7 @@ void NetPlayDialog::StartOrcaEngine(const NetPlay::OrcaLaunch& launch)
     m_orca_process->deleteLater();
     m_orca_process = nullptr;
     m_orca_log.reset();
+    GCAdapter::Init();  // the game gave the adapter back
   });
   connect(process, &QProcess::errorOccurred, this, [this, process](QProcess::ProcessError error) {
     if (process != m_orca_process || error != QProcess::FailedToStart)
@@ -1527,6 +1529,8 @@ void NetPlayDialog::StartOrcaEngine(const NetPlay::OrcaLaunch& launch)
     DisplayMessage(tr("Rollback: the YG engine failed to start."), "red");
   });
 
+  // Only one program can hold a GameCube adapter: let go of it so the game can read it.
+  GCAdapter::Shutdown();
   m_orca_process->start(engine, arguments);
   DisplayMessage(launch.joining ? tr("Your game is starting and will join the host's.") :
                                   tr("Your game is starting; everyone else joins once it's up."),
@@ -1551,4 +1555,5 @@ void NetPlayDialog::StopOrcaEngine()
   }
   process->deleteLater();
   m_orca_log.reset();
+  GCAdapter::Init();
 }

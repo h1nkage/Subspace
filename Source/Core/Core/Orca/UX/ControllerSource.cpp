@@ -22,12 +22,16 @@
 #include "Common/HttpRequest.h"
 #include "Common/Logging/Log.h"
 #include "Common/Network.h"
+#include "Common/Config/Config.h"
+#include "Core/Config/MainSettings.h"
+#include "Core/HW/SI/SI_Device.h"
 #include "Core/Orca/Bridge.h"
 #include "Core/Orca/Profile.h"
 #include "Core/Orca/Status.h"
 #include "Core/Orca/Session/PadCodec.h"
 #include "Core/Orca/UX/Controllers.h"
 #include "InputCommon/ControlReference/ControlReference.h"
+#include "InputCommon/GCAdapter.h"
 #include "InputCommon/LocalInput.h"
 
 namespace Orca::UX
@@ -694,6 +698,65 @@ void SetLocalPadCount(int n)
       s_local_devices[ordinal].store(NO_DEVICE, std::memory_order_relaxed);
       s_assignment_known[ordinal].store(false, std::memory_order_relaxed);
     }
+}
+
+u32 OwnAdapterPorts()
+{
+  if (Orca::Bridge::Enabled() || !Env("SUBSPACE_BRIDGE").empty())
+    return 0;
+  u32 ports = 0;
+  for (int i = 0; i < 4; ++i)
+  {
+    if (Config::GetBase(Config::GetInfoForSIDevice(i)) ==
+        SerialInterface::SIDevices::SIDEVICE_WIIU_ADAPTER)
+    {
+      ports |= 1u << i;
+    }
+  }
+  return ports;
+}
+
+std::optional<GCPadStatus> OwnAdapterPad()
+{
+  static const u32 ports = OwnAdapterPorts();
+  if (ports == 0)
+    return std::nullopt;
+  // Each port's calibrated neutral position: the adapter hands it over once, on the first read
+  // after a controller is plugged in (marked PAD_GET_ORIGIN).
+  static std::array<std::array<u8, 6>, 4> origins = [] {
+    std::array<std::array<u8, 6>, 4> o;
+    o.fill({128, 128, 128, 128, 0, 0});
+    return o;
+  }();
+  int chan = -1;
+  for (int i = 0; i < 4 && chan < 0; ++i)
+  {
+    if ((ports & (1u << i)) && GCAdapter::DeviceConnected(i))
+      chan = i;
+  }
+  if (chan < 0)
+    return NeutralPad();
+  GCPadStatus raw = GCAdapter::Input(chan);
+  if (raw.button & PAD_GET_ORIGIN)
+  {
+    origins[chan] = {raw.stickX,    raw.stickY,      raw.substickX,
+                     raw.substickY, raw.triggerLeft, raw.triggerRight};
+    NOTICE_LOG_FMT(CONTROLLERINTERFACE, "Subspace: GameCube adapter port {} in use", chan + 1);
+  }
+  AdapterPort port;
+  port.port = chan;
+  port.connected = true;
+  port.buttons = static_cast<u16>(
+      ((raw.button & PAD_BUTTON_A) ? 0x01 : 0) | ((raw.button & PAD_BUTTON_B) ? 0x02 : 0) |
+      ((raw.button & PAD_BUTTON_X) ? 0x04 : 0) | ((raw.button & PAD_BUTTON_Y) ? 0x08 : 0) |
+      ((raw.button & PAD_BUTTON_LEFT) ? 0x10 : 0) | ((raw.button & PAD_BUTTON_RIGHT) ? 0x20 : 0) |
+      ((raw.button & PAD_BUTTON_DOWN) ? 0x40 : 0) | ((raw.button & PAD_BUTTON_UP) ? 0x80 : 0) |
+      ((raw.button & PAD_BUTTON_START) ? 0x100 : 0) | ((raw.button & PAD_TRIGGER_Z) ? 0x200 : 0) |
+      ((raw.button & PAD_TRIGGER_R) ? 0x400 : 0) | ((raw.button & PAD_TRIGGER_L) ? 0x800 : 0));
+  port.axes = {raw.stickX, raw.stickY, raw.substickX, raw.substickY};
+  port.triggers = {raw.triggerLeft, raw.triggerRight};
+  port.origin = origins[chan];
+  return MapAdapterPort(port);
 }
 
 std::optional<GCPadStatus> LocalPad(bool for_frame)

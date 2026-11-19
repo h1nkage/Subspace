@@ -168,6 +168,7 @@ static u64 s_last_init = 0;
 static std::optional<Config::ConfigChangedCallbackID> s_config_callback_id = std::nullopt;
 
 static std::atomic_bool s_is_adapter_wanted = false;
+static std::atomic_bool s_wanted_override = false;
 static std::array<std::atomic_bool, SerialInterface::MAX_SI_CHANNELS> s_config_rumble_enabled{};
 
 static std::atomic<double> s_adapter_poll_rate{};
@@ -518,7 +519,7 @@ static void StopScanThread()
 
 static void RefreshConfig()
 {
-  bool is_adapter_wanted = false;
+  bool is_adapter_wanted = s_wanted_override.load(std::memory_order_relaxed);
 
   for (int i = 0; i < SerialInterface::MAX_SI_CHANNELS; ++i)
   {
@@ -534,6 +535,11 @@ static void RefreshConfig()
     StartScanThread();
   else
     StopScanThread();
+}
+
+void SetWantedOverride(bool wanted)
+{
+  s_wanted_override.store(wanted, std::memory_order_relaxed);
 }
 
 void Init()

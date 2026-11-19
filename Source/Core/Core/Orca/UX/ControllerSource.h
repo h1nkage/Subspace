@@ -27,6 +27,16 @@ namespace Orca::UX
 // input-age stats.
 std::optional<GCPadStatus> LocalPad(bool for_frame = false);
 std::optional<GCPadStatus> LocalPad(int ordinal, bool for_frame);
+// The player's own GameCube adapter, for games started from the Subspace lobby. A session forces
+// every port to a standard controller (Profile.cpp), so a player who set a port to "GameCube
+// Adapter for Wii U" would otherwise have no input. Bitmask of the ports set to the adapter in the
+// player's own Dolphin.ini (the base config layer); 0 under the app, whose helper reads it.
+u32 OwnAdapterPorts();
+// The local pad from that adapter: the first such port with a controller in it (else the first
+// such port), centred on the controller's origin as the app's adapter path does. nullopt when no
+// port is set to the adapter. CPU thread only.
+std::optional<GCPadStatus> OwnAdapterPad();
+
 // CPU thread: keep explicit assignment mode for the lifetime of a multi-seat match.
 void SetLocalPadCount(int n);
 

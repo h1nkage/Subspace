@@ -41,6 +41,7 @@
 #include "Core/IOS/STM/STM.h"
 #include "Core/Orca/Profile.h"
 #include "Core/Orca/Sandbox.h"
+#include "Core/Orca/UX/ControllerSource.h"
 #include "Core/System.h"
 #include "Core/WiiRoot.h"
 
@@ -205,9 +206,17 @@ void InitControllers(const WindowSystemInfo& wsi)
                                       "mappings intended for the default device may not work.");
   }
 
-  // Orca: in a session the app's helper owns the GameCube adapter (Orca/Sandbox.h).
-  if (Orca::Sandbox::AdapterAllowed(Orca::SessionActive()))
+  // Orca: in a session the app's helper owns the GameCube adapter (Orca/Sandbox.h). Without the
+  // app (the Subspace lobby's games), the engine reads the player's own adapter itself.
+  if (Orca::SessionActive() && Orca::UX::OwnAdapterPorts() != 0)
+  {
+    GCAdapter::SetWantedOverride(true);
     GCAdapter::Init();
+  }
+  else if (Orca::Sandbox::AdapterAllowed(Orca::SessionActive()))
+  {
+    GCAdapter::Init();
+  }
   Pad::Initialize();
   Pad::InitializeGBA();
   Keyboard::Initialize();
