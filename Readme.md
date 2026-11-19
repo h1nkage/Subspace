@@ -1,19 +1,18 @@
-# Subspace - GameCube and Wii rollback netplay
+# Subspace - Brawl rollback for Dolphin.
 
 > Players see the name Subspace. The code, its files and its protocols keep the codename Orca
 > (`Core/Orca`, `Sys/Orca/`, `orca <verb>` lines, the `ORCA_*` variables), and so do ORCA.md and
 > ORCA_ARCHITECTURE.md. Packages are `Subspace.app`, `subspace.exe` and `subspace/subspace`; the
 > Mac program stays `Contents/MacOS/Orca`. Tags are `subspace-<version>`.
 
-Subspace is a rollback netcode core for online play of Super Smash Bros. Brawl and Project+. No
-hosted service is built in: play online through Dolphin's NetPlay window
-([docs/DOLPHIN-NETPLAY.md](docs/DOLPHIN-NETPLAY.md)), or point `ORCA_SITE` at a room service of
-your own. It is a fork of the
+Subspace is a rollback netcode core for online play of Super Smash Bros. Brawl Rev 1 and Rev 2. No
+hosted service is built in: play online through Dolphin's NetPlay window, or point
+`ORCA_SITE` at a room service of your own. It is a fork of the
 [Dolphin](https://github.com/dolphin-emu/dolphin) emulator: an exact whole-machine snapshot at each
 frame boundary, controller input injected at the SI device, and re-run frames that skip host
 rendering, with per-game profiles.
 
-- **Play:** build it with Dolphin's NetPlay window ([docs/DOLPHIN-NETPLAY.md](docs/DOLPHIN-NETPLAY.md)).
+- **Play:** build it, then host or join through Dolphin's NetPlay window.
   Bring your own disc image; none are included or distributed here.
 - **How it works:** [ORCA_ARCHITECTURE.md](ORCA_ARCHITECTURE.md) explains the rollback design and how
   it compares with Slippi and Brawlback. [ORCA.md](ORCA.md) has the engineering detail: building,

@@ -14,7 +14,7 @@ Download and extract the whole archive for your machine. Keep the executable and
 files together.
 
 There are no hosted downloads: build Subspace yourself ([ORCA.md](../ORCA.md#building), or
-[DOLPHIN-NETPLAY.md](DOLPHIN-NETPLAY.md#building-windows) on Windows). The Mac build is for Apple
+`build-netplay.bat` on Windows). The Mac build is for Apple
 Silicon; it is not an Intel Mac build.
 
 ## First run and your disc

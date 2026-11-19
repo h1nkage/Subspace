@@ -9,8 +9,7 @@
 > `Orca/Orca.exe` and `Orca/orca`. Tags are `subspace-<version>`.
 
 > **No hosted service is built in.** Online play needs a room service: Dolphin's NetPlay window
-> serves one on loopback ([docs/DOLPHIN-NETPLAY.md](docs/DOLPHIN-NETPLAY.md)), or `ORCA_SITE` names
-> another. Where this document describes "the service" (tickets, matchmaking, ranked results, the
+> serves one on loopback, or `ORCA_SITE` names another. Where this document describes "the service" (tickets, matchmaking, ranked results, the
 > keyframe store, watch links) or "the desktop app" (the launcher and its bridge), that is the
 > protocol Orca speaks; nothing ships that answers it by default. `https://example.invalid` stands in
 > for the service's address in examples.
