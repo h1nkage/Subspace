@@ -6,7 +6,7 @@
   python3 Tools/orca/test_compat_key_template.py        (standard library only)
 
 The shared vectors (mods/compat-key-vectors.json) hold keys a real Orca logged for the TEST packs;
-YouGame's TS port (web/src/lib/orca-compat-keys.ts) runs the same file. When this checkout's key code
+the service's TS port (web/src/lib/orca-compat-keys.ts) runs the same file. When this checkout's key code
 no longer has a known fingerprint, the template refuses, and so does this test: update the tool,
 the TS port and the vectors together.
 """

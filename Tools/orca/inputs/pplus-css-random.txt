@@ -10,9 +10,9 @@
 #     its token down on RANDOM, B takes the token up, down 7 and right 24 onto RANDOM again, A puts
 #     it there, Start locks Random in; port 2's token is still down on RANDOM from game 1, and its
 #     Start locks that in: the stage select at once; both agree on Battlefield.
-# Run with ORCA_TEST_QUEUE=ranked:solo ORCA_UX_TEST_NAMES=ada,bo YG_RESULTS=1
+# Run with ORCA_TEST_QUEUE=ranked:solo ORCA_UX_TEST_NAMES=ada,bo ORCA_RESULTS=1
 # ORCA_TEST_QUEUE_PICK=<the solo character select's frame + 300>:41:0:0.5:0.5:1532, e.g. the sync
-# test from the main menu on (YG_SYNCTEST=7 YG_SYNCTEST_FROM=200).
+# test from the main menu on (ORCA_SYNCTEST=7 ORCA_SYNCTEST_FROM=200).
 @scBoot mash 30 99999 1 40 A
 # PLAY ONLINE, With Anyone, Ranked (one below Casual).
 @muMenuMain:1 120 123 1 DOWN

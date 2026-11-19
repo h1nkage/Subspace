@@ -38,16 +38,16 @@ public:
   {
     Save("ORCA_SESSION", &m_session);
     Save("ORCA_TEST_DEV_GAME", &m_dev_game);
-    Save("YOUGAME_BRIDGE", &m_bridge);
+    Save("SUBSPACE_BRIDGE", &m_bridge);
     SetEnv("ORCA_SESSION", "1");
     SetEnv("ORCA_TEST_DEV_GAME", dev_game);
-    SetEnv("YOUGAME_BRIDGE", nullptr);
+    SetEnv("SUBSPACE_BRIDGE", nullptr);
   }
   ~SessionEnv()
   {
     SetEnv("ORCA_SESSION", m_session ? m_session->c_str() : nullptr);
     SetEnv("ORCA_TEST_DEV_GAME", m_dev_game ? m_dev_game->c_str() : nullptr);
-    SetEnv("YOUGAME_BRIDGE", m_bridge ? m_bridge->c_str() : nullptr);
+    SetEnv("SUBSPACE_BRIDGE", m_bridge ? m_bridge->c_str() : nullptr);
   }
   SessionEnv(const SessionEnv&) = delete;
   SessionEnv& operator=(const SessionEnv&) = delete;

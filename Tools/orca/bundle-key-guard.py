@@ -12,11 +12,11 @@ script (on the PC, outside this repo), which has no `strings` or `grep`:
   2. <build-dir>/CMakeCache.txt says ORCA_BUNDLE_TRUST_TEST_KEY:BOOL=OFF (configure with
      -DORCA_BUNDLE_TRUST_TEST_KEY=OFF -DORCA_BUNDLE_PUBLIC_KEY=<key or empty> on every run, so an
      older cache can't keep it on).
-  3. <program> (e.g. Binaries\\Release\\yg-baiji.exe) doesn't hold the TEST key's text, and holds the
+  3. <program> (e.g. Binaries\\Release\\subspace.exe) doesn't hold the TEST key's text, and holds the
      pinned key's when one is set (Bundle.cpp keeps both as ASCII hex).
 
 The STAGING flat-bundle key (public half below) is refused the same way, as ORCA_BUNDLE_PUBLIC_KEY
-and in the program, unless ORCA_STAGING_BUILD=1 marks a staging build (YouGame's staging scripts
+and in the program, unless ORCA_STAGING_BUILD=1 marks a staging build (The service's staging scripts
 set it); ORCA_STAGING_BUILD is 1, 0 or unset.
 
 Exit 0 when all hold, 1 with the reason otherwise. Prints no key.

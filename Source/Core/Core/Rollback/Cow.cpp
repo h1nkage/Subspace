@@ -43,15 +43,15 @@ constexpr std::size_t RESERVE_PAGES = 512;
 // Silicon), and games write mostly the same pages every frame. So a recently written page stays
 // writable and each snapshot copies it up front. A page's heat is how many more snapshots it stays
 // hot: set on a fault, raised to the max while its bytes keep changing, and counting down while
-// they don't. At zero it is protected again. YG_COW_FAULT_HEAT and YG_COW_HEAT (0-255) override
+// they don't. At zero it is protected again. ORCA_COW_FAULT_HEAT and ORCA_COW_HEAT (0-255) override
 // the defaults for tuning.
 int EnvHeat(const char* name, int fallback)
 {
   const char* value = std::getenv(name);
   return value && *value ? std::clamp(std::atoi(value), 0, 255) : fallback;
 }
-const u8 HEAT_AFTER_FAULT = static_cast<u8>(EnvHeat("YG_COW_FAULT_HEAT", 64));
-const u8 HEAT_WHILE_CHANGING = static_cast<u8>(EnvHeat("YG_COW_HEAT", 255));
+const u8 HEAT_AFTER_FAULT = static_cast<u8>(EnvHeat("ORCA_COW_FAULT_HEAT", 64));
+const u8 HEAT_WHILE_CHANGING = static_cast<u8>(EnvHeat("ORCA_COW_HEAT", 255));
 
 struct ViewInfo
 {

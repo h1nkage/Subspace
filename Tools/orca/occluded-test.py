@@ -18,7 +18,7 @@
 # two Orca processes.
 # ORCA_TEST_KEEP=1 keeps the logs.
 #
-# --overlay (with --friend): instead of hiding the window, open and close the YouGame overlay
+# --overlay (with --friend): instead of hiding the window, open and close the app overlay
 # mid-fight on the embedded side, sending the same lines the page does. Nothing may pause: the
 # embedded side keeps its pace with neutral input, and the friend sees no stalls and no more
 # hitches than with the overlay shut.
@@ -86,7 +86,7 @@ def session_env(name, extra):
         "ORCA_TEST_DEV_GAME": "orca-present-test",
         "ORCA_TEST_KEYFRAME_DIR": os.path.join(WORK, "kf"),
         "ORCA_NAME": name,
-        "YG_INPUT": INPUT,
+        "ORCA_INPUT": INPUT,
     }
     env.update(extra)
     return env
@@ -285,7 +285,7 @@ def run():
                     [BIN, "-p", "macos", "-v", "Metal"] + common_args("Host"))
     procs.append(host)
     host.expect("orca caps", 60)
-    host.orca("caps join leave stats yougame" if OVERLAY else "caps join leave stats")
+    host.orca("caps join leave stats orb" if OVERLAY else "caps join leave stats")
     host.expect("orca state playing", 90)
     players = [host]
 
@@ -321,7 +321,7 @@ def run():
         time.sleep(0.5)
 
     if OVERLAY:
-        # The YouGame button where the page's stands (OrcaEmbed syncOrb), the overlay shut.
+        # The app button where the page's stands (OrcaEmbed syncOrb), the overlay shut.
         host.orca("orb 32 32 80 0 0 0")
         phase("visible", players)
         # Open: the menu beside the game takes the controls; the button goes.

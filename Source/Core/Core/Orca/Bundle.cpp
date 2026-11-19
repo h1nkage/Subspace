@@ -390,14 +390,14 @@ static std::optional<FlatBundle> LoadFlatBundleImpl(const std::string& dir_in,
     return fail("no mod.json");
 
   // mod.sig, when there is one, is checked first, by a key this Orca trusts, before parsing
-  // mod.json. The app's bundles (a listing) may come without one: YouGame's download checked their
+  // mod.json. The app's bundles (a listing) may come without one: The service's download checked their
   // files. Without a listing it is required. Local packs read unsigned mod.json by design.
   std::string why;
   std::optional<std::pair<PublicKey, Signature>> signature;
   if (local)
   {
     if (present.contains(std::string(FLAT_SIGNATURE)))
-      return fail("--pack takes unsigned local packs; open signed community packs through YouGame");
+      return fail("--pack takes unsigned local packs; open signed community packs through the desktop app");
   }
   else if (!present.contains(std::string(FLAT_SIGNATURE)))
   {
@@ -570,8 +570,8 @@ std::string FlatBundleDir(const std::string* executable_path)
     }
     else
     {
-      // A YouGame listing's slug (desktop orca-policy.ts SLUG_RE).
-      const std::string slug = GetEnv("YOUGAME_GAME");
+      // A service listing's slug (desktop orca-policy.ts SLUG_RE).
+      const std::string slug = GetEnv("SUBSPACE_GAME");
       if (slug.empty() || slug.size() > 80 || !std::ranges::all_of(slug, [](char c) {
             return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-';
           }))
@@ -614,7 +614,7 @@ static void ResolveBundleWithJail(const std::string* executable_path,
     ERROR_LOG_FMT(BOOT, "Orca bundle: {} refused: {}. The session is refused.", dir, why);
     // What the player reads (orca error): no folder path, which names their home folder; the log
     // line above keeps it.
-    resolution.error = fmt::format("YG Dolphin refused this game's pack: {}", why);
+    resolution.error = fmt::format("Subspace refused this game's pack: {}", why);
     decide(BundleKind::Refused);
   };
   if (dir.empty())
@@ -631,7 +631,7 @@ static void ResolveBundleWithJail(const std::string* executable_path,
                             PathToString(folder.filename())));
   };
   if (local && File::Exists(dir + std::string(FLAT_SIGNATURE)))
-    return refuse("--pack takes unsigned local packs; open signed community packs through YouGame");
+    return refuse("--pack takes unsigned local packs; open signed community packs through the desktop app");
   // Mods phase 1: a run folder the app wrote with tree.json (checked by LoadModProfile at boot).
   if (explicit_dir && File::Exists(dir + "tree.json"))
   {
@@ -651,11 +651,11 @@ static void ResolveBundleWithJail(const std::string* executable_path,
     return decide(BundleKind::None);
   }
   if (!local && !jailed)
-    return refuse("this pack requires the YouGame app's sandbox; open it through YouGame");
+    return refuse("this pack requires the desktop app's sandbox; open it through the desktop app");
   if (!SessionActive())
     return decide(BundleKind::None);
-  // The app's bundle (YOUGAME_GAME set) may come without mod.sig, and needs no key then.
-  const std::string listing = GetEnv("YOUGAME_GAME");
+  // The app's bundle (SUBSPACE_GAME set) may come without mod.sig, and needs no key then.
+  const std::string listing = GetEnv("SUBSPACE_GAME");
   if (!local && TrustedKeys().empty() &&
       (listing.empty() || File::Exists(dir + std::string(FLAT_SIGNATURE))))
   {
@@ -697,7 +697,7 @@ static void ResolveBundleWithJail(const std::string* executable_path,
                  bundle->tree.hash,
                  bundle->sd_image_hash.empty() ? "none" : bundle->sd_image_hash,
                  bundle->signer ? "signed by " + KeyHex(*bundle->signer) :
-                                  std::string("unsigned (YouGame download)"),
+                                  std::string("unsigned (service download)"),
                  bundle->signer && IsTestKey(*bundle->signer) ?
                      " (the TEST key: not for a release)" :
                      "",

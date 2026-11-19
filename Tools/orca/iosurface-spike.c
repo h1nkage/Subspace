@@ -1,5 +1,5 @@
 // iosurface-spike: measures what option (b) of ORCA.md "Embedding" would cost on macOS: Orca
-// rendering into IOSurfaces that the YouGame app shows in its own view. Two processes, as the app
+// rendering into IOSurfaces that the desktop app shows in its own view. Two processes, as the app
 // (consumer) and Orca (producer): the consumer checks in a bootstrap name (Chromium's rendezvous
 // does the same), the producer looks it up, sends three 1920x1080 BGRA IOSurfaces as mach ports,
 // then 600 "frame k is in surface i" messages at 60 Hz, each with a pixel it wrote into the surface.
@@ -137,7 +137,7 @@ int main(int argc, char** argv)
     return Producer(argv[2]);
 
   char name[128];
-  snprintf(name, sizeof name, "co.yougame.orca-spike.%d", getpid());
+  snprintf(name, sizeof name, "org.subspace.orca-spike.%d", getpid());
   mach_port_t port;
   const uint64_t c0 = mach_absolute_time();
   if (bootstrap_check_in(bootstrap_port, name, &port) != KERN_SUCCESS)

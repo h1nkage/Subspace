@@ -1,7 +1,7 @@
 # bf-cpu-dropin-live.txt in Project+ (ORCA_PROFILE=PPLUS32; 15 frames a panel). With
 # ORCA_UX_TEST_NAMES=ada,bo ORCA_UX_TEST_PLUG_AT=634 ORCA_UX_TEST_PADS_FOLLOW_PLUGS=1 the CPUs are
 # cleared at 634, port 2's panel is the friend's at 639, and the fight at 889 has two players.
-# YG_EXIT_AFTER=1150.
+# ORCA_EXIT_AFTER=1150.
 @scBoot mash 30 99999 1 40 A
 @muMenuMain:1 120 123 1 A
 @muMenuMain:1 170 173 1 A

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# dropin-delay.py: the input delay around a drop-in, over a real YouGame room: two Orcas on this
+# dropin-delay.py: the input delay around a drop-in, over a real online room: two Orcas on this
 # machine, steered with the app's stdin commands as in dropin-commands.py, headless and muted.
 #
 #   Tools/orca/dropin-delay.py <dolphin-emu-nogui> <disc> [--pplus <launcher.dol>]
@@ -95,8 +95,8 @@ class Orca:
             "ORCA_TEST_DEV_GAME": "orca-dropin-test",
             "ORCA_TEST_KEYFRAME_DIR": os.path.join(WORK, "kf"),
             "ORCA_NAME": name,
-            "YG_INPUT": INPUT,
-            "YG_SCENES": "1",
+            "ORCA_INPUT": INPUT,
+            "ORCA_SCENES": "1",
         }
         if a.pplus:
             env["ORCA_PROFILE"] = "PPLUS32"

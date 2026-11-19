@@ -12,9 +12,9 @@
 #     takes the token up and stays held 140 frames with the token in the hand (no back out), A
 #     puts it down where the hand is, Start locks in: the stage select at once, no ready step.
 # Game 2's stage select: port 1 strikes two stages with X, port 2's pick runs out.
-# Run with ORCA_TEST_QUEUE=ranked:solo ORCA_UX_TEST_NAMES=ada,bo YG_RESULTS=1
+# Run with ORCA_TEST_QUEUE=ranked:solo ORCA_UX_TEST_NAMES=ada,bo ORCA_RESULTS=1
 # ORCA_TEST_QUEUE_PICK=<the solo character select's frame + 300>:43:2:-7.4:7.7:1532, e.g. the sync
-# test from the main menu on (YG_SYNCTEST=7 YG_SYNCTEST_FROM=200).
+# test from the main menu on (ORCA_SYNCTEST=7 ORCA_SYNCTEST_FROM=200).
 @scBoot mash 30 99999 1 40 A
 # PLAY ONLINE, With Anyone, Ranked (one below Casual).
 @muMenuMain:1 120 123 1 DOWN

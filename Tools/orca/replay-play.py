@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-# replay-play.py: plays one replay stream (a .ygr file, or a ws:// watch URL) in a headless Orca and
+# replay-play.py: plays one replay stream (a .ssr file, or a ws:// watch URL) in a headless Orca and
 # prints its verdict (Rollback/ReplayStream.h). For checks by hand and for demos.
 #
-#   Tools/orca/replay-play.py <dolphin-emu-nogui> <disc> <file.ygr|ws://...> [--pplus <dol>]
+#   Tools/orca/replay-play.py <dolphin-emu-nogui> <disc> <file.ssr|ws://...> [--pplus <dol>]
 #       [--realtime] [--follow] [--video Metal] [--shots MS] [--env K=V ...]
 #       [--product [--names "<port> <url-encoded name> ..."]]
 #
@@ -10,7 +10,7 @@
 # watcher); --video Metal renders off screen and --shots MS saves a screenshot every MS ms into the
 # work folder (kept). The test knobs that are part of the compatibility key (ORCA_TEST_NET_*) must be
 # set as the recording machines had them: pass them with --env.
-# --product plays it the way the YouGame app does (ORCA_REPLAY_SOURCE: a file at real speed, a watch
+# --product plays it the way the desktop app does (ORCA_REPLAY_SOURCE: a file at real speed, a watch
 # URL live) instead of through the test knobs; --names gives view-time names (ORCA_REPLAY_NAMES).
 import os
 import subprocess

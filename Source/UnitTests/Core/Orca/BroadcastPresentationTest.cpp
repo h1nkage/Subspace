@@ -54,7 +54,7 @@ TEST(BroadcastContract, AppHeaderMatchesEveryByte)
 {
   // Literal desktop/src/broadcast-ring.ts ringHeader() fields and zero-filled reserved bytes.
   // Independent of the engine constants, so an accidental layout change cannot update both sides.
-  constexpr std::array<u32, 12> app_fields = {0x31424759, 1, 1280, 720, 30, 48000,
+  constexpr std::array<u32, 12> app_fields = {0x31425353, 1, 1280, 720, 30, 48000,
                                              2, 3, 64, 3686400, 480, 11186624};
   std::array<u8, 256> app_header{};
   for (size_t i = 0; i < app_fields.size(); ++i)

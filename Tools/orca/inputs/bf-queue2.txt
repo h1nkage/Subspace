@@ -7,8 +7,8 @@
 # Run with ORCA_TEST_QUEUE=casual:q2 ORCA_UX_TEST_NAMES=ada,bo and ORCA_TEST_QUEUE_PICK (the place
 # is where bf-mario-link-results.txt's port 2 puts Link down), e.g. the sync test:
 #   ORCA_SESSION=1 ORCA_TEST_QUEUE=casual:q2 ORCA_UX_TEST_NAMES=ada,bo \
-#   ORCA_TEST_QUEUE_PICK=<frame>:<char>:<costume>:<x>:<y> YG_INPUT=<this> YG_SYNCTEST=7 \
-#   YG_SYNCTEST_FROM=<the character select's frame> YG_EXIT_AFTER=<n> dolphin-emu-nogui ...
+#   ORCA_TEST_QUEUE_PICK=<frame>:<char>:<costume>:<x>:<y> ORCA_INPUT=<this> ORCA_SYNCTEST=7 \
+#   ORCA_SYNCTEST_FROM=<the character select's frame> ORCA_EXIT_AFTER=<n> dolphin-emu-nogui ...
 @scStrap mash 30 99999 1 40 A
 @scBoot mash 30 99999 1 40 A
 @scTitle mash 30 99999 1 40 A

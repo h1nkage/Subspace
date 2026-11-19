@@ -161,7 +161,7 @@ void Manager::Emit(bool chat, std::string_view edge)
   if (m_output)
   {
     const std::string line =
-        std::string("yg {\"") + (chat ? "chat" : "overlay") + "\":\"" + std::string(edge) + "\"}";
+        std::string("br {\"") + (chat ? "chat" : "overlay") + "\":\"" + std::string(edge) + "\"}";
     m_output(line);
   }
 }

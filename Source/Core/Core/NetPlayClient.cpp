@@ -65,6 +65,7 @@
 #include "Core/IOS/Uids.h"
 #include "Core/Movie.h"
 #include "Core/NetPlayCommon.h"
+#include "Core/Orca/Local/Gateway.h"
 #include "Core/SyncIdentifier.h"
 #include "Core/System.h"
 #include "DiscIO/Blob.h"
@@ -84,6 +85,9 @@ static bool s_si_poll_batching = false;
 // called from ---GUI--- thread
 NetPlayClient::~NetPlayClient()
 {
+  // Before anything it relies on goes away: its thread calls back into this client.
+  StopOrcaGateway();
+
   // not perfect
   if (m_is_running.IsSet())
     StopGame();
@@ -474,6 +478,10 @@ void NetPlayClient::OnData(sf::Packet& packet)
 
   case MessageID::GameDigestAbort:
     OnGameDigestAbort();
+    break;
+
+  case MessageID::OrcaRoom:
+    OnOrcaRoom(packet);
     break;
 
   default:
@@ -2713,6 +2721,224 @@ int NumLocalWiimotes()
   if (netplay_client)
     return netplay_client->NumLocalWiimotes();
   return 0;
+}
+
+// ---- Rollback rooms (Orca/Local) ----
+
+// What this player's gateway sends to the lobby host's room.
+class NetPlayClient::OrcaBackend final : public Orca::Local::Gateway::Backend
+{
+public:
+  explicit OrcaBackend(NetPlayClient& client) : m_client(client) {}
+
+  void Open(u32 conn, const std::string& room, const std::string& ticket) override
+  {
+    sf::Packet packet;
+    packet << MessageID::OrcaRoom << Orca::Local::Op::Open << conn << room << ticket;
+    m_client.SendAsync(std::move(packet));
+  }
+
+  void Text(u32 conn, const std::string& text) override
+  {
+    sf::Packet packet;
+    packet << MessageID::OrcaRoom << Orca::Local::Op::Text << conn << text;
+    m_client.SendAsync(std::move(packet));
+  }
+
+  void Close(u32 conn) override
+  {
+    sf::Packet packet;
+    packet << MessageID::OrcaRoom << Orca::Local::Op::Close << conn;
+    m_client.SendAsync(std::move(packet));
+  }
+
+  void KfPut(u32 req, const std::string& room, const std::string& id,
+             std::vector<u8> data) override
+  {
+    // In parts on the chunked-data channel, so a big keyframe never delays room messages.
+    const u64 total = data.size();
+    u64 offset = 0;
+    do
+    {
+      const u64 size = std::min<u64>(Orca::Local::KF_PART_BYTES, total - offset);
+      sf::Packet packet;
+      packet << MessageID::OrcaRoom << Orca::Local::Op::KfPut << req << room << id << total
+             << offset;
+      if (size != 0)
+        packet.append(data.data() + offset, static_cast<size_t>(size));
+      m_client.SendAsync(std::move(packet), CHUNKED_DATA_CHANNEL);
+      offset += size;
+    } while (offset < total);
+  }
+
+  void KfGet(u32 req, const std::string& room, const std::string& id) override
+  {
+    sf::Packet packet;
+    packet << MessageID::OrcaRoom << Orca::Local::Op::KfGet << req << room << id;
+    m_client.SendAsync(std::move(packet), CHUNKED_DATA_CHANNEL);
+  }
+
+  void KfDelete(u32 req, const std::string& room, const std::string& id) override
+  {
+    sf::Packet packet;
+    packet << MessageID::OrcaRoom << Orca::Local::Op::KfDelete << req << room << id;
+    m_client.SendAsync(std::move(packet), CHUNKED_DATA_CHANNEL);
+  }
+
+  int PongDelayMs() override { return m_client.OrcaPongDelayMs(); }
+
+private:
+  NetPlayClient& m_client;
+};
+
+void NetPlayClient::StopOrcaGateway()
+{
+  std::shared_ptr<Orca::Local::Gateway> gateway;
+  {
+    std::lock_guard lock(m_orca_mutex);
+    gateway = std::move(m_orca_gateway);
+    m_orca_gateway.reset();
+  }
+  if (gateway)
+    gateway->Stop();
+}
+
+// The room's pongs come from the lobby host, but other players' inputs travel further: through the
+// host to them. Holding each pong back by what's missing makes the engine's link estimate (and so
+// its input delay) match the real trip, as it would against the room service.
+int NetPlayClient::OrcaPongDelayMs()
+{
+  std::vector<PlayerId> room;
+  {
+    std::lock_guard lock(m_orca_mutex);
+    room = m_orca_room_pids;
+  }
+  std::lock_guard lkp(m_crit.players);
+  u32 extra = 0;
+  for (const PlayerId pid : room)
+  {
+    // The host's own engine sits next to the room: everyone else's whole trip is missing. A
+    // friend's pong already crossed its own leg; only the other friends' legs are missing.
+    if (pid == m_pid || (m_pid != 1 && pid == 1))
+      continue;
+    if (const auto it = m_players.find(pid); it != m_players.end())
+      extra = std::max(extra, it->second.ping);
+  }
+  return static_cast<int>(std::min<u32>(extra, 1000));
+}
+
+// called from ---NETPLAY--- thread
+void NetPlayClient::OnOrcaRoom(sf::Packet& packet)
+{
+  using Orca::Local::Op;
+  Op op;
+  packet >> op;
+
+  std::shared_ptr<Orca::Local::Gateway> gateway;
+  {
+    std::lock_guard lock(m_orca_mutex);
+    gateway = m_orca_gateway;
+  }
+
+  switch (op)
+  {
+  case Op::Launch:
+  {
+    std::string room, ticket;
+    u8 joining = 0, count = 0;
+    packet >> room >> ticket >> joining >> count;
+    std::vector<PlayerId> pids;
+    for (u8 i = 0; i < count && packet; ++i)
+    {
+      PlayerId pid = 0;
+      packet >> pid;
+      pids.push_back(pid);
+    }
+    if (!packet || !Orca::Local::ValidRoomCode(room))
+      break;
+    if (!m_orca_backend)
+      m_orca_backend = std::make_unique<OrcaBackend>(*this);
+    auto fresh = std::make_shared<Orca::Local::Gateway>(*m_orca_backend, room, ticket);
+    std::string error;
+    if (!fresh->Start(&error))
+    {
+      m_dialog->AppendChat(fmt::format("Rollback: your game can't start ({}).", error));
+      break;
+    }
+    StopOrcaGateway();
+    {
+      std::lock_guard lock(m_orca_mutex);
+      m_orca_gateway = fresh;
+      m_orca_room_pids = std::move(pids);
+    }
+    m_orca_downloads.clear();
+    OrcaLaunch launch;
+    launch.room = room;
+    launch.ticket = ticket;
+    launch.joining = joining != 0;
+    launch.site = fresh->Site();
+    launch.name = m_player_name;
+    m_dialog->LaunchOrca(launch);
+    break;
+  }
+  case Op::OpenResult:
+  {
+    u32 conn = 0;
+    u16 status = 0;
+    std::string body;
+    packet >> conn >> status >> body;
+    if (packet && gateway)
+      gateway->OnOpenResult(conn, status, body);
+    break;
+  }
+  case Op::Text:
+  {
+    u32 conn = 0;
+    std::string text;
+    packet >> conn >> text;
+    if (packet && gateway)
+      gateway->OnText(conn, text);
+    break;
+  }
+  case Op::Closed:
+  {
+    u32 conn = 0;
+    packet >> conn;
+    if (packet && gateway)
+      gateway->OnClosed(conn);
+    break;
+  }
+  case Op::KfResult:
+  {
+    u32 req = 0;
+    u16 status = 0;
+    packet >> req >> status;
+    const u64 total = Common::PacketReadU64(packet);
+    const u64 offset = Common::PacketReadU64(packet);
+    if (!packet)
+      break;
+    size_t size = 0;
+    const u8* data = Orca::Local::RestOfPacketData(packet, &size);
+    Orca::Local::PartAssembly& download = m_orca_downloads[req];
+    if (!download.Add(total, offset, data, size))
+    {
+      m_orca_downloads.erase(req);
+      if (gateway)
+        gateway->OnKfResult(req, 502, {});
+      break;
+    }
+    if (download.Complete())
+    {
+      std::vector<u8> body = download.Take();
+      m_orca_downloads.erase(req);
+      if (gateway)
+        gateway->OnKfResult(req, status, std::move(body));
+    }
+    break;
+  }
+  default:
+    break;
+  }
 }
 
 void NetPlay_Enable(NetPlayClient* const np)

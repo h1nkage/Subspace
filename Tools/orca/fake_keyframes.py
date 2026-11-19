@@ -2,7 +2,7 @@
 # Copyright 2026 YouGame
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# A stand-in for YouGame's keyframe endpoint (ORCA.md, "Keyframe store"), for the OrcaKeyframe
+# A stand-in for the service's keyframe endpoint (ORCA.md, "Keyframe store"), for the OrcaKeyframe
 # tests: python3 Tools/orca/fake_keyframes.py <port>, then
 # ORCA_TEST_KEYFRAME_SERVER=http://127.0.0.1:<port> ./Binaries/Tests/tests --gtest_filter='OrcaKeyframe*'
 #

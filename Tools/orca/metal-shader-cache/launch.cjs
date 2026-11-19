@@ -20,10 +20,10 @@ const env={HOME:path.join(user,'home'),PATH:'/usr/bin:/bin',TMPDIR:path.join(use
  ORCA_PROFILE:'RSBE01',ORCA_SESSION:'1',ORCA_NO_LOCAL_INPUT:'1',ORCA_TEST_COMMANDS:'1',
  ORCA_TEST_DEV_GAME:'1',ORCA_TEST_RNG_SEED:'0x03981031',
  ORCA_UX_PROBE:path.join(root,'probe.txt'),
- ORCA_TEST_PERF:'15,900',ORCA_PERF_AUTO:'0',YG_SCENES:'1',YOUGAME_STDIO:'1',
+ ORCA_TEST_PERF:'15,900',ORCA_PERF_AUTO:'0',ORCA_SCENES:'1',SUBSPACE_STDIO:'1',
  SDL_JOYSTICK_HIDAPI:'0',SDL_JOYSTICK_HIDAPI_GAMECUBE:'0',SDL_HIDAPI_LIBUSB:'0',
  SDL_JOYSTICK_IOKIT:'0',SDL_JOYSTICK_MFI:'0',SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT:'0x0000/0x0000',
- YG_INPUT:path.join(root,'input.txt'),YG_EXIT_AFTER:'3000',YG_FRAMETIME:'0',YG_THROTTLE:'1'};
+ ORCA_INPUT:path.join(root,'input.txt'),ORCA_EXIT_AFTER:'3000',ORCA_FRAMETIME:'0',ORCA_THROTTLE:'1'};
 if(process.env.ORCA_BENCH_TRACE==='1')env.ORCA_SHADER_CACHE_TRACE='1';
 const exe=path.join(dir,'AGENT TEST Orca.app/Contents/MacOS/Orca');
 const args=['-p','macos','-v','Metal','-u',user,
@@ -47,7 +47,7 @@ const consume=(stream,b)=>{fs.writeSync(log,b);buffers[stream]+=b.toString();let
  const scene=/Scene frame \d+: \S* -> (\S+)/.exec(line);
  if(scene&&scene[1]===sequence[scene_index]){++scene_index;timings.sequence_ok=scene_index===sequence.length;}
  if(line.startsWith('orca perf ')){try{if(JSON.parse(line.slice(10)).k==='pace')++timings.perf_windows;}catch{}}
- if(stream==='stdout'&&line.startsWith('yg ')){
+ if(stream==='stdout'&&line.startsWith('br ')){
   let msg;try{msg=JSON.parse(line.slice(3));}catch{continue;}
   if(!Number.isInteger(msg.id)||typeof msg.type!=='string')continue;
   timings.protocol_requests[msg.type]=(timings.protocol_requests[msg.type]||0)+1;
@@ -55,7 +55,7 @@ const consume=(stream,b)=>{fs.writeSync(log,b);buffers[stream]+=b.toString();let
   if(msg.type==='hello'||msg.type==='mpRoom')response={re:msg.id,ok:true,result:{}};
   else if(msg.type==='mpTicket')response={re:msg.id,ok:false,error:'AGENT TEST offline benchmark: no room'};
   else {timings.protocol_unexpected.push(msg.type);response={re:msg.id,ok:false,error:'AGENT TEST: unsupported request'};}
-  try{child.stdin.write('yg '+JSON.stringify(response)+'\n');}catch{}
+  try{child.stdin.write('br '+JSON.stringify(response)+'\n');}catch{}
  }
 }};
 child.stdout.on('data',b=>consume('stdout',b));child.stderr.on('data',b=>consume('stderr',b));

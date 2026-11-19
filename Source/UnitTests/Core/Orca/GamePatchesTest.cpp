@@ -77,11 +77,11 @@ std::vector<u32> Addresses(const std::vector<PatchPlan::Group>& groups)
 
 constexpr u32 MAGIC = 0x90001000;  // a stand-in for the match block's header
 constexpr u32 MODE = 0x90001004;
-constexpr u32 YGM1 = 0x59474D31;
+constexpr u32 SSM1 = 0x53534D31;
 
 // Two toggled groups (one with a guard word), a guarded group that lands once and a `*` line.
 const char* const FILE_WITH_TOGGLES = "# toggled while the header says an online mode\n"
-                                      "when 90001000 == 59474D31      # the magic\n"
+                                      "when 90001000 == 53534D31      # the magic\n"
                                       "when 90001004 & FF000000 != 0  # the mode: not none\n"
                                       "81001000 4082007C 4800007C     # bne -> b\n"
                                       "81001004 38600001 38600001     # guard only\n"
@@ -101,7 +101,7 @@ Memory Booted(u32 mode)
   m.Write32(0x81001014, 0x38000000);
   m.Write32(0x81002000, 0x11111111);
   m.Write32(0x9017B640, 0);
-  m.Write32(MAGIC, YGM1);
+  m.Write32(MAGIC, SSM1);
   m.Write32(MODE, mode);
   return m;
 }
@@ -110,7 +110,7 @@ Memory Booted(u32 mode)
 TEST(OrcaGamePatches, ParsesWhenBlocks)
 {
   const auto p = Parse("80FFFFFC 1 2                 # before the block, 4 bytes before its first\n"
-                       "when 90001000 == 59474D31\r\n"
+                       "when 90001000 == 53534D31\r\n"
                        "when 90001004 & ff000000 != 0  # lower-case hex too\n"
                        "81000000 4082007C 4800007C\n"
                        "81000004 38600001 38600001\n"
@@ -118,15 +118,15 @@ TEST(OrcaGamePatches, ParsesWhenBlocks)
                        "81000014 33333333 33333333     # a guard\n"
                        "end   # a comment\n"
                        "81000018 44444444 55555555     # right after the block's last word\n"
-                       "when 90001000 == 59474D31\n"
+                       "when 90001000 == 53534D31\n"
                        "8100001C 5 6                   # the same condition, a new block\n"
                        "81000020 7 7\n"
                        "end\n"
                        "81000024 8 9\n");
   ASSERT_EQ(p.size(), 9u);
-  const std::vector<PatchCondition> when{{0x90001000, 0xFFFFFFFF, YGM1, true},
+  const std::vector<PatchCondition> when{{0x90001000, 0xFFFFFFFF, SSM1, true},
                                          {0x90001004, 0xFF000000, 0, false}};
-  const std::vector<PatchCondition> magic{{0x90001000, 0xFFFFFFFF, YGM1, true}};
+  const std::vector<PatchCondition> magic{{0x90001000, 0xFFFFFFFF, SSM1, true}};
   EXPECT_TRUE(p[0].when.empty());
   for (size_t i = 1; i <= 4; ++i)
     EXPECT_EQ(p[i].when, when) << i;
@@ -211,20 +211,20 @@ TEST(OrcaGamePatches, RefusesMalformedBlocks)
 TEST(OrcaGamePatches, ConditionsReadOneMaskedWordEach)
 {
   Memory m;
-  m.Write32(MAGIC, YGM1);
+  m.Write32(MAGIC, SSM1);
   m.Write32(MODE, 0x02000000);
   const auto holds = [&](std::vector<PatchCondition> when) { return ConditionsHold(when, m); };
   EXPECT_TRUE(holds({}));
-  EXPECT_TRUE(holds({{MAGIC, 0xFFFFFFFF, YGM1, true}}));
-  EXPECT_FALSE(holds({{MAGIC, 0xFFFFFFFF, YGM1 + 1, true}}));
-  EXPECT_TRUE(holds({{MAGIC, 0xFFFFFFFF, YGM1 + 1, false}}));
-  EXPECT_FALSE(holds({{MAGIC, 0xFFFFFFFF, YGM1, false}}));
+  EXPECT_TRUE(holds({{MAGIC, 0xFFFFFFFF, SSM1, true}}));
+  EXPECT_FALSE(holds({{MAGIC, 0xFFFFFFFF, SSM1 + 1, true}}));
+  EXPECT_TRUE(holds({{MAGIC, 0xFFFFFFFF, SSM1 + 1, false}}));
+  EXPECT_FALSE(holds({{MAGIC, 0xFFFFFFFF, SSM1, false}}));
   EXPECT_TRUE(holds({{MODE, 0xFF000000, 0x02000000, true}}));
   EXPECT_TRUE(holds({{MODE, 0xFF000000, 0, false}}));
   EXPECT_FALSE(holds({{MODE, 0x00FF0000, 0, false}}));
   // All of them.
-  EXPECT_TRUE(holds({{MAGIC, 0xFFFFFFFF, YGM1, true}, {MODE, 0xFF000000, 0, false}}));
-  EXPECT_FALSE(holds({{MAGIC, 0xFFFFFFFF, YGM1, true}, {MODE, 0xFF000000, 0, true}}));
+  EXPECT_TRUE(holds({{MAGIC, 0xFFFFFFFF, SSM1, true}, {MODE, 0xFF000000, 0, false}}));
+  EXPECT_FALSE(holds({{MAGIC, 0xFFFFFFFF, SSM1, true}, {MODE, 0xFF000000, 0, true}}));
   EXPECT_FALSE(holds({{MAGIC, 0xFFFFFFFF, 0, true}, {MODE, 0xFF000000, 0, false}}));
   // Unmapped memory never holds, either operator.
   EXPECT_FALSE(holds({{0x90002000, 0xFFFFFFFF, 0, true}}));
@@ -323,7 +323,7 @@ TEST(OrcaGamePatches, ToggledGroupsFollowTheirConditionBothWays)
   m.Write32(MAGIC, 0);
   m.Write32(MODE, 0x01000000);
   EXPECT_TRUE(toggled().writes.empty());
-  m.Write32(MAGIC, YGM1);
+  m.Write32(MAGIC, SSM1);
   Write(toggled(), m);
   EXPECT_EQ(m.Read32(0x81001000), 0x4800007Cu);
 

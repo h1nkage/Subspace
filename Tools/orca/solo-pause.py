@@ -6,8 +6,8 @@
 #
 # 1. Offline, one Orca at a time: a reference run to frame 2800, then the same run paused for 5 s
 #    mid-match. The paused run must answer "state paused" / "state running", stop its frames while
-#    paused, and match the reference's RAM hash on every frame (YG_HASHLOG).
-# 2. --rooms instead: two Orcas over real YouGame dev rooms (ORCA_TEST_DEV_GAME):
+#    paused, and match the reference's RAM hash on every frame (ORCA_HASHLOG).
+# 2. --rooms instead: two Orcas over real service dev rooms (ORCA_TEST_DEV_GAME):
 #    - the host pauses alone, stays paused past the room's 8 s silence limit (its room stays open)
 #      and prints no stats meanwhile; a "prepare-join" (an invite) ends the pause ("state running");
 #    - paused again, a friend joins its room: the host runs again by itself, takes the friend in,
@@ -58,8 +58,8 @@ class Orca:
             "ORCA_SESSION": "1",
             "ORCA_TEST_COMMANDS": "1",
             "ORCA_NAME": name,
-            "YG_INPUT": os.path.join(HERE, "inputs", input_file),
-            "YG_SCENES": "1",
+            "ORCA_INPUT": os.path.join(HERE, "inputs", input_file),
+            "ORCA_SCENES": "1",
         }
         env.update(env_extra)
         args = ["nice", "-n", "10", BIN, "-p", "headless", "-u", user, "-v", "Null",
@@ -175,7 +175,7 @@ def pause_alone(orca, timeout):
 
 
 def last_hashed(path):
-    """The newest frame in a YG_HASHLOG file (written 60 frames at a time), -1 before any."""
+    """The newest frame in a ORCA_HASHLOG file (written 60 frames at a time), -1 before any."""
     try:
         with open(path) as f:
             lines = f.read().splitlines()
@@ -190,8 +190,8 @@ def last_hashed(path):
 
 def offline_run(name, pause):
     hashlog = os.path.join(WORK, f"{name}.hashes")
-    orca = Orca(name, {"YG_EXIT_AFTER": str(EXIT_AFTER), "YG_THROTTLE": "1",
-                       "YG_HASHLOG": hashlog}, "bf-mario-link-results.txt")
+    orca = Orca(name, {"ORCA_EXIT_AFTER": str(EXIT_AFTER), "ORCA_THROTTLE": "1",
+                       "ORCA_HASHLOG": hashlog}, "bf-mario-link-results.txt")
     orcas.append(orca)
     orca.expect("orca caps", 30)
     if pause:

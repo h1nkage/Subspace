@@ -1,5 +1,5 @@
 # Project+ v3.2 for Tools/orca/dropin-identity.py --pplus: each Orca joins port 1 of its own game's
-# character select at once (its YouGame tag, whose controls the test then sets), the friend drops
+# character select at once (its player tag, whose controls the test then sets), the friend drops
 # in, and only then do both pick: P2 joins port 2 30 s into character select, both take the
 # character two rows up from their panel as pplus-1v1.txt, P1 starts, a stage, fuzzed play.
 # Rules count frames from entry into each scene (@scene).

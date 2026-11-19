@@ -13,7 +13,7 @@ namespace Core
 class CPUThreadGuard;
 }
 
-// The game's rumble, for the YouGame page to play on the controller the player holds (cap
+// The game's rumble, for the app page to play on the controller the player holds (cap
 // "rumble"). Orca drives no motor itself: the app's controller helper owns the devices, and the
 // page sends it the commands.
 //

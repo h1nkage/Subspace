@@ -6,8 +6,8 @@
 IDI_ICON1               ICON                    "..\\..\\..\\Installer\\Orca.ico"
 "dolphin"               ICON                    "..\\..\\..\\Installer\\Orca.ico"
 
-// What Windows, Task Manager and antivirus show for the program (yg-dolphin.exe from 0.3.42,
-// yg-baiji.exe in 0.3.40 and 0.3.41, Orca.exe before).
+// What Windows, Task Manager and antivirus show for the program (subspace.exe from 0.3.42,
+// subspace.exe in 0.3.40 and 0.3.41, Orca.exe before).
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION ORCA_VERSION_NUM
  PRODUCTVERSION ORCA_VERSION_NUM
@@ -21,13 +21,13 @@ BEGIN
   BEGIN
     BLOCK "040904b0"
     BEGIN
-      VALUE "CompanyName", "YouGame"
-      VALUE "FileDescription", "YG Dolphin"
+      VALUE "CompanyName", "The service"
+      VALUE "FileDescription", "Subspace"
       VALUE "FileVersion", ORCA_VERSION_STR
-      VALUE "InternalName", "yg-dolphin"
+      VALUE "InternalName", "subspace"
       VALUE "LegalCopyright", "GPL-2.0-or-later. Based on the Dolphin emulator."
-      VALUE "OriginalFilename", "yg-dolphin.exe"
-      VALUE "ProductName", "YG Dolphin"
+      VALUE "OriginalFilename", "subspace.exe"
+      VALUE "ProductName", "Subspace"
       VALUE "ProductVersion", ORCA_VERSION_STR
     END
   END

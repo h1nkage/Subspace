@@ -384,7 +384,7 @@ TEST(OrcaDisc, AliasRefusalNamesEachFailedCheck)
 
 TEST(OrcaDisc, RevisionRefusalKeepsTheProfileSentencePrefix)
 {
-  const std::string prefix = "This disc is RSBE01 revision 1; YG Dolphin's profile is for revision 2";
+  const std::string prefix = "This disc is RSBE01 revision 1; Subspace's profile is for revision 2";
   AliasDisc volume;
   volume.SetContents(1, false);
   std::string reason;

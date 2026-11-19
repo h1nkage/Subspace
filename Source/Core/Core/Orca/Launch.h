@@ -7,7 +7,7 @@
 #include <string>
 #include <string_view>
 
-// orca-launch.ini tells Orca.app which launcher profile to start when the YouGame app runs it with
+// orca-launch.ini tells Orca.app which launcher profile to start when the desktop app runs it with
 // no arguments. It sits in the build's folder, next to the mod's files:
 //
 //   [Launch]

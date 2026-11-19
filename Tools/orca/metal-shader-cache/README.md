@@ -4,7 +4,7 @@ Run an uninstrumented BASE and candidate Orca.app with Brawl USA Rev 2, isolated
 
 ```sh
 python3 Tools/orca/metal-shader-cache/run.py \
-  --root /Volumes/YGWorktrees/repro/shader-cache-unique \
+  --root /Volumes/Worktrees/repro/shader-cache-unique \
   --base-app /path/to/base/Orca.app --new-app /path/to/new/Orca.app \
   --disc /path/to/Brawl-rev2.wbfs \
   --heavy-slot /path/to/run-queue.sh \

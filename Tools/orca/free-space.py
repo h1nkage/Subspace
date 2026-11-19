@@ -11,7 +11,7 @@
 #            boundary, and dumps MEM1 at 16 points and MEM2 at 5 (6 in Project+);
 #   trap     the same, after filling the block and every cave with illegal instructions (primary
 #            opcode 0, each word different) 5 frames into the first scene, once sora_scene is
-#            loaded; with a drop-in keyframe test (YG_KEYFRAME_TEST) in the first match.
+#            loaded; with a drop-in keyframe test (ORCA_KEYFRAME_TEST) in the first match.
 # PASS needs:
 #   - observe: the block and the caves hold the same bytes in every dump, and no watch changes
 #     after the module's load;
@@ -161,13 +161,13 @@ def run(mode):
         "HOME": os.environ["HOME"],
         "PATH": os.environ["PATH"],
         "ORCA_SESSION": "1",
-        "YG_SCENES": "1",
-        "YG_INPUT": os.path.join(WORK, f"{mode}-input.txt"),
+        "ORCA_SCENES": "1",
+        "ORCA_INPUT": os.path.join(WORK, f"{mode}-input.txt"),
         "ORCA_UX_PROBE": os.path.join(WORK, f"{mode}-probe.txt"),
-        "YG_EXIT_AFTER": str(EXIT_AFTER),
+        "ORCA_EXIT_AFTER": str(EXIT_AFTER),
     }
     if trap:
-        env["YG_KEYFRAME_TEST"] = str(KEYFRAME_AT)
+        env["ORCA_KEYFRAME_TEST"] = str(KEYFRAME_AT)
     if PPLUS:
         env["ORCA_PROFILE"] = "PPLUS32"
     args = [BIN, "-p", "headless", "-u", user, "-v", "Null",

@@ -8,7 +8,7 @@
 
 #include "Common/CommonTypes.h"
 
-// Press and release of YouGame's overlay key, for hold-to-talk (cap "talk"). Orca reports the two
+// Press and release of the service's overlay key, for hold-to-talk (cap "talk"). Orca reports the two
 // presses only it can see: Shift+Tab while its own window has the keyboard, and the
 // controller shortcut (UX/OrbCombo.h). With "talk" agreed a press prints
 //   orca overlay down keys|pad

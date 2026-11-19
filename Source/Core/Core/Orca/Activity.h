@@ -18,7 +18,7 @@ namespace Orca::UX
 struct Snapshot;
 }
 
-// How much the player is playing, for the YouGame app: in a session, one stdout line every 60 s
+// How much the player is playing, for the desktop app: in a session, one stdout line every 60 s
 // while a game runs, and a last one for the rest of the interval when the game stops:
 //
 //   orca active <interval_s> <active_s> <inputs> <mode> <pads>
@@ -138,7 +138,7 @@ private:
 constexpr u32 PAD_ADAPTER = 0x100;  // | the adapter's port (the app's controller stream)
 constexpr u32 PAD_GAMEPAD = 0x200;  // | the app's index for a standard gamepad (incl. its keyboard)
 constexpr u32 PAD_DOLPHIN = 0x300;  // Dolphin's own port 1 (keyboard and SDL pads mapped to it)
-constexpr u32 PAD_SCRIPT = 0x400;   // | port: a test harness script (YG_INPUT)
+constexpr u32 PAD_SCRIPT = 0x400;   // | port: a test harness script (ORCA_INPUT)
 
 struct Pad
 {

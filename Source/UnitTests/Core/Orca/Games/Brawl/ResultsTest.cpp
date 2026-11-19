@@ -12,7 +12,7 @@
 #include <fmt/format.h>
 #include <gtest/gtest.h>
 
-#include "Core/Orca/Session/YouGameRoom.h"
+#include "Core/Orca/Session/RelayRoom.h"
 #include "Core/Orca/Status.h"
 #include "Core/Orca/Engine/GuestMemory.h"
 #include "Core/Orca/Games/Brawl/OnlineMenu.h"
@@ -638,7 +638,7 @@ TEST(OrcaMatchmakingMenu, HostIsACapResultsOnlyWithAVerifiedReader)
 {
   // No profile here: host is offered, results is not.
   EXPECT_EQ(Orca::Status::OfferedCaps(),
-            "join leave stats pause delay perf direct host chat yougame gfx talk rumble record hostui");
+            "join leave stats pause delay perf direct host chat orb gfx talk rumble record hostui");
   Orca::Status::SetAppCaps("join host results");
   EXPECT_TRUE(Orca::Status::Cap("host"));
   EXPECT_FALSE(Orca::Status::Cap("results"));

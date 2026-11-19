@@ -249,7 +249,7 @@ TEST(OrcaSetEndCountdown, ALeaveDuringAStallCountsFromTheLeave)
 }
 
 // Before the set's first game began (its fighters in on final frames, or a game ended), the room
-// voids a leave or a stall instead of forfeiting it (YouGame docs/ORCA_ONLINE_UX.md "3B leaving
+// voids a leave or a stall instead of forfeiting it (service docs/ORCA_ONLINE_UX.md "3B leaving
 // mid-game"): the same countdown, to no contest.
 TEST(OrcaSetEndCountdown, BeforeTheFirstGameTheCountdownIsToNoContest)
 {
@@ -445,7 +445,7 @@ TEST(OrcaSetEndNotice, LeavingARankedSetSaysItCountsAsALoss)
 
 // Before the set's first game began the room voids a leave, and rates nobody: a no-show always (the
 // pick runs out on game 1's character select), or a leave or a crash during the stage's loading
-// image (YouGame docs/ORCA_ONLINE_UX.md "3B leaving mid-game").
+// image (service docs/ORCA_ONLINE_UX.md "3B leaving mid-game").
 TEST(OrcaSetEndNotice, LeavingBeforeTheFirstGameSaysItDoesNotCount)
 {
   Model m;

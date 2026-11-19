@@ -33,16 +33,16 @@ class CoSeatFixtureTest(unittest.TestCase):
         welcome = {"id": 1, "type": "mpRoom", "me": "Doubles1",
                    "lobby": {"maxLocalPlayers": 2},
                    "participants": [{"connectionId": "Doubles1", "localIndex": 0}]}
-        messages = page.receive("yg " + fixture.json.dumps(welcome))
+        messages = page.receive("br " + fixture.json.dumps(welcome))
         self.assertEqual(len(messages), 2)
         self.assertEqual(fixture.json.loads(messages[1][3:]),
                          {"push": {"slug": "doubles-fixture", "cmd": "local-add"}})
-        self.assertEqual(len(page.receive("yg " + fixture.json.dumps(welcome))), 1)
+        self.assertEqual(len(page.receive("br " + fixture.json.dumps(welcome))), 1)
         solo = fixture.FixturePage("http://127.0.0.1:1", 1, False)
-        self.assertEqual(len(solo.receive("yg " + fixture.json.dumps(welcome))), 1)
+        self.assertEqual(len(solo.receive("br " + fixture.json.dumps(welcome))), 1)
         pending = fixture.FixturePage("http://127.0.0.1:1", 1, True)
         welcome["participants"] = []
-        self.assertEqual(len(pending.receive("yg " + fixture.json.dumps(welcome))), 1)
+        self.assertEqual(len(pending.receive("br " + fixture.json.dumps(welcome))), 1)
 
     def test_ticket_reservations_include_existing_local_seats(self):
         server = fixture.Server(("127.0.0.1", 0))

@@ -1,6 +1,6 @@
 Roboto-Medium.ttf: Roboto, Copyright 2011 Google Inc. All Rights Reserved.
 From Dear ImGui's misc/fonts (https://fonts.google.com/specimen/Roboto), licensed under the Apache
-License, Version 2.0 (below). Used by Orca's YouGame layer (Core/Orca/UX/YgCard.cpp).
+License, Version 2.0 (below). Used by Orca's app layer (Core/Orca/UX/AppCard.cpp).
 SHA-256 8559132c89ad51d8a2ba5b171887a44a7ba93776e205f553573de228e64b45f8
 
 

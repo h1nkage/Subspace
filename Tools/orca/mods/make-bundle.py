@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Turn one of Orca's legacy profiles into a mod bundle (YouGame docs/ORCA_MODS.md, Phase 1).
+"""Turn one of Orca's legacy profiles into a mod bundle (service docs/ORCA_MODS.md, Phase 1).
 
   make-bundle.py RSBE01 <out> [--tree]
   make-bundle.py PPLUS32|PPLUS321 <out> --pplus-user <Project+ release's user/ folder> [--tree]
@@ -23,7 +23,7 @@ unpack with 7-Zip instead), plus its license.txt. Writes the bundle to
 <out>/ (which must not exist yet): mod.json, launcher.dol, sd/..., orca/patches/<profile>.patches,
 orca/textures/..., orca/jitwarm. A bundle never holds tree.json (the app writes it into the run
 folder it lays out); --tree also writes one, making <out> a run folder for local mod-mode runs
-(ORCA_MOD_DIR, or the desktop app's YOUGAME_ORCA_DEV_MOD).
+(ORCA_MOD_DIR, or the desktop app's SUBSPACE_DEV_MOD).
 
 None of Project+'s files belong in this repository: write P+ bundles outside it.
 """
@@ -166,7 +166,7 @@ def main():
     ap.add_argument("--pplus-user", help="Project+ release's user/ folder (Launcher/, Wii/sd.raw)")
     ap.add_argument("--7z", dest="sevenzip", default=None,
                     help="unpack sd.raw with this 7-Zip (7zz or 7z.exe); default: fatread.py, no 7-Zip needed")
-    ap.add_argument("--min-orca", default=None, help="engine.minOrca (default 0.3.35; YG Dolphin refuses a pack above its own version)")
+    ap.add_argument("--min-orca", default=None, help="engine.minOrca (default 0.3.35; Subspace refuses a pack above its own version)")
     ap.add_argument("--flat", action="store_true", help="a flat bundle (mod.json format 2)")
     ap.add_argument("--pplus-run", help="--flat: a folder with Project+'s launcher and sd.raw side by side")
     ap.add_argument("--key", help="--flat: sign with this private key (sign-bundle.py keygen)")

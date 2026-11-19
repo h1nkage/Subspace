@@ -1,5 +1,5 @@
 # Super Smash Bros. Brawl (RSBE01) for Tools/orca/dropin-identity.py: each Orca joins port 1 of its
-# own game's character select at once (its YouGame tag, whose controls the test then sets), the
+# own game's character select at once (its player tag, whose controls the test then sets), the
 # friend drops in (it boots once the host has set its controls, ~30 s in, and joins ~30 s later),
 # and only then do both pick: P2 joins port 2 70 s into character select, Mario (P1) and Link (P2)
 # as bf-mario-link-results.txt, P1 starts, Battlefield, fuzzed play.

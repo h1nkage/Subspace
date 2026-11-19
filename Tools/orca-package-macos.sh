@@ -1,8 +1,8 @@
 #!/bin/bash
-# Builds the macOS (arm64) app as a self-contained bundle and zips it as YG Dolphin.app
-# (YG Baiji.app in 0.3.40 and 0.3.41, Orca.app before). CMake still names its bundle Orca.app,
+# Builds the macOS (arm64) app as a self-contained bundle and zips it as Subspace.app
+# (Subspace.app in 0.3.40 and 0.3.41, Orca.app before). CMake still names its bundle Orca.app,
 # and the program inside stays
-# Contents/MacOS/Orca: installed YouGame apps let only that path run in their sandbox.
+# Contents/MacOS/Orca: installed desktop apps let only that path run in their sandbox.
 #
 #   ORCA_UNSIGNED_ONLY=1 Tools/orca-package-macos.sh [build-dir] [out-dir]
 #     ORCA_UNSIGNED_ONLY=1 skips all signing and notarization (local development).
@@ -15,7 +15,7 @@
 #   CSC_LINK (Developer ID Application .p12) and CSC_KEY_PASSWORD
 #   APPLE_API_KEY (.p8 path), APPLE_API_KEY_ID, APPLE_API_ISSUER
 #   ORCA_SOURCE_URL: the public repository players can fetch the source from (GPL); its
-#     yg-dolphin-<version> tag (yg-baiji-<version> in 0.3.40 and 0.3.41, orca-<version> before)
+#     subspace-<version> tag (subspace-<version> in 0.3.40 and 0.3.41, orca-<version> before)
 #     must point at HEAD, and the tree must be clean before and after the build.
 # ORCA_INTERNAL=1 instead signs and notarizes an internal test build from the private repository:
 # the same credentials and clean tree, but no ORCA_SOURCE_URL or tag. SOURCE.txt says it is not for
@@ -23,7 +23,7 @@
 # ORCA_BUNDLE_PUBLIC_KEY (64 lowercase hex digits) is the key flat bundles must be signed with
 # (ORCA.md "Flat bundles"); unset, the build trusts none and refuses every bundle. The TEST key is
 # never trusted in a package: the build turns it off and the executable is checked for it.
-# ORCA_STAGING_BUILD=1 marks a staging build (YouGame's staging scripts set it): only such a build
+# ORCA_STAGING_BUILD=1 marks a staging build (The service's staging scripts set it): only such a build
 # may pin the STAGING flat-bundle key, and it is never a public release. Any other build refuses
 # that key, as ORCA_BUNDLE_PUBLIC_KEY and in the executable, the same way it refuses the TEST key.
 set -euo pipefail
@@ -34,7 +34,7 @@ OUT_DIR="${2:-$BUILD_DIR/package}"
 ENTITLEMENTS="$ROOT/Source/Core/DolphinNoGUI/Orca.entitlements"
 BUILT="$BUILD_DIR/Binaries/Orca.app"
 # What ships: the name players see. The program keeps its name (CFBundleExecutable).
-APP="$BUILD_DIR/stage/YG Dolphin.app"
+APP="$BUILD_DIR/stage/Subspace.app"
 EXE="$APP/Contents/MacOS/Orca"
 
 fail() {
@@ -115,12 +115,12 @@ if [ "$STATE" = "git status failed" ]; then
 elif [ -n "$STATE" ]; then
   DIRTY=" (with local changes)"
 fi
-# yg-dolphin-<version> from 0.3.42; yg-baiji-<version> in 0.3.40 and 0.3.41; orca-<version> before.
-TAG="$(git -C "$ROOT" tag --points-at HEAD --list 'yg-dolphin-*' | head -n 1)"
-[ -n "$TAG" ] || TAG="$(git -C "$ROOT" tag --points-at HEAD --list 'yg-baiji-*' | head -n 1)"
+# subspace-<version> from 0.3.42; subspace-<version> in 0.3.40 and 0.3.41; orca-<version> before.
+TAG="$(git -C "$ROOT" tag --points-at HEAD --list 'subspace-*' | head -n 1)"
+[ -n "$TAG" ] || TAG="$(git -C "$ROOT" tag --points-at HEAD --list 'subspace-*' | head -n 1)"
 [ -n "$TAG" ] || TAG="$(git -C "$ROOT" tag --points-at HEAD --list 'orca-*' | head -n 1)"
-TAG_VERSION="${TAG#yg-dolphin-}"
-TAG_VERSION="${TAG_VERSION#yg-baiji-}"
+TAG_VERSION="${TAG#subspace-}"
+TAG_VERSION="${TAG_VERSION#subspace-}"
 TAG_VERSION="${TAG_VERSION#orca-}"
 VERSION="${ORCA_VERSION:-$TAG_VERSION}"
 VERSION="${VERSION:-0.3.103}"
@@ -210,14 +210,14 @@ $FOREIGN"
 # What the GPL asks to travel with the binary: where the source is, and the bundled licences.
 RESOURCES="$APP/Contents/Resources"
 if [ "$INTERNAL" = 1 ]; then
-  SOURCE_LINE="Internal test build of YG Dolphin $COMMIT from a private repository. Not for public distribution."
+  SOURCE_LINE="Internal test build of Subspace $COMMIT from a private repository. Not for public distribution."
 else
   SOURCE_LINE="Source:  ${ORCA_SOURCE_URL:-not published (a development build)}"
 fi
 cat >"$RESOURCES/SOURCE.txt" <<EOF
-YG Dolphin $VERSION for macOS (arm64)
+Subspace $VERSION for macOS (arm64)
 
-YG Dolphin (formerly Orca) is free software under the GNU General Public License; see COPYING and
+Subspace (formerly Orca) is free software under the GNU General Public License; see COPYING and
 LICENSES/.
 It is based on the Dolphin emulator source (https://github.com/dolphin-emu/dolphin).
 
@@ -249,10 +249,10 @@ done
 
 mkdir -p "$OUT_DIR"
 if [ "$RELEASE" = 0 ]; then
-  ZIP="$OUT_DIR/yg-dolphin-$VERSION-macos-arm64-unsigned.zip"
+  ZIP="$OUT_DIR/subspace-$VERSION-macos-arm64-unsigned.zip"
   rm -f "$ZIP"
   ditto -c -k --keepParent "$APP" "$ZIP"
-  echo "orca-package: no signing credentials; YG Dolphin.app stays unsigned"
+  echo "orca-package: no signing credentials; Subspace.app stays unsigned"
   echo "orca-package: $ZIP"
   shasum -a 256 "$ZIP"
   exit 0
@@ -292,8 +292,8 @@ codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS" \
   --keychain "$KEYCHAIN" --sign "$IDENTITY" "$APP"
 codesign --verify --strict --verbose=2 "$APP"
 
-ZIP="$OUT_DIR/yg-dolphin-$VERSION-macos-arm64.zip"
-[ "$INTERNAL" = 0 ] || ZIP="$OUT_DIR/yg-dolphin-$VERSION-macos-arm64-internal.zip"
+ZIP="$OUT_DIR/subspace-$VERSION-macos-arm64.zip"
+[ "$INTERNAL" = 0 ] || ZIP="$OUT_DIR/subspace-$VERSION-macos-arm64-internal.zip"
 RESULT="$KEYCHAIN_DIR/notary.json"
 rm -f "$ZIP"
 ditto -c -k --keepParent "$APP" "$ZIP"

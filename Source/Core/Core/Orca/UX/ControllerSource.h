@@ -12,9 +12,9 @@
 #include "Core/Orca/UX/Controllers.h"
 #include "InputCommon/GCPadStatus.h"
 
-// The local player's controller, read from the YouGame desktop app. The app's helper reads
+// The local player's controller, read from the desktop app. The app's helper reads
 // GameCube adapters and SDL gamepads and serves them as an authenticated SSE stream
-// ($YOUGAME_BRIDGE/controllers/events), or writes them on Orca's stdin (the stdio bridge,
+// ($SUBSPACE_BRIDGE/controllers/events), or writes them on Orca's stdin (the stdio bridge,
 // Orca/Bridge.h). A background thread keeps the newest snapshot in a one-slot cache; the CPU thread
 // reads it once per frame and never waits on the network or the pipe.
 //
@@ -41,9 +41,9 @@ struct LocalDevice
 std::optional<LocalDevice> LastLocalDevice();
 std::optional<LocalDevice> LastLocalDevice(int ordinal);
 
-// Starts the stream when running under the app: on the stdio bridge (YOUGAME_STDIO=1,
+// Starts the stream when running under the app: on the stdio bridge (SUBSPACE_STDIO=1,
 // Orca/Bridge.h) the app's snapshots arrive on stdin, otherwise from the loopback bridge
-// (YOUGAME_BRIDGE and YOUGAME_TOKEN set). Call on the main thread before the game boots.
+// (SUBSPACE_BRIDGE and SUBSPACE_TOKEN set). Call on the main thread before the game boots.
 void StartControllerStreamFromEnvironment();
 // The stdio bridge's stream: the cache takes each snapshot Orca::Bridge routes to it.
 void StartControllerStreamFromStdio();

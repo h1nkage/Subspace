@@ -631,7 +631,7 @@ void OnFrameBoundary(const Core::CPUThreadGuard& guard)
                                     first, live);
       };
       // The local pad comes from a test script, the app's input stream, or the host's first
-      // controller, and the YouGame shortcut (Up + Start) is filtered out before it is sent.
+      // controller, and the app shortcut (Up + Start) is filtered out before it is sent.
       // `first_run` uses the session's flag, which counts a joiner's catch-up as a first run; the
       // app stream times its input only on frames that are neither re-runs nor catch-up.
       const RingPort* const ring = RingPort::Active();

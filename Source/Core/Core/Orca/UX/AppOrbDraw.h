@@ -10,11 +10,11 @@
 #include <imgui.h>
 
 #include "Core/Orca/UX/Kit.h"
-#include "Core/Orca/UX/YgOrb.h"
+#include "Core/Orca/UX/AppOrb.h"
 
-// Draws the YouGame button and its lines (YgOrb.h) with ImGui. Only Overlay.cpp includes this,
+// Draws the app button and its lines (AppOrb.h) with ImGui. Only Overlay.cpp includes this,
 // since the platform layer has no ImGui. Video thread only, inside the overlay's ImGui frame.
-namespace Orca::UX::YgOrb
+namespace Orca::UX::AppOrb
 {
 // The button's bounds including its dot and badge; empty (min == max) when off.
 Kit::Box ButtonBox(const Model::View& view);
@@ -133,4 +133,4 @@ std::size_t FitSuffix(std::string_view text, float width, Measure&& measure)
     return space + 1;
   return hi;
 }
-}  // namespace Orca::UX::YgOrb
+}  // namespace Orca::UX::AppOrb

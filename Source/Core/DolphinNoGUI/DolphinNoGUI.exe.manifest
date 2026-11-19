@@ -3,10 +3,10 @@
 <assemblyIdentity
     version="1.0.0.0"
     processorArchitecture="amd64"
-    name="YouGame.Orca"
+    name="Subspace.Orca"
     type="win32"
 />
-<description>YG Dolphin</description>
+<description>Subspace</description>
 <dependency>
     <dependentAssembly>
         <assemblyIdentity

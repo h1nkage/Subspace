@@ -186,8 +186,8 @@ class RealMapTests(unittest.TestCase):
             "Source/Core/Core/Orca/UX/GamePatches.cpp": ("engine-sensitive", False),
             "Source/Core/Core/Orca/UX/Chat.cpp": ("engine-sensitive", False),
             "Source/Core/Core/Orca/UX/ControllerSource.cpp": ("engine-sensitive", False),
-            "Source/Core/Core/Orca/UX/YgOrb.cpp": ("engine-sensitive", False),
-            "Source/Core/Core/Orca/UX/YgOrbDraw.cpp": ("engine", False),
+            "Source/Core/Core/Orca/UX/AppOrb.cpp": ("engine-sensitive", False),
+            "Source/Core/Core/Orca/UX/AppOrbDraw.cpp": ("engine", False),
             "Source/Core/Core/Orca/Status.cpp": ("engine-sensitive", False),
             "Source/Core/Core/Orca/Games/BrawlRev2/Module.cpp": ("game-logic", False),
             "Source/Core/Core/Orca/Games/BrawlRev2/CMakeLists.txt": ("engine-sensitive", False),
@@ -199,7 +199,7 @@ class RealMapTests(unittest.TestCase):
             "Source/Core/Core/Orca/LocalStore.cpp": ("engine-sensitive", False),
             "Source/Core/Core/Orca/UX/Search.cpp": ("engine", False),
             "Source/Core/Core/Orca/UX/MenuEvents.cpp": ("engine", False),
-            "Source/Core/Core/Orca/Session/YouGameRoom.cpp": ("engine-sensitive", False),
+            "Source/Core/Core/Orca/Session/RelayRoom.cpp": ("engine-sensitive", False),
             "Source/Core/Core/Orca/Session/Session.cpp": ("engine-sensitive", False),
             "Source/Core/Core/Orca/Session/Events.h": ("engine", False),
             "Source/Core/Core/Orca/Profile.cpp": ("engine-sensitive", False),
@@ -374,7 +374,7 @@ def game(text, path="Source/Core/Core/Orca/Games/Brawl/NameTags.cpp"):
 
 class ScanTests(unittest.TestCase):
     UX = "Source/Core/Core/Orca/Games/Brawl/Queue.cpp"
-    ROOM = "Source/Core/Core/Orca/Session/YouGameRoom.cpp"
+    ROOM = "Source/Core/Core/Orca/Session/RelayRoom.cpp"
 
     def test_comments_are_blanked_strings_kept(self):
         text = ('a(); // connect(fd)\n/* getenv("X")\n system("y") */ b();\n'

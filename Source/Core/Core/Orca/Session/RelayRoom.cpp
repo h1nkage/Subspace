@@ -1,7 +1,7 @@
 // Copyright 2026 YouGame
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include "Core/Orca/Session/YouGameRoom.h"
+#include "Core/Orca/Session/RelayRoom.h"
 
 #include <algorithm>
 #include <atomic>
@@ -51,7 +51,7 @@ namespace Orca::Net
 {
 namespace
 {
-// The rooms Worker's lobby protocol (rooms/src/index.ts and rooms/src/game-lobby.ts in the YouGame
+// The rooms Worker's lobby protocol (rooms/src/index.ts and rooms/src/game-lobby.ts in the service
 // repo). Orca rooms are private game lobbies of up to four. The host plays from boot; a friend who
 // joins plugs into the next free port (drop-in). A friends room starts no room match and keeps no
 // results.
@@ -743,7 +743,15 @@ bool LoopbackBridge(std::string bridge)
          std::all_of(port.begin(), port.end(), [](char c) { return c >= '0' && c <= '9'; });
 }
 
-// Room tickets travel only over TLS, except to a rooms Worker on this machine (tests).
+// A Dolphin NetPlay lobby's room (Online::LocalRoom; read here too, as this file doesn't use
+// Online.h).
+bool LocalRoom()
+{
+  return Orca::GetEnv("ORCA_LOCAL_ROOM") == "1";
+}
+
+// Room tickets travel only over TLS, except to a rooms Worker on this machine (tests) or a NetPlay
+// lobby's gateway (always 127.0.0.1).
 bool AcceptableRoomUrl(const std::string& url)
 {
   return url.starts_with("https://") || url.starts_with("wss://") ||
@@ -789,17 +797,17 @@ std::string RefusalReason(const std::string& connect_error)
     {
       const std::string marker = " host_version=";
       const auto version = connect_error.find(marker);
-      return "Your friend is on an older YG Dolphin" +
+      return "Your friend is on an older Subspace" +
              (version == std::string::npos ? std::string() :
                                             " (" + connect_error.substr(version + marker.size()) + ")") +
              ". Ask them to press Play to update it and send you a new invite.";
     }
     if (connect_error.find(" host_newer") != std::string::npos)
-      return "Your friend is on a newer YG Dolphin. Press Play to update, then join again.";
+      return "Your friend is on a newer Subspace. Press Play to update, then join again.";
     if (connect_error.find(" lobby_mismatch") != std::string::npos)
       return "That room is set up for a different game or mode, so your game opened its own room.";
-    return "The room didn't let you in: your friend's YG Dolphin, disc or save differs from yours "
-           "(both of you: update YouGame and press Play again), or the host removed you";
+    return "The room didn't let you in: your friend's Subspace, disc or save differs from yours "
+           "(both of you: update Subspace and press Play again), or the host removed you";
   }
   if (connect_error.find("match complete") != std::string::npos)
     return "The match is over";
@@ -809,7 +817,7 @@ std::string RefusalReason(const std::string& connect_error)
     return "The invite expired; press Play again";
   if (connect_error.find("(HTTP 4") != std::string::npos)
     return "The room refused to let you in";
-  return "Could not reach YouGame's rooms";
+  return "Could not reach the room service";
 }
 
 std::string EncodePacket(const Packet& packet)
@@ -957,7 +965,7 @@ std::optional<KeyframeInfo> KeyframeOfferFromJson(const picojson::object& d)
 {
   KeyframeInfo info;
   const auto frame = Int(d, "f", 0, MAX_FRAME);
-  // YouGame's store accepts at most 128 MB.
+  // The service's store accepts at most 128 MB.
   const auto size = Int(d, "n", 1, 128 << 20);
   info.id = Str(d, "id");
   info.hash = Str(d, "x");
@@ -1124,7 +1132,7 @@ bool DecodeDirectPacket(const std::string& payload, int slot, Packet* packet)
   return true;
 }
 
-struct YouGameRoom::Impl
+struct RelayRoom::Impl
 {
   RoomOptions options;
   std::thread thread;
@@ -1133,7 +1141,7 @@ struct YouGameRoom::Impl
   // Shared with the emulator thread.
   mutable std::mutex mutex;
   RoomState state = RoomState::Connecting;
-  std::string status = "Connecting to YouGame...";
+  std::string status = "Connecting to the service...";
   std::string error_code;
   // Why this player leaves, told to the friend before going (an Orca::Status code, e.g. "desync").
   std::string leave_reason;
@@ -1376,7 +1384,7 @@ struct YouGameRoom::Impl
   std::set<std::string> co_removals;
   Clock::time_point last_heard{};
 
-  // Under the desktop app, the room is mirrored to the YouGame page through the app's bridge
+  // Under the desktop app, the room is mirrored to the app page through the app's bridge
   // (mpRoom, latest only), and the page's lobby commands come back on its event stream. `stdio`:
   // that bridge is stdin and stdout (Orca/Bridge.h), and the lobby commands come with
   // `push_token`'s handler instead of the event stream.
@@ -1526,7 +1534,7 @@ struct YouGameRoom::Impl
   bool direct_started = false;  // I/O thread only
   // Whether links are on, as the I/O thread last saw it (DirectAllowed; logged on change).
   std::optional<bool> direct_on;
-  // The ticket reply's `direct` (TicketAllowsDirect): YouGame's own switch, re-read from every
+  // The ticket reply's `direct` (TicketAllowsDirect): The service's own switch, re-read from every
   // ticket (under mutex).
   bool ticket_direct = true;
   Clock::time_point direct_summary_at{};
@@ -1640,9 +1648,9 @@ struct YouGameRoom::Impl
       return;
     }
     joining = options.joining;
+    // The online service's base URL. There is no built-in default: a Dolphin NetPlay lobby sets
+    // its loopback gateway here, and any other room service must be named explicitly.
     site = Env("ORCA_SITE");
-    if (site.empty())
-      site = "https://yougame.co";
     while (site.ends_with("/"))
       site.pop_back();
     if (start_thread)
@@ -1805,20 +1813,34 @@ struct YouGameRoom::Impl
     lobby["maxLocalPlayers"] = picojson::value(2.0);
     lobby["compatibility"] = picojson::value(options.compatibility);
 
-    const std::string bridge = Env("YOUGAME_BRIDGE"), token = Env("YOUGAME_TOKEN");
-    const std::string dev = Env("ORCA_TEST_DEV_GAME");
+    const std::string bridge = Env("SUBSPACE_BRIDGE"), token = Env("SUBSPACE_TOKEN");
+    // A Dolphin NetPlay lobby's room (ORCA_LOCAL_ROOM) answers tickets like the site's dev path.
+    const bool local = LocalRoom();
+    const std::string dev = local ? "local" : Env("ORCA_TEST_DEV_GAME");
     // The app's bridge on stdin and stdout (a sandboxed Orca), else on loopback.
-    stdio = Orca::Bridge::Enabled();
-    const bool use_bridge = stdio || (!bridge.empty() && !token.empty());
+    stdio = !local && Orca::Bridge::Enabled();
+    const bool use_bridge = !local && (stdio || (!bridge.empty() && !token.empty()));
     if (!use_bridge && dev.empty())
     {
-      End("Start YG Dolphin from the YouGame app to play online");
+      End("Start online games from Dolphin's NetPlay window");
+      return false;
+    }
+    // Placeholder for a hosted room service: without a configured site there is nowhere to ask.
+    if (!use_bridge && site.empty())
+    {
+      End("No online service is configured (set ORCA_SITE)");
+      return false;
+    }
+    // The lobby's room is on this machine; never send a ticket request anywhere else.
+    if (local && !site.starts_with("http://127.0.0.1:") && !site.starts_with("http://localhost:"))
+    {
+      End("Start online games from Dolphin's NetPlay window");
       return false;
     }
     // The bridge is the desktop app on loopback; nothing else may receive the token.
     if (use_bridge && !stdio && !LoopbackBridge(bridge))
     {
-      End("Invalid YouGame app bridge address");
+      End("Invalid desktop app bridge address");
       return false;
     }
     if (use_bridge)
@@ -1866,7 +1888,7 @@ struct YouGameRoom::Impl
       }
       if (!response && !answer)
       {
-        End(stop ? "You left the room" : "YouGame did not respond", stop ? "" : "network");
+        End(stop ? "You left the room" : "The service did not respond", stop ? "" : "network");
         return false;
       }
       picojson::value json;
@@ -1877,7 +1899,7 @@ struct YouGameRoom::Impl
       else if (!Json::ParseJson(std::string(response->begin(), response->end()), &json) ||
                !json.is<picojson::object>())
       {
-        End(fmt::format("YouGame sent an unreadable reply (HTTP {})", http.GetLastResponseCode()));
+        End(fmt::format("The service sent an unreadable reply (HTTP {})", http.GetLastResponseCode()));
         return false;
       }
       picojson::object o = json.get<picojson::object>();
@@ -1887,7 +1909,7 @@ struct YouGameRoom::Impl
         if (!o.count("ok") || !o["ok"].evaluate_as_boolean() ||
             !o["result"].is<picojson::object>())
         {
-          End(Str(o, "error").empty() ? "The YouGame app refused the request" : Str(o, "error"));
+          End(Str(o, "error").empty() ? "The desktop app refused the request" : Str(o, "error"));
           return false;
         }
         // Copied out first: assigning a map from one of its own elements frees it mid-copy.
@@ -1896,7 +1918,7 @@ struct YouGameRoom::Impl
       }
       else if (http.GetLastResponseCode() != 200)
       {
-        End(Str(o, "error").empty() ? "YouGame refused the ticket" : Str(o, "error"));
+        End(Str(o, "error").empty() ? "The service refused the ticket" : Str(o, "error"));
         return false;
       }
       *result = std::move(o);
@@ -1977,7 +1999,7 @@ struct YouGameRoom::Impl
     *ticket = Str(reply, "ticket");
     if (url->empty() || ticket->empty() || !AcceptableRoomUrl(*url))
     {
-      End("YouGame sent no usable room ticket");
+      End("The service sent no usable room ticket");
       return false;
     }
     keyframes_url = KeyframesUrl(Str(reply, "keyframes"));
@@ -2002,7 +2024,7 @@ struct YouGameRoom::Impl
   }
 
   // The keyframe store's base URL: what the ticket reply names, if it's on the site the tickets
-  // come from (ORCA_SITE, else yougame.co); otherwise the site's default.
+  // come from (ORCA_SITE); otherwise the site's default.
   std::string KeyframesUrl(const std::string& named) const
   {
     if (!named.empty() && named.starts_with(site + "/"))
@@ -2032,7 +2054,7 @@ struct YouGameRoom::Impl
       }
       room = code;
       lobby = ticket_lobby;
-      // YouGame's keyframe store accepts a room ticket for hours past expiry, so only mint another
+      // The service's keyframe store accepts a room ticket for hours past expiry, so only mint another
       // when it refused this one. A reconnect must refresh before the five-minute expiry.
       if (!fresh && !current_ticket.empty() &&
           (!deadline || Now() - ticket_minted < std::chrono::seconds(240)))
@@ -2085,7 +2107,7 @@ struct YouGameRoom::Impl
     }
     else
     {
-      request["dev"] = picojson::value(Env("ORCA_TEST_DEV_GAME"));
+      request["dev"] = picojson::value(LocalRoom() ? "local" : Env("ORCA_TEST_DEV_GAME"));
       request["player_id"] = picojson::value(dev_player);
       request["name"] = picojson::value(options.player_name);
       response = http.Post(site + "/api/multiplayer/ticket", picojson::value(request).serialize(),
@@ -2105,7 +2127,7 @@ struct YouGameRoom::Impl
     else if (!response || !Json::ParseJson(std::string(response->begin(), response->end()), &json) ||
              !json.is<picojson::object>())
     {
-      *error = fmt::format("no ticket from YouGame (HTTP {})", http.GetLastResponseCode());
+      *error = fmt::format("no ticket from the service (HTTP {})", http.GetLastResponseCode());
       return false;
     }
     picojson::object reply = json.get<picojson::object>();
@@ -2122,13 +2144,13 @@ struct YouGameRoom::Impl
     }
     else if (http.GetLastResponseCode() != 200)
     {
-      *error = Str(reply, "error").empty() ? "YouGame refused a ticket" : Str(reply, "error");
+      *error = Str(reply, "error").empty() ? "The service refused a ticket" : Str(reply, "error");
       return false;
     }
     *ticket = Str(reply, "ticket");
     if (ticket->empty())
     {
-      *error = "YouGame sent no ticket";
+      *error = "The service sent no ticket";
       return false;
     }
     *store_url = KeyframesUrl(Str(reply, "keyframes")) + "/" + room;
@@ -2156,7 +2178,7 @@ struct YouGameRoom::Impl
     return ice;
   }
 
-  // Whether direct links may run now, and if not, why: YouGame's ticket can turn them off for
+  // Whether direct links may run now, and if not, why: The service's ticket can turn them off for
   // everyone (`direct: false`), and the player can too (the app's "direct off"). ORCA_DIRECT=0
   // builds no DirectLink at all.
   bool DirectAllowed(std::string* why)
@@ -2170,7 +2192,7 @@ struct YouGameRoom::Impl
       std::lock_guard lock(mutex);
       if (!ticket_direct)
       {
-        *why = "YouGame's ticket turned them off";
+        *why = "The service's ticket turned them off";
         return false;
       }
     }
@@ -3445,7 +3467,7 @@ struct YouGameRoom::Impl
   void OnPageEvent(const picojson::object& e)
   {
     // Only this game's own page may command it.
-    const std::string game = Env("YOUGAME_GAME");
+    const std::string game = Env("SUBSPACE_GAME");
     if (game.empty() || Str(e, "slug") != game)
       return;
     const std::string cmd = Str(e, "cmd");
@@ -5469,7 +5491,7 @@ struct YouGameRoom::Impl
 
       if (Str(m, "lifecycle") != "game")
       {
-        End("This room is not a YG Dolphin lobby", "room_mismatch");
+        End("This room is not a Subspace lobby", "room_mismatch");
         return;
       }
       // A room whose game is running is what a drop-in friend joins: no refusal.
@@ -6027,9 +6049,9 @@ struct YouGameRoom::Impl
       else if (reason == "stalled")
         End("The connection with your friend stalled, so you left the game", "peer_left");
       else if (reason == "signed_out")
-        End("Your friend needs to sign in to YouGame to share their game", "signed_out");
+        End("Your friend needs to sign in to the service to share their game", "signed_out");
       else if (reason == "refused")
-        End("YouGame couldn't pass your friend's game to you", "network");
+        End("The service couldn't pass your friend's game to you", "network");
       else if (reason == "room_full")
         End("Your friend's game already has another friend in it", "room_full");
       else if (reason == "replay_limit")
@@ -6048,7 +6070,7 @@ struct YouGameRoom::Impl
         // Not a player of this game; a joiner can't play it at all.
         WARN_LOG_FMT(NETPLAY, "Orca room: {} runs a different Orca build or setup", id);
         if (joining && id == host)
-          End("Your friend is running a different YG Dolphin build or setup", "room_mismatch");
+          End("Your friend is running a different Subspace build or setup", "room_mismatch");
         return;
       }
       const std::string their_run = Str(d, "run");
@@ -6252,22 +6274,22 @@ struct YouGameRoom::Impl
   }
 };
 
-YouGameRoom::YouGameRoom(RoomOptions options) : m_impl(std::make_unique<Impl>(std::move(options)))
+RelayRoom::RelayRoom(RoomOptions options) : m_impl(std::make_unique<Impl>(std::move(options)))
 {
 }
 
-YouGameRoom::YouGameRoom(RoomOptions options, bool start_io)
+RelayRoom::RelayRoom(RoomOptions options, bool start_io)
     : m_impl(std::make_unique<Impl>(std::move(options), start_io))
 {
 }
 
-YouGameRoom::~YouGameRoom() = default;
+RelayRoom::~RelayRoom() = default;
 
 std::vector<RoomTestSnapshot> TraceRoomForTest(const RoomOptions& options,
                                              const std::vector<RoomTestStep>& steps,
-                                             const std::function<void(YouGameRoom&)>& observe)
+                                             const std::function<void(RelayRoom&)>& observe)
 {
-  YouGameRoom owner(options, false);
+  RelayRoom owner(options, false);
   auto& room = *owner.m_impl;
   room.code = options.room_code;
   room.bridged = true;  // Exercise publication without starting a bridge or making requests.
@@ -6385,7 +6407,7 @@ std::vector<RoomTestSnapshot> TraceRoomForTest(const RoomOptions& options,
         room.Tick();
       break;
     case RoomTestStep::Kind::ConnectFailure:
-      room.reconnect_job = std::make_unique<YouGameRoom::Impl::ReconnectJob>();
+      room.reconnect_job = std::make_unique<RelayRoom::Impl::ReconnectJob>();
       room.reconnect_job->error = step.text;
       room.reconnect_job->done = true;
       room.PollReconnect();
@@ -6432,24 +6454,24 @@ std::vector<RoomTestSnapshot> TraceRoomForTest(const RoomOptions& options,
   return trace;
 }
 
-RoomState YouGameRoom::GetState() const
+RoomState RelayRoom::GetState() const
 {
   return m_impl->State();
 }
 
-int YouGameRoom::Seat() const
+int RelayRoom::Seat() const
 {
   std::lock_guard lock(m_impl->mutex);
   return m_impl->seat;
 }
 
-std::vector<int> YouGameRoom::CoSeats() const
+std::vector<int> RelayRoom::CoSeats() const
 {
   std::lock_guard lock(m_impl->mutex);
   return m_impl->my_co_seats;
 }
 
-std::optional<std::vector<int>> YouGameRoom::CoSeatsForSolo() const
+std::optional<std::vector<int>> RelayRoom::CoSeatsForSolo() const
 {
   std::lock_guard lock(m_impl->mutex);
   if (m_impl->local_add_pending)
@@ -6457,13 +6479,13 @@ std::optional<std::vector<int>> YouGameRoom::CoSeatsForSolo() const
   return m_impl->my_co_seats;
 }
 
-void YouGameRoom::SetSessionActive(bool active)
+void RelayRoom::SetSessionActive(bool active)
 {
   std::lock_guard lock(m_impl->mutex);
   m_impl->session_active = active;
 }
 
-bool YouGameRoom::TryStartSession(const std::vector<int>& co_seats)
+bool RelayRoom::TryStartSession(const std::vector<int>& co_seats)
 {
   std::lock_guard lock(m_impl->mutex);
   if (m_impl->local_add_pending || m_impl->my_co_seats != co_seats ||
@@ -6473,7 +6495,7 @@ bool YouGameRoom::TryStartSession(const std::vector<int>& co_seats)
   return true;
 }
 
-int YouGameRoom::LocalIndex(int seat, bool only_mine) const
+int RelayRoom::LocalIndex(int seat, bool only_mine) const
 {
   std::lock_guard lock(m_impl->mutex);
   if (seat < 0 || seat >= MAX_SEATS ||
@@ -6483,13 +6505,13 @@ int YouGameRoom::LocalIndex(int seat, bool only_mine) const
   return m_impl->local_indices[seat];
 }
 
-std::vector<int> YouGameRoom::GroupOf(int seat) const
+std::vector<int> RelayRoom::GroupOf(int seat) const
 {
   std::lock_guard lock(m_impl->mutex);
   return seat >= 0 && seat < MAX_SEATS ? m_impl->seat_groups[seat] : std::vector<int>{};
 }
 
-std::optional<bool> YouGameRoom::Joining() const
+std::optional<bool> RelayRoom::Joining() const
 {
   std::lock_guard lock(m_impl->mutex);
   if (!m_impl->role_known)
@@ -6497,18 +6519,18 @@ std::optional<bool> YouGameRoom::Joining() const
   return m_impl->joining;
 }
 
-std::vector<PeerEvent> YouGameRoom::TakePeerEvents()
+std::vector<PeerEvent> RelayRoom::TakePeerEvents()
 {
   std::lock_guard lock(m_impl->mutex);
   return std::exchange(m_impl->events, {});
 }
 
-bool YouGameRoom::InputHoldFor(const std::string& id) const
+bool RelayRoom::InputHoldFor(const std::string& id) const
 {
   return m_impl->InputHoldAlive(id, std::chrono::steady_clock::now());
 }
 
-bool YouGameRoom::ArrivalPending() const
+bool RelayRoom::ArrivalPending() const
 {
   std::lock_guard lock(m_impl->mutex);
   // As the host takes them (OnlineMatch's HostEvents): a friend on a seat after the host's.
@@ -6517,7 +6539,7 @@ bool YouGameRoom::ArrivalPending() const
   });
 }
 
-std::vector<int> YouGameRoom::LeftSeatsPending() const
+std::vector<int> RelayRoom::LeftSeatsPending() const
 {
   std::lock_guard lock(m_impl->mutex);
   std::vector<int> seats;
@@ -6529,7 +6551,7 @@ std::vector<int> YouGameRoom::LeftSeatsPending() const
   return seats;
 }
 
-bool YouGameRoom::HostLeftPending() const
+bool RelayRoom::HostLeftPending() const
 {
   std::lock_guard lock(m_impl->mutex);
   return std::ranges::any_of(m_impl->events, [](const PeerEvent& event) {
@@ -6537,13 +6559,13 @@ bool YouGameRoom::HostLeftPending() const
   });
 }
 
-std::optional<std::chrono::steady_clock::time_point> YouGameRoom::HostAwayDeadline() const
+std::optional<std::chrono::steady_clock::time_point> RelayRoom::HostAwayDeadline() const
 {
   std::lock_guard lock(m_impl->mutex);
   return m_impl->state == RoomState::Ended ? std::nullopt : m_impl->host_hold_until;
 }
 
-void YouGameRoom::RetryPeer(int seat)
+void RelayRoom::RetryPeer(int seat)
 {
   std::lock_guard lock(m_impl->mutex);
   if (const auto id = m_impl->peer_ids.find(seat); id != m_impl->peer_ids.end() &&
@@ -6551,7 +6573,7 @@ void YouGameRoom::RetryPeer(int seat)
     m_impl->pending_retries.push_back(id->second);
 }
 
-bool YouGameRoom::HoldInputSilence(Clock::time_point since, Clock::time_point now,
+bool RelayRoom::HoldInputSilence(Clock::time_point since, Clock::time_point now,
                                   std::optional<std::vector<int>> missing)
 {
   std::lock_guard lock(m_impl->mutex);
@@ -6622,7 +6644,7 @@ bool YouGameRoom::HoldInputSilence(Clock::time_point since, Clock::time_point no
   return held;
 }
 
-bool YouGameRoom::RoomRecovering(Clock::time_point now) const
+bool RelayRoom::RoomRecovering(Clock::time_point now) const
 {
   std::lock_guard lock(m_impl->mutex);
   // All recovery rooms expose input holds/countdown to the session and overlay.
@@ -6636,20 +6658,20 @@ bool YouGameRoom::RoomRecovering(Clock::time_point now) const
                              [&](const auto& hold) { return now < hold.second; });
 }
 
-bool YouGameRoom::FreshTicket(bool fresh, std::string* ticket, std::string* store_url,
+bool RelayRoom::FreshTicket(bool fresh, std::string* ticket, std::string* store_url,
                               std::string* error)
 {
   return m_impl->FreshTicket(fresh, ticket, store_url, error);
 }
 
-void YouGameRoom::DropPeer(int seat, const std::string& reason)
+void RelayRoom::DropPeer(int seat, const std::string& reason)
 {
   std::lock_guard lock(m_impl->mutex);
   if (m_impl->pending_drops.size() < 16)
     m_impl->pending_drops.emplace_back(seat, reason);
 }
 
-void YouGameRoom::HoldJoins(bool holding, bool fight)
+void RelayRoom::HoldJoins(bool holding, bool fight)
 {
   std::lock_guard lock(m_impl->mutex);
   fight = holding && fight;
@@ -6660,14 +6682,14 @@ void YouGameRoom::HoldJoins(bool holding, bool fight)
   m_impl->hold_told = false;
 }
 
-void YouGameRoom::BroadcastNames(const std::vector<KeyframeInfo::Name>& names, int version)
+void RelayRoom::BroadcastNames(const std::vector<KeyframeInfo::Name>& names, int version)
 {
   std::lock_guard lock(m_impl->mutex);
   m_impl->pending_names = std::pair(names, version);
   m_impl->offer_now = true;
 }
 
-void YouGameRoom::OfferKeyframe(int seat, const KeyframeInfo& info)
+void RelayRoom::OfferKeyframe(int seat, const KeyframeInfo& info)
 {
   std::lock_guard lock(m_impl->mutex);
   m_impl->keyframe_offers[seat] = info;
@@ -6675,57 +6697,57 @@ void YouGameRoom::OfferKeyframe(int seat, const KeyframeInfo& info)
   m_impl->offer_now = true;
 }
 
-std::string YouGameRoom::SeatName(int seat) const
+std::string RelayRoom::SeatName(int seat) const
 {
   std::lock_guard lock(m_impl->mutex);
   const auto it = m_impl->seat_names.find(seat);
   return it == m_impl->seat_names.end() ? std::string() : it->second;
 }
 
-std::vector<u8> YouGameRoom::HelloControls() const
+std::vector<u8> RelayRoom::HelloControls() const
 {
   std::lock_guard lock(m_impl->mutex);
   const auto& controls = m_impl->options.controls;
   return m_impl->joining && controls.size() <= MAX_CONTROLS ? controls : std::vector<u8>{};
 }
 
-std::vector<u8> YouGameRoom::HelloQueue() const
+std::vector<u8> RelayRoom::HelloQueue() const
 {
   std::lock_guard lock(m_impl->mutex);
   const auto& queue = m_impl->options.queue;
   return m_impl->joining && queue.size() <= MAX_QUEUE ? queue : std::vector<u8>{};
 }
 
-std::string YouGameRoom::Code() const
+std::string RelayRoom::Code() const
 {
   std::lock_guard lock(m_impl->mutex);
   return m_impl->code;
 }
 
-u64 YouGameRoom::Generation() const
+u64 RelayRoom::Generation() const
 {
   return m_impl->generation;
 }
 
-std::string YouGameRoom::Status() const
+std::string RelayRoom::Status() const
 {
   std::lock_guard lock(m_impl->mutex);
   return m_impl->status;
 }
 
-void YouGameRoom::SetLeaveReason(std::string reason)
+void RelayRoom::SetLeaveReason(std::string reason)
 {
   std::lock_guard lock(m_impl->mutex);
   m_impl->leave_reason = std::move(reason);
 }
 
-std::string YouGameRoom::ErrorCode() const
+std::string RelayRoom::ErrorCode() const
 {
   std::lock_guard lock(m_impl->mutex);
   return m_impl->state == RoomState::Ended ? m_impl->error_code : "";
 }
 
-int YouGameRoom::RoundTripMs(u32* sequence) const
+int RelayRoom::RoundTripMs(u32* sequence) const
 {
   std::lock_guard lock(m_impl->mutex);
   if (sequence)
@@ -6733,7 +6755,7 @@ int YouGameRoom::RoundTripMs(u32* sequence) const
   return m_impl->rtt;
 }
 
-std::vector<int> YouGameRoom::RecentRoundTrips(u32* sequence) const
+std::vector<int> RelayRoom::RecentRoundTrips(u32* sequence) const
 {
   std::lock_guard lock(m_impl->mutex);
   *sequence = m_impl->rtt_sequence;
@@ -6902,54 +6924,54 @@ void CoalesceToSeats(std::optional<Packet>* outgoing,
     CoalescePacket(&(*addressed)[recipient], packet);
 }
 
-bool YouGameRoom::RoomRecovery() const
+bool RelayRoom::RoomRecovery() const
 {
   return m_impl->RoomRecovery();
 }
 
-std::string YouGameRoom::Queue() const
+std::string RelayRoom::Queue() const
 {
   std::lock_guard lock(m_impl->mutex);
   return m_impl->queue;
 }
 
-std::string YouGameRoom::PlayQueue() const
+std::string RelayRoom::PlayQueue() const
 {
   std::lock_guard lock(m_impl->mutex);
   return m_impl->doubles ? "private" : m_impl->queue;
 }
 
-std::map<int, int> YouGameRoom::Teams() const
+std::map<int, int> RelayRoom::Teams() const
 {
   std::lock_guard lock(m_impl->mutex);
   return m_impl->match_teams.empty() ? m_impl->seat_teams : m_impl->match_teams;
 }
 
-bool YouGameRoom::Doubles() const
+bool RelayRoom::Doubles() const
 {
   std::lock_guard lock(m_impl->mutex);
   return m_impl->doubles;
 }
 
-bool YouGameRoom::MatchLive() const
+bool RelayRoom::MatchLive() const
 {
   std::lock_guard lock(m_impl->mutex);
   return !m_impl->match_id.empty() && !m_impl->set_done;
 }
 
-bool YouGameRoom::SetOver() const
+bool RelayRoom::SetOver() const
 {
   std::lock_guard lock(m_impl->mutex);
   return m_impl->set_over;
 }
 
-void YouGameRoom::SetOpponentPlugged(bool plugged)
+void RelayRoom::SetOpponentPlugged(bool plugged)
 {
   std::lock_guard lock(m_impl->mutex);
   m_impl->opponent_plugged = plugged;
 }
 
-void YouGameRoom::ReportGame(GameReport report)
+void RelayRoom::ReportGame(GameReport report)
 {
   m_impl->probe_stopped = true;
   std::lock_guard lock(m_impl->mutex);
@@ -6957,7 +6979,7 @@ void YouGameRoom::ReportGame(GameReport report)
     m_impl->reports.push_back({std::move(report), Clock::now()});
 }
 
-void YouGameRoom::ReportGameStart(int start)
+void RelayRoom::ReportGameStart(int start)
 {
   if (start >= 0)
     m_impl->probe_stopped = true;
@@ -6968,37 +6990,37 @@ void YouGameRoom::ReportGameStart(int start)
     m_impl->reports.push_back({std::move(report), Clock::now(), true});
 }
 
-void YouGameRoom::ReportDesync()
+void RelayRoom::ReportDesync()
 {
   std::lock_guard lock(m_impl->mutex);
   m_impl->desync_pending = true;
 }
 
-void YouGameRoom::ReportStall()
+void RelayRoom::ReportStall()
 {
   std::lock_guard lock(m_impl->mutex);
   m_impl->stall_pending = true;
 }
 
-int YouGameRoom::KnownSetGames() const
+int RelayRoom::KnownSetGames() const
 {
   std::lock_guard lock(m_impl->mutex);
   return m_impl->known_games;
 }
 
-void YouGameRoom::ReportFault()
+void RelayRoom::ReportFault()
 {
   std::lock_guard lock(m_impl->mutex);
   m_impl->fault_pending = true;
 }
 
-void YouGameRoom::KeepAlive()
+void RelayRoom::KeepAlive()
 {
   std::lock_guard lock(m_impl->mutex);
   m_impl->alive_wanted = Clock::now();
 }
 
-void YouGameRoom::SendReplayStream(const std::vector<u8>& bytes)
+void RelayRoom::SendReplayStream(const std::vector<u8>& bytes)
 {
   if (bytes.empty())
     return;
@@ -7017,7 +7039,7 @@ void YouGameRoom::SendReplayStream(const std::vector<u8>& bytes)
   m_impl->replay_texts.push_back(std::move(text));
 }
 
-void YouGameRoom::SendReplayPacked(const std::vector<std::vector<u8>>& pieces, int frames)
+void RelayRoom::SendReplayPacked(const std::vector<std::vector<u8>>& pieces, int frames)
 {
   if (pieces.empty() || frames <= 0)
     return;
@@ -7050,7 +7072,7 @@ void YouGameRoom::SendReplayPacked(const std::vector<std::vector<u8>>& pieces, i
                                std::make_move_iterator(texts.end()));
 }
 
-void YouGameRoom::TestDropConnection(std::chrono::seconds ticket_age)
+void RelayRoom::TestDropConnection(std::chrono::seconds ticket_age)
 {
   if (Env("ORCA_TEST_ROOM_DROP") == "1")
   {
@@ -7063,7 +7085,7 @@ void YouGameRoom::TestDropConnection(std::chrono::seconds ticket_age)
   }
 }
 
-void YouGameRoom::Send(const Packet& packet)
+void RelayRoom::Send(const Packet& packet)
 {
   {
     std::lock_guard lock(m_impl->mutex);
@@ -7075,7 +7097,7 @@ void YouGameRoom::Send(const Packet& packet)
   m_impl->SendDirect(packet);
 }
 
-void YouGameRoom::SendToSeats(const std::map<int, Packet>& packets)
+void RelayRoom::SendToSeats(const std::map<int, Packet>& packets)
 {
   {
     std::lock_guard lock(m_impl->mutex);
@@ -7089,7 +7111,7 @@ void YouGameRoom::SendToSeats(const std::map<int, Packet>& packets)
     m_impl->SendDirect(packet, recipient);
 }
 
-std::vector<Packet> YouGameRoom::Receive()
+std::vector<Packet> RelayRoom::Receive()
 {
   std::vector<Packet> packets;
   {
@@ -7144,24 +7166,24 @@ std::vector<Packet> YouGameRoom::Receive()
   return packets;
 }
 
-DirectSummary YouGameRoom::Direct() const
+DirectSummary RelayRoom::Direct() const
 {
   std::lock_guard lock(m_impl->mutex);
   return m_impl->direct_summary;
 }
 
-void YouGameRoom::TestDirect(const std::string& command)
+void RelayRoom::TestDirect(const std::string& command)
 {
   if (m_impl->direct)
     m_impl->direct->Test(command);
 }
 
-bool YouGameRoom::Connected() const
+bool RelayRoom::Connected() const
 {
   return GetState() == RoomState::Waiting;
 }
 
-void YouGameRoom::Leave()
+void RelayRoom::Leave()
 {
   m_impl->stop = true;
   if (m_impl->thread.joinable())

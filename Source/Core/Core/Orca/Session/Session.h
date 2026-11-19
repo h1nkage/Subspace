@@ -322,7 +322,7 @@ public:
   Step OnBoundary(int completed_frame, const Pad& local_pad);
   Step OnBoundary(int completed_frame, const Pad& local_pad, const Pads* co_pads);
   // A measured relay round trip, from the transport's pings. Call on the OnBoundary thread once per
-  // new measurement (YouGameRoom::RoundTripMs gives a sequence number; feed only when it changes,
+  // new measurement (RelayRoom::RoundTripMs gives a sequence number; feed only when it changes,
   // or one ping counts many times). A new session may take the room's recent ones at once, oldest
   // first, so it covers the link from its first frame.
   void OnRoundTrip(int rtt_ms);

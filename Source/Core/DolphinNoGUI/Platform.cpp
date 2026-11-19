@@ -32,7 +32,7 @@
 #include "Core/Orca/UX/QueueApp.h"
 #include "Core/Orca/UX/Search.h"
 #include "Core/Orca/UX/SetEnd.h"
-#include "Core/Orca/UX/YgOrb.h"
+#include "Core/Orca/UX/AppOrb.h"
 #include "Core/Rollback/OnlineMatch.h"
 #include "Core/Rollback/Harness.h"
 #include "Core/Rollback/ReplayStream.h"
@@ -323,8 +323,8 @@ void Platform::ProcessEmbedCommands()
           // window system resizes it.
           ApplyEmbedView();
           EmbedSetRect(*rect);
-          // The YouGame button is placed in the page's device pixels (UX/YgOrb.h).
-          Orca::UX::YgOrb::SetViewSize(rect->w, rect->h);
+          // The app button is placed in the page's device pixels (UX/AppOrb.h).
+          Orca::UX::AppOrb::SetViewSize(rect->w, rect->h);
         }
         if (too_small != m_embed_too_small)
         {
@@ -622,37 +622,37 @@ void Platform::ProcessEmbedCommands()
     {
       // The app sends this shortcut only from its focused view; Orca never polls for it.
       if (Orca::Status::Cap(Orca::Status::HOSTUI_CAP))
-        Orca::UX::YgOrb::ActivateHost(Orca::UX::YgOrb::HostAction::Feedback);
+        Orca::UX::AppOrb::ActivateHost(Orca::UX::AppOrb::HostAction::Feedback);
     }
     else if (cmd == "host-menu")
     {
-      Orca::UX::YgOrb::ToggleHostMenu(
+      Orca::UX::AppOrb::ToggleHostMenu(
           IsEmbedded() ? +[](std::string_view line) { Embed::Out(std::string(line)); } : nullptr);
     }
     else if (cmd == "orb")
     {
-      // Draws the YouGame button where the page's own sits under Orca (UX/YgOrb.h).
-      if (std::optional<Orca::UX::YgOrb::Command> orb = Orca::UX::YgOrb::ParseOrb(line))
-        Orca::UX::YgOrb::Apply(*orb);
+      // Draws the app button where the page's own sits under Orca (UX/AppOrb.h).
+      if (std::optional<Orca::UX::AppOrb::Command> orb = Orca::UX::AppOrb::ParseOrb(line))
+        Orca::UX::AppOrb::Apply(*orb);
       else
         Embed::Out("unsupported orb");
     }
     else if (cmd == "notice")
     {
-      // A notice beside the YouGame button, e.g. someone joined or wrote. Players' words are never
+      // A notice beside the app button, e.g. someone joined or wrote. Players' words are never
       // printed or logged.
-      if (std::optional<Orca::UX::YgOrb::Notice> notice = Orca::UX::YgOrb::ParseNotice(line))
-        Orca::UX::YgOrb::Show(std::move(*notice));
+      if (std::optional<Orca::UX::AppOrb::Notice> notice = Orca::UX::AppOrb::ParseNotice(line))
+        Orca::UX::AppOrb::Show(std::move(*notice));
       else
         Embed::Out("unsupported notice");
     }
     else if (cmd == "talk")
     {
-      // Hold-to-talk's row beside the YouGame button, replaced by each line, with the app's "talk"
-      // cap (UX/YgOrb.h). Players' words are never printed or logged.
-      std::optional<Orca::UX::YgOrb::Talk> talk = Orca::UX::YgOrb::ParseTalk(line);
+      // Hold-to-talk's row beside the app button, replaced by each line, with the app's "talk"
+      // cap (UX/AppOrb.h). Players' words are never printed or logged.
+      std::optional<Orca::UX::AppOrb::Talk> talk = Orca::UX::AppOrb::ParseTalk(line);
       if (talk && Orca::Status::Cap(Orca::Status::TALK_CAP))
-        Orca::UX::YgOrb::SetTalk(std::move(*talk));
+        Orca::UX::AppOrb::SetTalk(std::move(*talk));
       else
         Embed::Out("unsupported talk");
     }

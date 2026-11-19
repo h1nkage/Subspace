@@ -39,7 +39,7 @@
 #include "Core/Orca/SafeJson.h"
 #include "Core/Orca/Session/Keyframe.h"
 #include "Core/Orca/Session/Online.h"
-#include "Core/Orca/Session/YouGameRoom.h"
+#include "Core/Orca/Session/RelayRoom.h"
 #include "Core/Rollback/ReplayStream.h"
 #include "Core/System.h"
 
@@ -772,7 +772,7 @@ TEST(OrcaKeyframe, HttpStoreAgainstAFakeServer)
                              const std::string& fresh_ticket) {
     return MakeHttpKeyframeStore(
         [=, &minted](bool fresh, std::string* t, std::string* url, std::string*) {
-          // Like YouGameRoom::FreshTicket: a minted ticket is the cached one from then on.
+          // Like RelayRoom::FreshTicket: a minted ticket is the cached one from then on.
           minted += fresh;
           *t = minted ? fresh_ticket : cached;
           *url = std::string(server) + "/api/orca/keyframes/" + room;
@@ -868,7 +868,7 @@ TEST(OrcaKeyframe, HttpStoreAgainstAFakeServer)
     EXPECT_EQ(minted, 1);
     EXPECT_NE(error.find("403"), std::string::npos) << error;
     EXPECT_EQ(LastRefusal(), "signed_out");
-    // A 4xx without YouGame's code (an edge page) fails this try but isn't a refusal.
+    // A 4xx without the service's code (an edge page) fails this try but isn't a refusal.
     EXPECT_FALSE(store_for("room4", "edge", "edge")->Put(info, blob, &error));
     EXPECT_NE(error.find("403"), std::string::npos) << error;
     EXPECT_EQ(LastRefusal(), "");
@@ -1145,7 +1145,7 @@ TEST(OrcaReplayStream, ValidHeaderParsesByteIdentically)
       R"({"build":"0123456789abcdef","compat":"orca2:test","first_frame":500,"game":"RSBE01",)"
       R"("origin_hash":"123456789abcdef0","room":"abc123","seat_labels":false,"segment":2,"v":2})";
   ASSERT_EQ(json.size(), 171u);
-  std::vector<u8> golden{'Y', 'G', 'R', 'S', 1, 0, 0, 0, 171, 0, 0, 0};
+  std::vector<u8> golden{'S', 'S', 'R', 'S', 1, 0, 0, 0, 171, 0, 0, 0};
   golden.insert(golden.end(), json.begin(), json.end());
   ReplayStreamReader reader("orca2:test");
   std::string error;
@@ -1156,23 +1156,23 @@ TEST(OrcaReplayStream, ValidHeaderParsesByteIdentically)
   EXPECT_TRUE(reader.Archive().frames.empty());
 }
 
-// Changing this header also requires updating rooms/test/fixtures/yg-dolphin-stream-header.json;
+// Changing this header also requires updating rooms/test/fixtures/subspace-stream-header.json;
 // its "about" field describes the refresh steps.
 TEST(OrcaReplayStream, HeaderBytesMatchRoomsGoldenFixture)
 {
   auto info = StreamInfo();
   EXPECT_EQ(Common::BytesToHexString(PackReplayStreamHeader(info)),
-            "5947525301000000ab0000007b226275696c64223a2230313233343536373839616263646566222c22636f6d70617422"
+            "5353525301000000ab0000007b226275696c64223a2230313233343536373839616263646566222c22636f6d70617422"
             "3a226f726361323a74657374222c2266697273745f6672616d65223a3530302c2267616d65223a22525342453031222c"
             "226f726967696e5f68617368223a2231323334353637383961626364656630222c22726f6f6d223a2261626331323322"
             "2c22736561745f6c6162656c73223a66616c73652c227365676d656e74223a322c2276223a327d");
   info.seat_labels = true;
   EXPECT_EQ(Common::BytesToHexString(PackReplayStreamHeader(info)),
-            "5947525301000000aa0000007b226275696c64223a2230313233343536373839616263646566222c22636f6d70617422"
+            "5353525301000000aa0000007b226275696c64223a2230313233343536373839616263646566222c22636f6d70617422"
             "3a226f726361323a74657374222c2266697273745f6672616d65223a3530302c2267616d65223a22525342453031222c"
             "226f726967696e5f68617368223a2231323334353637383961626364656630222c22726f6f6d223a2261626331323322"
             "2c22736561745f6c6162656c73223a747275652c227365676d656e74223a322c2276223a327d");
-  // A change here means updating rooms/test/fixtures/yg-dolphin-stream-header.json streams.chunked
+  // A change here means updating rooms/test/fixtures/subspace-stream-header.json streams.chunked
   // too. The XML report carries the sample used in notes/train-0348-replay-fixture.md.
   const auto chunked = Stream(Replay(30, 0), 10);
   EXPECT_EQ(chunked.size(), 1516u);
@@ -1707,7 +1707,7 @@ TEST(OrcaReplayStream, ContainerVersionIsTheOneTheServersAccept)
 {
   const std::vector<u8> header = PackReplayStreamHeader(StreamInfo());
   ASSERT_GE(header.size(), 12u);
-  EXPECT_EQ(std::string(header.begin(), header.begin() + 4), "YGRS");
+  EXPECT_EQ(std::string(header.begin(), header.begin() + 4), "SSRS");
   EXPECT_EQ(header[4] | header[5] << 8 | header[6] << 16 | header[7] << 24, 1);
 }
 
@@ -1980,7 +1980,7 @@ TEST(OrcaReplayStream, LocalSourcesMustBeRegularFiles)
   const std::string directory = File::CreateTempDir();
   ASSERT_FALSE(directory.empty());
   const Common::ScopeGuard cleanup([&] { File::DeleteDirRecursively(directory); });
-  const std::string path = directory + "/replay.ygr";
+  const std::string path = directory + "/replay.ssr";
   ASSERT_TRUE(File::WriteStringToFile(path, "replay"));
   std::string error;
   auto file = Rollback::ReplayStream::OpenReplayFile(path, &error);
@@ -2078,7 +2078,7 @@ TEST(OrcaReplayStream, WriterStripsRealNamesAndPreservesTagDecisions)
     const std::map<int, u64> checksums{{60, 123}, {120, 456}};
     ASSERT_TRUE(writer.Pump(replay, 120, 120, &checksums));
   }
-  File::IOFile file(base + "-1.ygr", "rb");
+  File::IOFile file(base + "-1.ssr", "rb");
   ASSERT_TRUE(file);
   std::vector<u8> bytes(file.GetSize());
   ASSERT_TRUE(file.ReadBytes(bytes.data(), bytes.size()));

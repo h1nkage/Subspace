@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # versus-cpu-dropin.py: a friend drops into a host's local Versus character select (Group > Brawl)
-# that has CPUs (ORCA.md "No CPUs online"), over a real YouGame dev room. Runs two Orca processes,
+# that has CPUs (ORCA.md "No CPUs online"), over a real service dev room. Runs two Orca processes,
 # headless and muted.
 #
 #   Tools/orca/versus-cpu-dropin.py <dolphin-emu-nogui> <disc> [--pplus <launcher.dol>]
@@ -82,7 +82,7 @@ class Orca:
         env = {
             "HOME": os.environ["HOME"],
             "TMPDIR": os.environ.get("TMPDIR", WORK),
-            "YG_THROTTLE": "1",
+            "ORCA_THROTTLE": "1",
             "PATH": os.environ["PATH"],
             "ORCA_SESSION": "1",
             "ORCA_TEST_COMMANDS": "1",
@@ -90,8 +90,8 @@ class Orca:
             "ORCA_UX_PROBE": WATCH,
             "ORCA_TEST_KEYFRAME_DIR": os.path.join(WORK, "kf"),
             "ORCA_NAME": name,
-            "YG_INPUT": input_path,
-            "YG_SCENES": "1",
+            "ORCA_INPUT": input_path,
+            "ORCA_SCENES": "1",
         }
         if PPLUS:
             env["ORCA_PROFILE"] = os.environ.get("ORCA_PROFILE", "PPLUS32")

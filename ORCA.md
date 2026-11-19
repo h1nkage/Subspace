@@ -1,22 +1,21 @@
 # Orca
 
-> **2026-10-13: YG Baiji is now YG Dolphin.** Players see YG Dolphin from 0.3.42 on. The code,
-> files and contracts keep the codename Orca. Packages are `YG Dolphin.app`, `yg-dolphin.exe`
-> and `yg-dolphin/yg-dolphin`; the Mac program stays `Contents/MacOS/Orca`. Tags are
-> `yg-dolphin-<version>` from 0.3.42; older `yg-baiji-` and `orca-` tags keep their names.
-> Earlier notes are left as they were.
+> **Players see the name Subspace.** The builds use neither Dolphin's name nor its logo. This
+> document, the code and every contract keep the codename Orca: `namespace Orca`, `Core/Orca`,
+> `Sys/Orca/`, the `orca <verb>` lines and caps, `orca2:` keys, `orca-<game>` modes, the `ORCA_*`
+> variables, `Config/Orca.ini`, `OrcaControls-<GAMEID>.txt` and the log prefixes. What ships is
+> `Subspace.app` (bundle id `org.subspace.orca`, its program still `Contents/MacOS/Orca`),
+> `Subspace/subspace.exe` and `subspace/subspace` where this document says Orca.app,
+> `Orca/Orca.exe` and `Orca/orca`. Tags are `subspace-<version>`.
 
-> **2026-10-12: players see the name YG Baiji** from 0.3.40 on (Orca up to 0.3.39; the baiji is the
-> Yangtze river dolphin). The builds still use neither Dolphin's name nor its logo. This document,
-> the code and every contract keep the codename Orca: `namespace Orca`, `Core/Orca`, `Sys/Orca/`,
-> the `orca <verb>` lines and caps, `orca2:` keys, `orca-<game>` modes, the `ORCA_*` variables,
-> `Config/Orca.ini`, `OrcaControls-<GAMEID>.txt`, the log prefixes and the bundle id
-> `co.yougame.orca`. What ships is `YG Baiji.app` (its program still `Contents/MacOS/Orca`),
-> `YG Baiji/yg-baiji.exe` and `yg-baiji/yg-baiji` where this document says Orca.app,
-> `Orca/Orca.exe` and `Orca/orca`. Public tags are `yg-baiji-<version>` from 0.3.40. Text written
-> before this note is left as it was.
+> **No hosted service is built in.** Online play needs a room service: Dolphin's NetPlay window
+> serves one on loopback ([docs/DOLPHIN-NETPLAY.md](docs/DOLPHIN-NETPLAY.md)), or `ORCA_SITE` names
+> another. Where this document describes "the service" (tickets, matchmaking, ranked results, the
+> keyframe store, watch links) or "the desktop app" (the launcher and its bridge), that is the
+> protocol Orca speaks; nothing ships that answers it by default. `https://example.invalid` stands in
+> for the service's address in examples.
 
-Orca is YouGame's GameCube and Wii rollback netcode core: a fork of the
+Orca is a GameCube and Wii rollback netcode core: a fork of the
 [Dolphin](https://github.com/dolphin-emu/dolphin) emulator. Every Orca source file carries an SPDX
 `GPL-2.0-or-later` tag, as Dolphin's own do; in aggregate the repository is GPLv3-compatible (see
 [COPYING](COPYING)). Orca is not affiliated with or endorsed by the Dolphin project or Nintendo, and
@@ -31,8 +30,8 @@ How Orca's rollback works and how it compares with Slippi and Brawlback: [ORCA_A
   the SI device; re-run frames that parse the GPU command stream but skip host rendering; per-game
   profiles. Super Smash Bros. Brawl (`RSBE01` rev 2, and rev 1 played as rev 2) and Project+ v3.2 (a
   launcher profile on top of Brawl) are the supported games.
-- **Online:** through YouGame rooms. Friends drop in to a running game; strangers come from
-  YouGame's matchmaking queue (casual or ranked).
+- **Online:** through online rooms. Friends drop in to a running game; strangers come from
+  the service's matchmaking queue (casual or ranked).
 
 No disc images, NAND dumps or save data belong in this repository. Bring your own disc.
 
@@ -73,11 +72,11 @@ and why. Paths are relative to `Source/Core/Core/` unless they start with `Sourc
 
 ## Building
 
-Orca builds like Dolphin (CMake). The targets that matter are `dolphin-emu-nogui` (what the YouGame
+Orca builds like Dolphin (CMake). The targets that matter are `dolphin-emu-nogui` (what the
 desktop app runs) and `tests`. On macOS, `Tools/orca-package-macos.sh` makes **Orca.app**, the
-bundle the desktop app starts, and zips it as `YG Baiji.app` (from 0.3.40). On Linux (x86-64),
-`Tools/orca-package-linux.sh` makes the `yg-baiji/` folder (`Orca/` up to 0.3.39) the app's
-`linux-x64` build unpacks: `yg-baiji/yg-baiji` (the NoGUI program), `Sys/` and the licences. It builds with no Qt, Vulkan, ALSA, PulseAudio (Cubeb opens the system's sound
+bundle the desktop app starts, and zips it as `Subspace.app` (from 0.3.40). On Linux (x86-64),
+`Tools/orca-package-linux.sh` makes the `subspace/` folder (`Orca/` up to 0.3.39) the app's
+`linux-x64` build unpacks: `subspace/subspace` (the NoGUI program), `Sys/` and the licences. It builds with no Qt, Vulkan, ALSA, PulseAudio (Cubeb opens the system's sound
 server itself, so its PulseAudio headers must be there at build time), BlueZ, evdev or libudev,
 links libstdc++ statically, and refuses a program that needs a library beyond glibc, X11 and
 EGL/OpenGL, one that lacks X11, Xi or EGL, or a glibc newer than `ORCA_GLIBC_MAX` (2.35, Ubuntu
@@ -101,7 +100,7 @@ other disc, and anything that would change what the game computes (`Orca/Profile
 refuses whatever would change one player's game alone: pausing (except solo, see
 [Embedding](#embedding)), savestates, the reset button and the Wii power button.
 
-Online play goes through a private YouGame room of up to four (`Orca/Session/Online.h`). The host
+Online play goes through a private online room of up to four (`Orca/Session/Online.h`). The host
 plays at once; a friend who joins plugs into the next port ([Drop-in](#drop-in)).
 
 Two players meet when both use the same room code and the same **compatibility key**: the Orca
@@ -114,8 +113,8 @@ game) is seat 0, controller port 1; a friend's seat is its room slot.
 
 | Variable | Meaning |
 |---|---|
-| `YOUGAME_BRIDGE`, `YOUGAME_TOKEN` | Set by the YouGame desktop app: tickets come from its loopback bridge. |
-| `YOUGAME_STDIO` | `1`, set by the app instead: its bridge is Orca's stdin and stdout ([The stdio bridge](#the-stdio-bridge)). |
+| `SUBSPACE_BRIDGE`, `SUBSPACE_TOKEN` | Set by the desktop app: tickets come from its loopback bridge. |
+| `SUBSPACE_STDIO` | `1`, set by the app instead: its bridge is Orca's stdin and stdout ([The stdio bridge](#the-stdio-bridge)). |
 | `ORCA_NET` | Set by the app when it sandboxes Orca: `internet` or `internet-lan` ([Network](#network)). |
 | `ORCA_ROOM` | Room code (6-12 of `a-z0-9`). Default: the app's invite, else a new code. |
 | `ORCA_JOIN` | `1`: join the friend's game in that room. |
@@ -133,8 +132,8 @@ with the same value meet):
 
 | Variable | Meaning |
 |---|---|
-| `ORCA_TEST_DEV_GAME`, `ORCA_SITE` | An anonymous dev ticket from the site (default `https://yougame.co`) instead of the app. No ratings, no account. |
-| `ORCA_TEST_KEYFRAME_DIR` | Keyframes go through this folder instead of YouGame's store. |
+| `ORCA_TEST_DEV_GAME`, `ORCA_SITE` | An anonymous dev ticket from the site (`ORCA_SITE`, required: there is no default) instead of the app. No ratings, no account. |
+| `ORCA_TEST_KEYFRAME_DIR` | Keyframes go through this folder instead of the service's store. |
 | `ORCA_TEST_LEAVE_AT` | A joined friend leaves at this frame. |
 | `ORCA_TEST_COMMANDS` | `1`: take the embed protocol's stdin commands without embedding, plus test commands: `test-drop-room`, `test-direct off\|on\|in\|out\|rebuild`, `test-shot <name>`. |
 | `ORCA_TEST_DROP_SILENT` | `1`: `test-drop-room` drops the room connection the way a network failure does: no close, the socket stays open and unread, and the server only notices when the player's next connection replaces it. |
@@ -221,7 +220,7 @@ folder (`Orca/Launch.h`). A mod's native build is Orca.app plus the mod's files 
 
 ### The local controller
 
-Under the YouGame app, the app's controller helper reads GameCube adapters (libusb, raw reports) and
+Under the desktop app, the app's controller helper reads GameCube adapters (libusb, raw reports) and
 gamepads, and Orca takes the newest snapshot of its stream at each frame boundary
 (`Orca/UX/ControllerSource.*`). Without the app, it is port 1 as mapped in Dolphin's controller
 settings. A session never runs Dolphin's own adapter code.
@@ -237,8 +236,8 @@ measures the whole transport (0.1-0.3 ms on loopback); `Tools/orca/fake_bridge.p
 ## Mods (phase 1)
 
 Side branches `mods-0334` (`mods-p1` on `release-0.3.34`) and `bundle-flat` (flat bundles, below,
-on top of it), not on main: nothing ships until YouGame switches to this architecture. Design:
-YouGame `docs/ORCA_MODS.md` ("Phase 1 contract" and its adjustments). A session reads its game from a
+on top of it), not on main: nothing ships until the service switches to this architecture. Design:
+The service `docs/ORCA_MODS.md` ("Phase 1 contract" and its adjustments). A session reads its game from a
 mod bundle instead of `Data/Sys/Orca/<profile>.*`: a tree bundle laid out as a run folder, chosen by
 `ORCA_MOD_DIR`, or a signed flat bundle that Orca finds by itself ("Flat bundles"). Without either
 every legacy code path runs exactly as on the release (each mod branch keys on `Profile::mod`, set
@@ -256,9 +255,9 @@ only by `LoadModProfile` and `LoadFlatProfile`, or on `Mod::Requested()`).
   (what PPLUS32.ini forces besides the card); the card itself follows `sd`. `saveTitle` only the
   disc's own. `firstKeyframeFrame` (default and least 300) replaces `FIRST_KEYFRAME_FRAME` and
   `FriendsMove::FIRST_FRIEND_FRAME`. `engine.api` above `Mod::ENGINE_API` (1) refuses. `minOrca`
-  above the running YG Dolphin (`Mod::EngineVersion`, CMake's `ORCA_VERSION`, set in
+  above the running Subspace (`Mod::EngineVersion`, CMake's `ORCA_VERSION`, set in
   `Source/Core/CMakeLists.txt`; X.Y.Z compared number by number) refuses before any other check,
-  with the player's message "This pack needs YG Dolphin <minOrca> or newer. Update the YouGame app
+  with the player's message "This pack needs Subspace <minOrca> or newer. Update the desktop app
   and try again." as the session's error (`OrcaMod.MinOrcaAboveThisBuildRefuses`).
 - **`tree.json`** (written by the app): sorted, unique also without case, no file that is also a
   folder, paths of at most 100 bytes of printable ASCII with no `..`, leading dots, trailing dots or
@@ -363,7 +362,7 @@ only by `LoadModProfile` and `LoadFlatProfile`, or on `Mod::Requested()`).
   root (any case; all hash-checked) 64 MiB, `orca/jitwarm` 16 MiB. JSON nests at most 16 levels
   (picojson recurses per level, so a deep document would overflow the stack).
 
-Launch (what the desktop app does with `YOUGAME_ORCA_DEV_MOD=<folder>`):
+Launch (what the desktop app does with `SUBSPACE_DEV_MOD=<folder>`):
 
 ```bash
 ORCA_SESSION=1 ORCA_MOD_DIR=<run folder> ORCA_SD_CACHE=<cache> [ORCA_DISC_SHA1=<sha1>] \
@@ -428,20 +427,20 @@ reads needs a builtin whose guards hold, never a ruleset ([Online menu](#online-
 ### Flat bundles
 
 A flat bundle is a game's data as at most eight files in one folder, so it can ride as a
-YouGame listing's runtime files: the app lays those out in `userData/orca/run/<slug>/` beside
+service listing's runtime files: the app lays those out in `userData/orca/run/<slug>/` beside
 `userData/orca/user/` (the `-u` folder), and a Project+ or Brawl change becomes a file update instead
 of an Orca release (`Core/Orca/Bundle.h`).
 
 | File | What |
 |---|---|
 | `mod.json` | format 2: as format 1, plus `listing` (the slug it is for) and `serial`, optional `pplusGuards` for P+ forks and `rankedRules` for results-only builds, with `sdImage` `{file, bytes, sha256}` (the card used as it is), `patches` (file names, applied in order), `jitwarm`, `textures: "engine"` instead of `sd`. |
-| `mod.sig` | `ed25519 <public key> <signature>`, lowercase hex, one line. Optional for a bundle the app delivers (`YOUGAME_GAME` set): its files came over YouGame's HTTPS download, which checks them against the site's listed hashes. Checked whenever it is there. |
+| `mod.sig` | `ed25519 <public key> <signature>`, lowercase hex, one line. Optional for a bundle the app delivers (`SUBSPACE_GAME` set): its files came over the service's HTTPS download, which checks them against the site's listed hashes. Checked whenever it is there. |
 | the rest | exactly the files `mod.json` names: a launcher, the SD image, up to four `.patches`, a JIT seed. |
 
 - **Where Orca looks**, once per process at boot, before any game setting is read
   (`Mod::ResolveBundle`): `ORCA_MOD_DIR` when set (with a `tree.json` it is a tree bundle, as
   above); else a launcher boot's own folder, where Project+'s `sd.raw` already lies; else, for a disc
-  boot, `<-u folder>/../run/<YOUGAME_GAME>/`. No `mod.json` there: legacy, exactly as before. A
+  boot, `<-u folder>/../run/<SUBSPACE_GAME>/`. No `mod.json` there: legacy, exactly as before. A
   launcher boot must run the bundle's launcher, and a disc boot needs a bundle without one.
 - **The signature** is over `orca-flat-bundle 1\n` and one `<name>\t<sha256>\t<bytes>\n` line for
   `mod.json` and every file it names but the SD image, sorted by name; `mod.json` pins the card by
@@ -451,13 +450,13 @@ of an Orca release (`Core/Orca/Bundle.h`).
   so nothing is read again after the check. Verified with `Externals/ed25519`.
 - **Keys.** Only a key the build pins may sign: CMake `-DORCA_BUNDLE_PUBLIC_KEY=<64 hex digits>`. A
   build without one trusts no key, and every signed flat bundle is refused. Signing is optional
-  (2026-11): under the app (`YOUGAME_GAME` set) a bundle without `mod.sig` loads with every other
+  (2026-11): under the app (`SUBSPACE_GAME` set) a bundle without `mod.sig` loads with every other
   check, on any build, keyed or not. A `mod.sig` that is there must still be by a trusted key and
-  match the files; a bad one refuses the bundle. Without `YOUGAME_GAME` (a bare `ORCA_MOD_DIR` run)
+  match the files; a bad one refuses the bundle. Without `SUBSPACE_GAME` (a bare `ORCA_MOD_DIR` run)
   `mod.sig` is still required. `-DORCA_BUNDLE_TRUST_TEST_KEY=ON` adds the bundle-flat TEST key for
   tests and gates only; `orca-package-macos.sh` turns it off and fails if the executable holds it.
   `OrcaBundle.PinnedKey` checks the build trusts exactly what CMake was given.
-- **Listing and serial.** Under the app (`YOUGAME_GAME` set), a bundle for another listing is
+- **Listing and serial.** Under the app (`SUBSPACE_GAME` set), a bundle for another listing is
   refused. `MIN_FLAT_SERIAL` (`Bundle.h`) refuses older bundles: a release raises it to retire a
   signed bundle, which can't otherwise be taken back.
 - **Hostile input.** The folder must hold exactly the named files (hidden files such as the app's
@@ -468,7 +467,7 @@ of an Orca release (`Core/Orca/Bundle.h`).
   unsigned bundle gets the same checks but the signature, and the same tree hash and key as the
   signed one. It still needs the app's sandbox. Anything wrong refuses the whole bundle with an
   `Orca bundle: <folder> refused: <why>. The session is refused.` line, and the session ends with
-  `orca error profile YG Baiji refused this game's pack: <why>` (no folder path), whether Orca found
+  `orca error profile Subspace refused this game's pack: <why>` (no folder path), whether Orca found
   the bundle by itself or `ORCA_MOD_DIR` named it: a refused pack never plays the built-in game in
   its place.
 - **Mod mode** then runs as for a tree bundle (builtins, guards, caps). Textures stay the engine's.
@@ -510,7 +509,7 @@ ninja tests && ./Binaries/Tests/tests --gtest_filter='Orca*'
 
 Live, network and disc tests skip without their switches (`ORCA_TEST_DISC` for a Rev 2 image,
 `ORCA_TEST_DISC_REV1` for Rev 1). `ORCA_LIVE_TEST=1` runs `OrcaLive.*`
-against real rooms on yougame.co.
+against real rooms on example.invalid.
 
 ### The harness
 
@@ -519,16 +518,16 @@ The header documents every knob; the main ones:
 
 | Variable | What it does |
 |---|---|
-| `YG_INPUT=<file>` | Scripted pads (`Tools/orca/inputs/`): hold, mash and fuzz rules, counted from scene entry with `@<scene>`. |
-| `YG_EXIT_AFTER=<n>` | Stop after first-pass frame n. |
-| `YG_HASHLOG=<file>` | A RAM hash per frame. Two builds that should compute the same game must produce the same log. |
-| `YG_SYNCTEST=<k>` | Save every frame, rewind k, re-run, compare RAM and device-state hashes. `0 RAM mismatches` is the bar. `_FROM`, `_DIAG`, `_SECTIONS`, `_CLEARJIT` refine it. |
-| `YG_KEYFRAME_TEST` | Capture and load a drop-in keyframe, then check 30 re-run frames. |
-| `YG_PADREC=<file>`, `YG_LOOPBACK=<file>` | Record pads and checksums, then replay them through a real session with a late virtual remote (`_LAG`, `_JITTER`, `_SPIKE`, ...). |
-| `YG_THROTTLE=1` | Run in real time instead of unthrottled. |
-| `YG_SCENES=1`, `YG_RESULTS=1` | Log scene changes and each game's result. |
-| `YG_SHOT_EVERY`, `YG_SHOT_AT`, `YG_DUMP_FRAMES_FROM/_TO` | Screenshots and frame dumps. |
-| `YG_CLEARJIT_AT`, `YG_JITCODE_LOG`, `YG_JITCODE_CENSUS`, `YG_WATCH` | JIT history diagnostics ([Code the JIT doesn't see](#code-the-jit-doesnt-see)). |
+| `ORCA_INPUT=<file>` | Scripted pads (`Tools/orca/inputs/`): hold, mash and fuzz rules, counted from scene entry with `@<scene>`. |
+| `ORCA_EXIT_AFTER=<n>` | Stop after first-pass frame n. |
+| `ORCA_HASHLOG=<file>` | A RAM hash per frame. Two builds that should compute the same game must produce the same log. |
+| `ORCA_SYNCTEST=<k>` | Save every frame, rewind k, re-run, compare RAM and device-state hashes. `0 RAM mismatches` is the bar. `_FROM`, `_DIAG`, `_SECTIONS`, `_CLEARJIT` refine it. |
+| `ORCA_KEYFRAME_TEST` | Capture and load a drop-in keyframe, then check 30 re-run frames. |
+| `ORCA_PADREC=<file>`, `ORCA_LOOPBACK=<file>` | Record pads and checksums, then replay them through a real session with a late virtual remote (`_LAG`, `_JITTER`, `_SPIKE`, ...). |
+| `ORCA_THROTTLE=1` | Run in real time instead of unthrottled. |
+| `ORCA_SCENES=1`, `ORCA_RESULTS=1` | Log scene changes and each game's result. |
+| `ORCA_SHOT_EVERY`, `ORCA_SHOT_AT`, `ORCA_DUMP_FRAMES_FROM/_TO` | Screenshots and frame dumps. |
+| `ORCA_CLEARJIT_AT`, `ORCA_JITCODE_LOG`, `ORCA_JITCODE_CENSUS`, `ORCA_WATCH` | JIT history diagnostics ([Code the JIT doesn't see](#code-the-jit-doesnt-see)). |
 
 A device-state-only mismatch in a sync test is expected (the emulated icache, GPU dirty flags, host
 counters); only RAM mismatches are bugs. Settings go through Dolphin's config system names:
@@ -538,13 +537,13 @@ counters); only RAM mismatches are bugs. Settings go through Dolphin's config sy
 Example: the reference Brawl run.
 
 ```bash
-ORCA_SESSION=1 YG_INPUT=Tools/orca/inputs/bf-mario-link-results.txt YG_EXIT_AFTER=10800 \
-  YG_HASHLOG=brawl.hash dolphin-emu-nogui -p headless -v Null -e <your Brawl (USA, Rev 2) disc>
+ORCA_SESSION=1 ORCA_INPUT=Tools/orca/inputs/bf-mario-link-results.txt ORCA_EXIT_AFTER=10800 \
+  ORCA_HASHLOG=brawl.hash dolphin-emu-nogui -p headless -v Null -e <your Brawl (USA, Rev 2) disc>
 ```
 
 ### Two-instance tests
 
-These start two Orca processes and steer them as the desktop app does, over real rooms on yougame.co
+These start two Orca processes and steer them as the desktop app does, over real rooms on example.invalid
 with dev tickets (nothing is recorded). Each takes one to three minutes.
 
 | Tool | What it covers |
@@ -569,7 +568,7 @@ Project+.
 
 How long a queue match takes from "matched" (the page's `/match` socket) to both players in control
 on the room's character select, phase by phase. `Tools/orca/match-latency.mjs` drives two headless
-Orcas through YouGame's real queue, rooms and keyframe store as the desktop app's page does (the
+Orcas through the service's real queue, rooms and keyframe store as the desktop app's page does (the
 in-process bridge of `queue-e2e.mjs`), as two `/sandbox` roster players, N matches in a row; it
 records every line both print, with times. `match-latency-report.mjs` cuts each match into phases
 (the matched room's ticket, the room connect, the host's fresh start and unseen hold, the replay's
@@ -579,7 +578,7 @@ a replay that didn't reproduce the host's game, `orca error mismatch`, `not_seat
 never landing, a live frame moved, or a desync. `--max-p50`/`--max-p90`/`--min-ok` gate the total.
 
 ```bash
-node Tools/orca/match-latency-session.mjs <YouGame checkout> <sess> cy di   # roster cookies, mode 600
+node Tools/orca/match-latency-session.mjs <service checkout> <sess> cy di   # roster cookies, mode 600
 ML_BIN=<Orca> ML_BUILD=<version>:<commit> ML_DISC=<Brawl> ML_PPLUS=<dol> ML_SESS=<sess> \
   Tools/orca/match-latency-run.sh perf cb10 casual brawl 10 [--gap 90]
 node Tools/orca/match-latency-report.mjs [--detail] match-latency-runs/cb10
@@ -601,8 +600,8 @@ node Tools/orca/match-latency-report.mjs [--detail] match-latency-runs/cb10
 Every release candidate passes, for Brawl and for Project+:
 
 0. **Nobody playing** on a shared Mac: before each step that starts Orca, `ps -axo comm=` lists
-   neither `/Applications/YouGame.app/Contents/Resources/runtimes/orca/Orca.app/Contents/MacOS/Orca`
-   nor `~/Library/Application Support/yougame-desktop/orca/apps/<version>/Orca.app/Contents/MacOS/Orca`
+   neither `/Applications/Subspace.app/Contents/Resources/runtimes/orca/Orca.app/Contents/MacOS/Orca`
+   nor `~/Library/Application Support/the service-desktop/orca/apps/<version>/Orca.app/Contents/MacOS/Orca`
    (whole paths: a packaged test copy's own bundled Orca isn't a player's). Test Orcas beside a game
    in play make it stutter; wait until it closes.
 
@@ -611,7 +610,7 @@ Every release candidate passes, for Brawl and for Project+:
 3. **Hashlogs** of the default inputs (`bf-mario-link-results.txt` to frame 10800,
    `pplus-1v1.txt` to 9000) equal to the live release's, frame by frame. A release that changes
    emulation on purpose says which frames move and why.
-4. **Sync tests** (`YG_SYNCTEST=7`): 0 RAM mismatches over the whole casual flows.
+4. **Sync tests** (`ORCA_SYNCTEST=7`): 0 RAM mismatches over the whole casual flows.
 5. **Two-Orca checks** on one machine: `queue-e2e.mjs --queue casual --q2` (and `--scenario
    rematch`) and `online-menu-dropin.py`. Each must pass with every session's checksums matched
    (both Orcas print `K checksums matched` with K > 0), no `Desync at frame`, no `orca error`. A
@@ -826,7 +825,7 @@ same move from its own origin. So is a new seed for the game's random numbers
   the stage list, Project+'s Code Menu, tags made in the game. A held fight is reset only if the host
   explicitly uses `let-in` (or disables the fight-hold test flag); Tourney and Rotation keep
   their immediate-join behavior. Each
-  player's YouGame tag and controls carry over as port values.
+  player's player tag and controls carry over as port values.
 - **NAND.** A restore rewrites only the files that differ and removes the rest
   (`ReplaceNandTree`), so a fresh start doesn't write Brawl's 39 MB of boot files again.
 
@@ -861,14 +860,14 @@ hook writes both generators' seed words from it at that frame (`OnlineMenu.h`
 `FreshMove::ApplySeed`), after the origin is captured, so every Orca's origin stays the canonical
 one, and a joiner's rebuild plays the same event from its own origin. The origin's checksum and the
 rebuild's checksum at K still refuse any difference. A seed rides only on a replay's first frame;
-the decoder refuses it anywhere else. With no YouGame room there is no history and nothing is
+the decoder refuses it anywhere else. With no online room there is no history and nothing is
 written, so harness runs and hash logs repeat; in a dev game's room `ORCA_TEST_RNG_SEED=<n>` (a
 test knob) fixes the seed.
 
 ### Port values: each player's name and controls
 
 A joiner reconstructs the host's input history, so its own name tags are not there.
-Each port carries its player's values instead (`Orca/UX/NameTags.h`): the YouGame username as the
+Each port carries its player's values instead (`Orca/UX/NameTags.h`): the player username as the
 tag's name, the tag's rumble byte and its whole button layout. The frame hook writes them into the
 port's name tag on the character select, and the game copies the layout into its per-port table
 (`0x805B7480`) as a match starts, so each port plays with its player's own buttons.
@@ -896,20 +895,20 @@ the page shows what Orca plays.
   their controls and never replaces them with the defaults. The tags themselves are not kept.
 - **A tag the player typed is theirs.** The game types names in full-width characters (`A` is
   `0xFF21`) and Orca's own tags are ASCII, so names match as they read: full-width folded to ASCII,
-  one case (`NameTags.h`). A tag the player named like their YouGame username in Options >
+  one case (`NameTags.h`). A tag the player named like their player username in Options >
   Controls is found as theirs, preferred over Orca's own copy (`FindPlayerTag`), and is the one their
   port wears on the character select and their own controls are read from. Since 0.3.37; before, Orca
   made a second tag of that name at the game's defaults and put the player in it, so controls set in
   the game (tap jump off) never reached an online game.
 
-- **Solo**, the own port's values carry them from the frame they change, so the YouGame tag gets them
+- **Solo**, the own port's values carry them from the frame they change, so the player tag gets them
   on every character select: Training, the queue's own select, With Friends. A friend who joins
   later gets those entries with the keyframe. A session's host and joiner carry them as before
   (`RefreshOwnValues`, the hello).
 - **The name button** takes A on With Friends' selects (the hand's own panel) and on the queue's own
   select while not searching, with the stick centred while A is down; its list takes A and the stick,
   never L (Project+'s hold-L leaves for its controls scene). Start never readies with the list open.
-  A queue room's select keeps A in the grid: there each player wears their YouGame tag with their
+  A queue room's select keeps A in the grid: there each player wears their player tag with their
   own controls.
 
 ### Rooms
@@ -984,7 +983,7 @@ machines, so no compatibility change. Tests: `OrcaOnlineMenuLobby.*` (the three 
 store and its route keep the keyframe name). Tests use `ORCA_TEST_KEYFRAME_DIR`: the store refuses
 dev tickets.
 
-- `https://yougame.co/api/orca/keyframes/<room>/<id>`, `id` = `replay-<frame>-<8 hex of XXH3-64>`
+- `https://example.invalid/api/orca/keyframes/<room>/<id>`, `id` = `replay-<frame>-<8 hex of XXH3-64>`
   (frame 0 to 216,000, no leading zeros; `ValidReplayId`). Orca sends and accepts no other id.
   Auth: `Authorization: Ticket <ticket>` with the room's ticket (accepted up to 6 h past expiry; on
   401 `ticket` or 403 `signed_out` Orca mints a fresh one once).
@@ -1005,15 +1004,15 @@ dev tickets.
   start) goes through the store as before. `ORCA_TEST_INLINE=off` (a test knob) sends every replay
   through the store.
 - Network errors, 429 and 5xx retry 4 times with 0.5/1/2 s backoff; anything else is final. A host
-  whose keyframe is refused for good (a refusal with YouGame's code; a bare 4xx from the edge only
+  whose keyframe is refused for good (a refusal with the service's code; a bare 4xx from the edge only
   fails that keyframe) makes no more for the friends waiting: it drops them with
-  `signed_out` (YouGame's code) or `refused`, prints `orca state friend-left <that>`, and each of
+  `signed_out` (The service's code) or `refused`, prints `orca state friend-left <that>`, and each of
   them ends with `orca error signed_out` or `network`. A joiner whose own download is refused with
   `signed_out` reports that code too.
 
 ### Room messages
 
-Relayed `msg` (`Orca/Session/YouGameRoom.cpp`):
+Relayed `msg` (`Orca/Session/RelayRoom.cpp`):
 
 - `hello {c, r, h, dl}`: key, heard-you, is-host, offers direct links. Sent until answered.
 - `dl`, `dlc`, `dlr`: direct-link signalling, only between two Orcas that both offered links.
@@ -1058,7 +1057,7 @@ through it where a direct one takes about 1 ms.
   rebuilds back off 2 s to 30 s. Each build is a new generation with fresh keys.
 - **Flood limit:** at most 300 packets a second per link after authentication (an honest Orca sends
   one a frame); the rest are dropped (their copy still comes through the relay).
-- **Switching off:** YouGame can turn links off for everyone with `"direct": false` in the ticket
+- **Switching off:** The service can turn links off for everyone with `"direct": false` in the ticket
   reply; the player can with the embed command `direct off`; `ORCA_DIRECT=0` is a test switch.
 - **Logs** never carry addresses, candidates or credentials. `orca stats` gains `tx` (0 relay, 1
   direct, 2 TURN) and `lrtt` (the link's median round trip).
@@ -1096,7 +1095,7 @@ Tests: `OrcaDirectLink*`, `OrcaRoom.TicketSwitchesDirectLinks`, `OrcaSessionDire
 ## Input delay
 
 Fixed, never adaptive: players want a delay that never moves with the link. The page sends `delay N`
-(1-6; YouGame's `ORCA_DELAY_DEFAULT`, 3 since Orca 0.3.32's v-sync move); with no page, no `caps
+(1-6; the service's `ORCA_DELAY_DEFAULT`, 3 since Orca 0.3.32's v-sync move); with no page, no `caps
 delay` or an old page's `delay auto`, Orca plays at its own fixed 3 (`Rollback/OnlineMatch.cpp`
 `DEFAULT_DELAY`, Orca 0.3.33+; before, the adaptive delay below from 2). Rollback hides the rest of
 the link, jitter and spikes included: a spike past the rollback window costs a stall there, not a
@@ -1276,7 +1275,7 @@ Offered for Brawl (any revision) and Project+; without the cap the line answers 
 
 - Hashlogs of the default inputs (Brawl to 10800, Project+ to 9000) with the music on, with it off,
   and of 0.3.27: equal on every frame.
-- Sync tests (`YG_SYNCTEST=7`) with it off: 0 RAM mismatches (Brawl 73451 re-run frames, Project+
+- Sync tests (`ORCA_SYNCTEST=7`) with it off: 0 RAM mismatches (Brawl 73451 re-run frames, Project+
   60851).
 - What Orca played (`Dolphin.DSP.DumpAudio`, the same run on and off, sample-aligned): where only
   music plays (character select after the match) RMS 2000-4000 drops to 0.7, the floor of a silent
@@ -1317,7 +1316,7 @@ MUSIC before the friend joined. With 0.3.30 the friend's audio after the join wa
 second); with the lock it had its music (RMS 2700-6100), every checksum matched. Hashlogs of the
 default inputs equal 0.3.30's without the two groups and differ with them only in the three changed
 words (RAM compared at the character select, in the match, on the results screen and back on the
-character select). `YG_SYNCTEST=7` with the slider held both ways on the Sound page, and over the
+character select). `ORCA_SYNCTEST=7` with the slider held both ways on the Sound page, and over the
 default inputs: 0 RAM mismatches. Test: `OrcaOnlineMenuSound.*`.
 
 ## Match start
@@ -1381,7 +1380,7 @@ M4) and ~4,100 more when the second fighter enters during the countdown.
 - **A shipped list for players without one** (`Data/Sys/Orca/RSBE01.jitwarm`, `PPLUS32.jitwarm`):
   used only when the player's own file is missing, then replaced by it. Re-record both after a change
   to the games' patches, scene detection or how the JIT splits blocks: run the reference inputs
-  (`bf-two-new.txt`, `pplus-1v1.txt`) with `ORCA_JITWARM_SEED=0 YG_SCENES=1` on a fresh user folder
+  (`bf-two-new.txt`, `pplus-1v1.txt`) with `ORCA_JITWARM_SEED=0 ORCA_SCENES=1` on a fresh user folder
   and copy `Cache/*.jitwarm` into `Data/Sys/Orca`. ARM64 and x86-64 record the same lists.
 - **JIT tables grow early:** Jit64's backpatch map rehashes inside a compile as it doubles (up to
   26 ms), so `JitBase::ReserveForBlocks` makes room at the match's first frame.
@@ -1404,7 +1403,7 @@ would keep most of them (not done).
 ## Graphics
 
 Since 0.3.39 the player picks every graphics setting that only changes what their own machine
-draws, and how fast. The YouGame app keeps them per computer and passes them on every start
+draws, and how fast. The desktop app keeps them per computer and passes them on every start
 (`-C Graphics.*` and `-C Dolphin.Core.GFXBackend`, the CommandLine layer). Code:
 `Orca/Profile.cpp` (what a session forces), `Orca/Perf.*` (live changes, speed, the switch to
 Performance).
@@ -1612,7 +1611,7 @@ re-runs, as a pure function of emulated memory. One 32-bit word per line, in hex
 | Toggled group | guarded lines between `when` lines and `end` | its values while the conditions hold, its originals while they don't |
 
 ```
-when 806F2380 == 59474D31               # the match block's first word is 'YGM1'
+when 806F2380 == 53534D31               # the match block's first word is 'SSM1'
 when 806F2384 & FF000000 != 00000000    # and its masked word isn't 0
 8119A120 2C030000 2C030000              # cmpwi r3, 0 (guard)
 8119A124 4082000C 4800000C              # bne -> b while both hold
@@ -1670,7 +1669,7 @@ away.
 
 | Offset | What |
 |---|---|
-| `+0x00` | Header: `YGM1`, version 1, mode (0 none, 1 casual, 2 ranked), ruleset (1 Brawl: Supernova 2026 ranked, existing casual; 2 Project+ 2024), `+0x07` coin, `+0x08` room hash, `+0x0C` queue flags |
+| `+0x00` | Header: `SSM1`, version 1, mode (0 none, 1 casual, 2 ranked), ruleset (1 Brawl: Supernova 2026 ranked, existing casual; 2 Project+ 2024), `+0x07` coin, `+0x08` room hash, `+0x0C` queue flags |
 | `+0x10`-`+0x8F` | Project+'s stage flow (`MatchBlock::State`) |
 | `+0x80`-`+0xBF` | Brawl's stage flow (`BrawlStages`; each game uses its own range) |
 | `+0xC0`-`+0xCF` | Ranked ready timer, no-show, plugged ports |
@@ -1853,7 +1852,7 @@ shows that the host is in a single-player mode. The join's 90 s limit doesn't ru
 
 ## Matchmaking and results
 
-With Anyone > Casual or Ranked plays a stranger YouGame's queue found (Elo and distance windows, the
+With Anyone > Casual or Ranked plays a stranger the service's queue found (Elo and distance windows, the
 same Orca build and disc), then the existing drop-in into the matched room. Ranked is a best of 3,
 rated once per set.
 
@@ -1881,7 +1880,7 @@ rated once per set.
 Leaving a ranked set once game 1 began is a forfeit (the room's 15 s grace); a set left before
 game 1 began (a no-show, a leave or a crash while game 1's stage loads) is void and rates nobody.
 The room knows game 1 began from the leaver's own `game-start` (Orca 0.3.33+) or from a game it
-settled (rooms `game-lobby.ts` `reached`; YouGame `docs/ORCA_ONLINE_UX.md` "3B leaving mid-game").
+settled (rooms `game-lobby.ts` `reached`; the service `docs/ORCA_ONLINE_UX.md` "3B leaving mid-game").
 A desync voids the match in progress before the players part.
 
 `game-start`: each Orca sends `{"t":"game-start","matchId":M,"id":"g<start>"}` once per ranked game,
@@ -2152,7 +2151,7 @@ as written, no duplicate keys, at most 16 KiB and 8 levels), then the one schema
 and interpreted by `Engine/Schema.*`, then the few rules a schema can't state (its `x-orca-rules`).
 Anything unknown, out of range or of the wrong type refuses the file; nothing is defaulted or
 clamped. The schema uses a small subset of JSON Schema in which every value is typed and bounded,
-and the interpreter refuses a schema outside it, so the site's validator (YouGame
+and the interpreter refuses a schema outside it, so the site's validator (The service
 `web/src/lib/orca-data-schema.ts`, `orca-ruleset-validate.ts`, with a byte copy of the schema) and
 Orca can't drift: `Tools/orca/mods/ruleset-vectors.json` holds the cases both must agree on
 (`OrcaRuleset.Vectors` and the site's `orca-ruleset-validate.test.mjs`). A libFuzzer target for
@@ -2300,7 +2299,7 @@ in hand. A token still in hand 45 s after both turns makes its player the ranked
 the set. Game 1 has no order (both pick
 at once). L or R held as you lock in
 carries into the game (Zero Suit Samus, Sheik, Project+'s Nana-led Ice Climbers): kept as the turn
-ends and held for that player while the select ends. State: 16 bytes at `+0x200` (magic `YGCO`, the
+ends and held for that player while the select ends. State: 16 bytes at `+0x200` (magic `SSCO`, the
 step, the first picker, the lock-ins, the step's start frame, the kept L and R at `+0x20E`).
 
 Not yet: Supernova's exact order (bans, the loser's stage, then characters).
@@ -2394,7 +2393,7 @@ Everything Orca shows should look like the game drew it. Two ways:
   hashes to another name, and Orca's texture pack has a label for each: PRESS START TO LOCK IN!,
   WINNER PICKS FIRST!, P1 STRIKES 2, CASUAL, RANKED, FRIENDS. Without the pack the game's own words
   show, unchanged to the eye.
-- **YouGame's layer** (`Orca/UX/YgCard.*`, `YgOrb*`): chat and room notices in YouGame's own look and
+- **The service's layer** (`Orca/UX/AppCard.*`, `AppOrb*`): chat and room notices in the service's own look and
   Roboto (`Data/Sys/Orca/Fonts`, Apache 2.0), deliberately not the game's.
 
 **Set end** (`Orca/UX/SetEnd.*`): VICTORY or DEFEAT with the set's score and the rating counting from
@@ -2421,11 +2420,11 @@ overlay docks its lines on the bar instead), native words on the results screen,
 product replay (`ORCA_REPLAY_SOURCE`, a file or ticketed watch URL). Only a product replay player's
 lifetime enables the sink; setting the sink on a playing machine exports nothing. Finish and
 destruction disable it. The app creates the private file in its run directory, initializes every
-page, grants this single file read-write, then launches YG Dolphin. No listener, loopback, screen,
+page, grants this single file read-write, then launches Subspace. No listener, loopback, screen,
 microphone, or system audio source is used. The sink never records media for later playback.
 
 `Common/BroadcastRing.h` defines the little-endian file ABI, 11,186,624 bytes. Its 256-byte header
-has u32 magic `0x31424759` (YGB1), version 1, width 1280, height 720, fps 30, rate 48000,
+has u32 magic `0x31425353` (SSB1), version 1, width 1280, height 720, fps 30, rate 48000,
 channels 2, video slots 3, audio slots 64, video bytes 3686400, audio frames 480, total size, at
 offsets 0 through 44. Video/audio latest tickets, video/audio drop counters and state are u32 at
 64/68/72/76/80. State is 0 waiting, 1 active replay, 2 stopped. Other header words are reserved.
@@ -2449,7 +2448,7 @@ The lead must measure CPU/GPU load, output fps and drops, A/V drift over a long 
 with the window minimized. Render/audio shutdown and readback orientation on each backend need
 runtime validation; none of these code changes are a substitute for those checks.
 
-The YouGame desktop app shows Orca inside its own window, at the page's player box, using the same
+The desktop app shows Orca inside its own window, at the page's player box, using the same
 line protocol as its libretro host. Code: `Source/Core/DolphinNoGUI/Embed.*`, `Platform.cpp`
 (commands), `PlatformWin32.cpp`, `PlatformMacos.mm` and `PlatformX11.cpp` (the window). Test hosts:
 `Tools/orca/embed-test-host.m` (macOS) and `embed-test-host-win.cpp`.
@@ -2470,7 +2469,7 @@ the jailed Windows launcher reports adoption itself. Parent loss after successfu
 still stops the run as described below.
 
 **Replay playback.** Use the same game, disc/profile, session (`ORCA_SESSION=1`) and embed launch,
-with `ORCA_REPLAY_SOURCE=<local file path or ws(s) watch URL with ticket>`. YG Dolphin boots to its
+with `ORCA_REPLAY_SOURCE=<local file path or ws(s) watch URL with ticket>`. Subspace boots to its
 local canonical origin and plays the stream instead of joining or creating a room. A saved regular
 file (at most 1 MiB) plays at real speed. For watch playback the app also sets
 `ORCA_REPLAY_ROOMS_ORIGIN=https://<rooms host>[:port]` for its selected environment. Replay has no
@@ -2495,7 +2494,7 @@ checksum comparisons are retained in test playback and in a player's own product
 a view-time name map. Playback with a view-time map still validates stream hashes, compatibility,
 the local origin, and reconnect overlap.
 
-The desktop bridge is `window.yougameDesktop.orca.watchReplay({ bytes?, url?, names, launch? })`.
+The desktop bridge is `window.subspaceDesktop.orca.watchReplay({ bytes?, url?, names, launch? })`.
 Supply exactly one source: the page fetches a saved replay with its own session and passes an
 `ArrayBuffer` of at most 1 MiB, or supplies the live ticketed watch URL. Main creates a private,
 unique file in the app's temporary replay folder, grants that one file read-only in the sandbox,
@@ -2512,7 +2511,7 @@ session request headers/cookies and bounds the streamed response before passing 
 - `--parent`: on Windows the HWND as a decimal number; on macOS the window's **CGWindowID** (in
   Electron, the middle field of `win.getMediaSourceId()`), since an `NSView*` means nothing to
   another process; on Linux the X11 window id (Electron's `getNativeWindowHandle()` when the app
-  runs as an X11 client: the YouGame app always does, through XWayland on a Wayland desktop).
+  runs as an X11 client: the desktop app always does, through XWayland on a Wayland desktop).
 - Orca never shows dialogs while embedded: alerts go to stderr. stdin must stay open; a closed stdin
   means the app is gone, and Orca quits. When the app's window goes away without a `quit`, Orca
   stops too.
@@ -2565,8 +2564,8 @@ log their raw request and the unchanged bounds after hiding the window. Unset, t
 | `delay auto` / `delay N` | Orca's default input delay (a fixed 3), or a fixed 1-6 frames. |
 | `chat <name> <text>` | A line from the page's chat, shown while Orca fills the screen. Fields are `encodeURIComponent` of UTF-8 (name at most 24 code points, text 140). Never logged. |
 | `controls <hex>` | The player's own controls ([Each player's own controls](#each-players-own-controls)); the tag gets them at the next character select. A bad profile answers `unsupported controls`. |
-| `orb <x> <y> <size> <lit> <away> <badge>` / `orb blink` / `orb off` | YouGame's overlay button, drawn where the page's own stands under Orca's window. |
-| `notice <kind> <name> <text> [<key> <verb>]` | One of the YouGame overlay's lines (join, leave, invite, ...). Never logged. |
+| `orb <x> <y> <size> <lit> <away> <badge>` / `orb blink` / `orb off` | the service's overlay button, drawn where the page's own stands under Orca's window. |
+| `notice <kind> <name> <text> [<key> <verb>]` | One of the app overlay's lines (join, leave, invite, ...). Never logged. |
 | `talk listen\|send\|sent\|error <name> <text>` / `talk off` | Hold-to-talk's row, cap `talk`: one row after the notices, replaced by each line. Fields as in `chat`. Never logged. |
 | `feedback` / `host-menu` | Cap `hostui`: request feedback with a game screenshot, or toggle the native host menu. Ignored without the agreed cap. The app relays these shortcuts only from its focused view. |
 | `let-in` | While a friend waits for the solo host's Versus fight/results to end, release that hold and fresh-start now. Ignored outside an active fight hold. Uses the same stdin channel as `join` and `prepare-join`; desktop wiring is separate. |
@@ -2584,7 +2583,7 @@ A ruleset profile normally offers 21 words (22 with `replay`), within the app's 
 mode withdraws `join`, `host` and `direct`; it never opens a seated room.
 
 **Native host menu** (cap `hostui`). The app may handle `orca host ...` and `orca feedback ...`
-and wants YG Dolphin's native host menu only when both sides list `hostui`. Desktop 0.13.0 / V2 web
+and wants Subspace's native host menu only when both sides list `hostui`. Desktop 0.13.0 / V2 web
 will add this agreement; desktop 0.12.100, 0.12.43/44 and V1 web keep the 0.3.49 orb and overlay
 behavior without it. With the cap, Δ appears beside the orb; an orb click or Up+Start opens
 Feedback, Volume up/down, Mute, Exit fullscreen, Leave and Controls. Feedback captures at most
@@ -2593,7 +2592,7 @@ the menu immediately; withdrawal closes an open menu and suppresses pending feed
 
 Without `hostui`, overlay and talk input follow these paths:
 
-**Opening YouGame's overlay** prints `orca orb`: a left press on the button (Windows), Shift+Tab
+**Opening the service's overlay** prints `orca orb`: a left press on the button (Windows), Shift+Tab
 while Orca has the keyboard, or, on a controller, holding the D-pad's Up and pressing Start
 (`Orca/UX/OrbCombo.h`). From that Start until Start and the D-pad are let go the game gets neither,
 and the masked pad is what is recorded and sent, so every machine plays it. Opening the overlay
@@ -2774,20 +2773,20 @@ so. Since 0.3.35; before, a refused resize ended Orca (exit `0x80000003`).
 
 ## The sandbox
 
-The YouGame desktop app can run Orca inside its sandbox: on Windows an AppContainer started by
-`yougame-sandbox.exe`, inside a job (low integrity, no loopback, files only where the app grants
+The desktop app can run Orca inside its sandbox: on Windows an AppContainer started by
+`subspace-sandbox.exe`, inside a job (low integrity, no loopback, files only where the app grants
 them), and later on macOS a `sandbox-exec` profile. Orca's side of it is a handful of switches, all
 off unless the app sets them, so an Orca with them runs exactly as before under an app without the
 sandbox. The app jails only an Orca whose manifest entry (and the installer's `orca.json`) says
 `"sandbox": 1`. The build says so itself in `Sys/Orca/features.json` (`{"sandbox": 1}`: it speaks
-`YOUGAME_STDIO`, `--embed-adopted` and `ORCA_NET`), which the release scripts copy into the
+`SUBSPACE_STDIO`, `--embed-adopted` and `ORCA_NET`), which the release scripts copy into the
 manifest entry, so a build without the mode can never be marked as having it. Code: `Orca/Sandbox.*`, `Orca/Bridge.*`, `DolphinNoGUI/Embed.*`,
 `PlatformWin32.cpp`; tests: `OrcaBridge*`, `OrcaSandbox.*` (`SandboxTest.cpp`) and
 `OrcaLive.StdioBridgeMirrorsTheRoomAndTakesLeave`.
 
 | What | How |
 |---|---|
-| `YOUGAME_STDIO=1` | The app's bridge on stdin and stdout instead of a loopback server ([The stdio bridge](#the-stdio-bridge)). |
+| `SUBSPACE_STDIO=1` | The app's bridge on stdin and stdout instead of a loopback server ([The stdio bridge](#the-stdio-bridge)). |
 | `--embed-adopted` | Windows: the window waits to be made a child of the app's ([Adopted window](#adopted-window)). |
 | `ORCA_NET` | The network the sandbox gives Orca ([Network](#network)). |
 | Every session | Dolphin's own GameCube adapter code never starts (`GCAdapter::Init`): the app's controller helper owns the adapter and sends its ports in the snapshots. No libusb or UsbDk is loaded, and a planted `Dolphin.ini` can't reach the adapter. |
@@ -2802,28 +2801,28 @@ manifest entry, so a build without the mode can never be marked as having it. Co
 | Code | When |
 |---|---|
 | `sandbox_disc` | Inside the sandbox, the disc can't be opened for lack of permission: the app didn't grant it (a network share, a file an admin tool made). "Orca can't read this disc where it is. Copy it into a folder of yours, such as Documents, and choose the copy." (the app's words for the same refusal) |
-| `sandbox_embed` | `--embed-adopted`: nothing adopted the window within 10 s. "Orca couldn't open in the YouGame window. Try again." |
-| `sandbox_denied` | Inside the sandbox, Orca may not write its user folder. "Orca isn't allowed into its own folder, so it didn't start. Reset Orca's files from YouGame's Help menu, then press Play again." |
+| `sandbox_embed` | `--embed-adopted`: nothing adopted the window within 10 s. "Orca couldn't open in the app window. Try again." |
+| `sandbox_denied` | Inside the sandbox, Orca may not write its user folder. "Orca isn't allowed into its own folder, so it didn't start. Reset Orca's files from the desktop app's Help menu, then press Play again." |
 | `gpu_lost` | Direct3D: the graphics device was lost (a GPU hang the driver reset, a driver update or crash; `Orca/GpuLost.h`). stderr says `Orca: [VIDEO] the graphics device is lost (D3D11: device hung, 0x887A0006) at <what failed>; Orca stops`, nothing more is drawn, and the run stops like any other stop (the room is left: an online opponent sees this player leave, not a desync), exit 1. "Your graphics driver stopped responding. Try the Performance preset or a lower resolution in Graphics, and update your GPU driver." |
 
 **Windows zip layout.** A release zip for the sandbox carries, beside `Orca/Orca.exe`, the pinned
 `d3dcompiler_47.dll` (10.0.20348 from the Windows SDK's `Redist/D3D/x64`, SHA-256
-`a05f99734f7c4822fefc12b367af21fd0976ed6608752fb1e1e80b6ece7ecbbb`, the one YouGame's installer ships) and `Orca/shaders/D3D-fxc.cache`, the
+`a05f99734f7c4822fefc12b367af21fd0976ed6608752fb1e1e80b6ece7ecbbb`, the one the desktop app's installer ships) and `Orca/shaders/D3D-fxc.cache`, the
 compiled-shader cache made with that compiler and that build (the app's `orca.ts`
 `downloadedShaders` merges it into the player's). The 0.3.30-0.3.38 zips have neither.
 
 ### The stdio bridge
 
-With `YOUGAME_STDIO=1` the app's bridge is Orca's own stdin and stdout, the pipes embedding already
+With `SUBSPACE_STDIO=1` the app's bridge is Orca's own stdin and stdout, the pipes embedding already
 uses, so a sandboxed Orca needs no loopback (an AppContainer can't reach it) and no token. Each
-bridge line starts with `yg `; every other line keeps its embed meaning.
+bridge line starts with `br `; every other line keeps its embed meaning.
 
 | Direction | Line |
 |---|---|
-| Orca to app (stdout) | `yg {"id":<n>,"type":"hello"\|"mpTicket"\|"mpRoom",...}`: the only three requests Orca makes, at most 32 KB. `mpTicket` carries `players`, `mode`, `ranked` (always `false`), `room` and `lobby`, nothing else. |
-| App to Orca (stdin) | `yg {"re":<n>,"ok":true,"result":{...}}` or `yg {"re":<n>,"ok":false,"error":"..."}`: the reply to request `n`. |
-| | `yg {"push":{"type":"controllers","snapshot":{...}}}`: a controller snapshot, the same schema-1 object the loopback stream's `data:` lines carry. |
-| | `yg {"push":{"slug":"<game>","cmd":"leave"\|"kick",...}}`: the page's lobby commands, as the loopback event stream sent them. |
+| Orca to app (stdout) | `br {"id":<n>,"type":"hello"\|"mpTicket"\|"mpRoom",...}`: the only three requests Orca makes, at most 32 KB. `mpTicket` carries `players`, `mode`, `ranked` (always `false`), `room` and `lobby`, nothing else. |
+| App to Orca (stdin) | `br {"re":<n>,"ok":true,"result":{...}}` or `br {"re":<n>,"ok":false,"error":"..."}`: the reply to request `n`. |
+| | `br {"push":{"type":"controllers","snapshot":{...}}}`: a controller snapshot, the same schema-1 object the loopback stream's `data:` lines carry. |
+| | `br {"push":{"slug":"<game>","cmd":"leave"\|"kick",...}}`: the page's lobby commands, as the loopback event stream sent them. |
 
 - The stdin reader reads 64 KB at a time and routes bridge lines on its own thread, so neither a
   reply nor a pad waits for the frame loop: a reply wakes the request waiting for it (any thread,
@@ -2834,10 +2833,10 @@ bridge line starts with `yg `; every other line keeps its embed meaning.
 - A stdin line over 128 KB is dropped whole, through its newline; a bridge line over 64 KB, one that
   isn't JSON, nests deeper than 8 or has a shape Orca doesn't know is dropped and counted, never
   acted on. A reply nobody waits for is dropped. A closed stdin fails every waiting request at once.
-- Bridge lines are dropped unless `YOUGAME_STDIO=1`, and they never reach the embed commands.
+- Bridge lines are dropped unless `SUBSPACE_STDIO=1`, and they never reach the embed commands.
 - Requests need stdout as the protocol channel and stdin read: `--embed`, or `ORCA_TEST_COMMANDS=1`
   for tests. Without either the bridge is off (stderr says so) and the session plays offline.
-- The loopback bridge (`YOUGAME_BRIDGE`, `YOUGAME_TOKEN`) stays for an app without the stdio
+- The loopback bridge (`SUBSPACE_BRIDGE`, `SUBSPACE_TOKEN`) stays for an app without the stdio
   bridge and for tests; dev tickets (`ORCA_TEST_DEV_GAME`) work as before.
 
 ### Adopted window
@@ -2883,16 +2882,16 @@ What each release changed for players, in plain words.
 
 ### 0.3.103
 
-- Unsigned app-delivered flat packs: a YouGame download (YOUGAME_GAME set) may come without mod.sig; a present mod.sig is still checked as before, and flat packs still need the OS jail.
+- Unsigned app-delivered flat packs: a service download (SUBSPACE_GAME set) may come without mod.sig; a present mod.sig is still checked as before, and flat packs still need the OS jail.
 
 ### 0.3.102
 
 - Updated Dolphin’s graphics-mod asset handling with an upstream fix.
-- The game list no longer shows Dolphin’s own NetPlay host entry. Online play uses YouGame’s queue and friend join.
+- The game list no longer shows Dolphin’s own NetPlay host entry. Online play uses the service’s queue and friend join.
 
 ### 0.3.101
 
-- The Tools menu no longer shows Dolphin's own NetPlay host and session browser. Online play is YouGame's queue and friend join.
+- The Tools menu no longer shows Dolphin's own NetPlay host and session browser. Online play is the service's queue and friend join.
 
 ### 0.3.100
 
@@ -2900,7 +2899,7 @@ What each release changed for players, in plain words.
 
 ### 0.3.99
 
-- Windows: Project+ and other games that boot through a launcher start again in the app's protected mode. Since 0.3.94 YG Dolphin closed before its first frame there, because Windows refused a file-name lookup it made while checking the launcher ("file status failed: Access denied"). It now identifies the launcher without that lookup. Built on 0.3.98: nothing else changes.
+- Windows: Project+ and other games that boot through a launcher start again in the app's protected mode. Since 0.3.94 Subspace closed before its first frame there, because Windows refused a file-name lookup it made while checking the launcher ("file status failed: Access denied"). It now identifies the launcher without that lookup. Built on 0.3.98: nothing else changes.
 
 ### 0.3.97
 
@@ -2908,15 +2907,15 @@ What each release changed for players, in plain words.
 
 ### 0.3.96
 
-- Smoothness reports: YG Dolphin now reports how evenly frames reach the screen, the hitches over 25, 33 and 50 ms, how deep rollbacks go and how long each screen transition takes (`orca perf` `pace` and `scene` lines), so the team can find and fix stutter. Play is exactly as before.
+- Smoothness reports: Subspace now reports how evenly frames reach the screen, the hitches over 25, 33 and 50 ms, how deep rollbacks go and how long each screen transition takes (`orca perf` `pace` and `scene` lines), so the team can find and fix stutter. Play is exactly as before.
 
 ### 0.3.95
 
-- Discs: YG Dolphin can now tell how a Brawl copy made with disc tools differs from the standard disc, and rebuild it into the standard layout, so the app can offer to fix a copy it refuses. The engine plays every disc exactly as before.
+- Discs: Subspace can now tell how a Brawl copy made with disc tools differs from the standard disc, and rebuild it into the standard layout, so the app can offer to fix a copy it refuses. The engine plays every disc exactly as before.
 
 ### 0.3.94
 
-- Online: fixes the game closing when a friend joined after YG Dolphin's first connection to its own room had been refused (the fix production got in 0.3.93).
+- Online: fixes the game closing when a friend joined after Subspace's first connection to its own room had been refused (the fix production got in 0.3.93).
 - Ranked doubles: if the room refuses to start a full room, the host asks again every few seconds instead of waiting for someone to join or leave.
 
 ### 0.3.91
@@ -2942,11 +2941,11 @@ What each release changed for players, in plain words.
 
 ### 0.3.87
 
-- Linux: mod packs now start inside YouGame's Linux sandbox as it really runs (the 0.3.86 check refused it: the sandbox has no user list and creates empty home folders). Homes must still be empty placeholders, with no host home and no keys, browser or Steam folders visible.
+- Linux: mod packs now start inside the service's Linux sandbox as it really runs (the 0.3.86 check refused it: the sandbox has no user list and creates empty home folders). Homes must still be empty placeholders, with no host home and no keys, browser or Steam folders visible.
 
 ### 0.3.86
 
-- Linux: mod packs now play inside YouGame's Linux sandbox. The engine checks for itself that it runs isolated (no privileges, its own user namespace, not the computer's own files or display, and no network for offline packs) and refuses a pack otherwise.
+- Linux: mod packs now play inside the service's Linux sandbox. The engine checks for itself that it runs isolated (no privileges, its own user namespace, not the computer's own files or display, and no network for offline packs) and refuses a pack otherwise.
 
 ### 0.3.85
 
@@ -2983,7 +2982,7 @@ What each release changed for players, in plain words.
 
 ### 0.3.77
 
-- Project+ 3.2.1b: YG Dolphin plays the new Project+ release (profile PPLUS321) next to 3.2.
+- Project+ 3.2.1b: Subspace plays the new Project+ release (profile PPLUS321) next to 3.2.
   Players on 3.2 and 3.2.1b are matched only with players on the same version.
 
 ### 0.3.76
@@ -3004,7 +3003,7 @@ What each release changed for players, in plain words.
 
 ### 0.3.72
 
-- The game's messages say "YG Dolphin" everywhere, also before YouGame shows them.
+- The game's messages say "Subspace" everywhere, also before the service shows them.
 - A broadcast from a muted game keeps a silent sound track, so the video never waits for sound.
 
 ### 0.3.70
@@ -3016,20 +3015,20 @@ What each release changed for players, in plain words.
 
 ### 0.3.68
 
-- If you drop out of a long friends room, you get back in: the game asks YouGame for a fresh pass
+- If you drop out of a long friends room, you get back in: the game asks the service for a fresh pass
   when the old one has expired and gives a waking room more time to answer. If the room can't be
   reached, it stops trying after a few minutes and says so, instead of retrying for ever.
 
 ### 0.3.67
 
-- Broadcast a replay or a live match you're watching through YouGame, with game sound.
+- Broadcast a replay or a live match you're watching through the service, with game sound.
   The broadcast keeps going when the game view is hidden or has no room on screen.
 - On Mac, the game finishes every change to its picture at once, so the screen can't be left
   waiting on it.
 
 ### 0.3.66
 
-- On Mac, the game stays with YouGame when entering or leaving full screen, and waits for the
+- On Mac, the game stays with the service when entering or leaving full screen, and waits for the
   app's window to settle before appearing again.
 - The game keeps full priority on Mac while it runs.
 - On Linux, Vulkan graphics are included (fixes a crash on the character screen with some AMD graphics drivers).
@@ -3043,8 +3042,8 @@ What each release changed for players, in plain words.
 
 ### 0.3.64
 
-- Clicking the YouGame logo inside a game (full screen or theater) opens the same menu as
-  Shift+Tab. YG Dolphin's own small dropdown is gone; the Δ feedback button stays.
+- Clicking the app logo inside a game (full screen or theater) opens the same menu as
+  Shift+Tab. Subspace's own small dropdown is gone; the Δ feedback button stays.
 - While you search for an opponent on your own, the screen says "Waiting for another player…"
   with how long you have waited.
 - Windows graphics-crash diagnostics no longer read the Windows graphics timeout settings (as in
@@ -3052,7 +3051,7 @@ What each release changed for players, in plain words.
 
 ### 0.3.62
 
-- Windows: when the graphics driver stops responding, YG Dolphin's log now records memory use,
+- Windows: when the graphics driver stops responding, Subspace's log now records memory use,
   the graphics card's video memory budget, the driver version and the render settings, so these
   crashes can be traced. Nothing changes in play.
 
@@ -3066,7 +3065,7 @@ What each release changed for players, in plain words.
 
 ### 0.3.59
 
-- When your friend gets back to a friends room before you do, YG Dolphin joins their game instead
+- When your friend gets back to a friends room before you do, Subspace joins their game instead
   of reporting a network error.
 - After a dropped connection, rejoining a game that just finished shows its result like any other
   finish, instead of a network error.
@@ -3074,14 +3073,14 @@ What each release changed for players, in plain words.
   them for a new invite.") and stops retrying.
 - Ranked sets on results-only packs (Brawl Minus, Project M 3.6): leaving during the first game
   now counts as a loss, as it does on Project+.
-- Offline play without YouGame: `--pack <folder>` plays your own unsigned pack offline only
+- Offline play without the service: `--pack <folder>` plays your own unsigned pack offline only
   (docs/PLAY-STANDALONE.md).
 
 ### 0.3.58
 
-- The feedback button inside a game is the same red triangle as everywhere else on YouGame, and it
-  and the YouGame button no longer react to each other.
-- After a lost match, YG Dolphin opens a fresh room of its own and says the match ended, instead of
+- The feedback button inside a game is the same red triangle as everywhere else on the service, and it
+  and the app button no longer react to each other.
+- After a lost match, Subspace opens a fresh room of its own and says the match ended, instead of
   retrying the old room and blaming a version or disc mismatch.
 
 ### 0.3.57
@@ -3092,15 +3091,15 @@ What each release changed for players, in plain words.
 ### 0.3.56
 
 - Returning to a public match after the reconnect time runs out now says why you couldn't rejoin.
-- On a Mac, YG Dolphin inside the YouGame app is much lighter on macOS's window system and never takes
+- On a Mac, Subspace inside the desktop app is much lighter on macOS's window system and never takes
   keyboard focus from the app. This follows a Mac that froze when a game started in full screen.
 
 ### 0.3.55
 
 - Public casual and ranked matches can ride through a dropped connection: when the server supports
-  it, YG Dolphin keeps the match, shows "Reconnecting…" with a countdown, and rejoins by itself.
+  it, Subspace keeps the match, shows "Reconnecting…" with a countdown, and rejoins by itself.
   If a player doesn't come back in time, today's rules decide the result.
-- Fixes the game window sometimes not starting on Windows 10 with the YouGame app.
+- Fixes the game window sometimes not starting on Windows 10 with the desktop app.
 
 ### 0.3.54
 
@@ -3110,9 +3109,9 @@ What each release changed for players, in plain words.
 
 ### 0.3.53
 
-- If your PC runs out of memory while a game starts, YG Dolphin now says so plainly instead of closing.
-- The YouGame menu's feedback and volume buttons over the game appear only with a YouGame app that
-  supports them; on older apps the YouGame button works as before.
+- If your PC runs out of memory while a game starts, Subspace now says so plainly instead of closing.
+- The app menu's feedback and volume buttons over the game appear only with a desktop app that
+  supports them; on older apps the app button works as before.
 - Behind the scenes: diagnostics for the game window inside the page.
 
 ### 0.3.52
@@ -3122,8 +3121,8 @@ What each release changed for players, in plain words.
 
 ### 0.3.50
 
-- In full screen, the YouGame menu over the game can now send feedback with a screenshot of the
-  game, change the volume, mute, leave full screen and leave the match (with YouGame 0.12.52).
+- In full screen, the app menu over the game can now send feedback with a screenshot of the
+  game, change the volume, mute, leave full screen and leave the match (with the service 0.12.52).
 - A networking fix for Windows.
 - Behind the scenes: test copies mark their results as tests, and safer checks on the game's own menus.
 
@@ -3137,11 +3136,11 @@ What each release changed for players, in plain words.
 - In a friends room with three or four people, you can now sit out after a fight: pick up your
   token with B, then press A on your own player button. Whoever doesn't pick a character sits out;
   they can pick at the next character select.
-- A clearer message tells you when a friend's YG Dolphin is older or newer. Ask them to press Play
+- A clearer message tells you when a friend's Subspace is older or newer. Ask them to press Play
   to update.
 - Fewer "room is full" retries after a dropped connection.
 - A clear message tells you when a friend's game is too far behind to send you the match.
-- Packs that need a newer YG Dolphin now give a clear message telling you to update the YouGame app.
+- Packs that need a newer Subspace now give a clear message telling you to update the desktop app.
 - Known limit: a friend who is sitting out is still connected. Their bad connection can briefly
   stall the fight.
 
@@ -3171,7 +3170,7 @@ What each release changed for players, in plain words.
 
 ### 0.3.42
 
-- **YG Baiji is now YG Dolphin.** The window, the Mac menu and the messages use the new name.
+- **Renamed.** The window, the Mac menu and the messages use the new name.
   Your controls and settings carry over.
 - **Name tags keep the buttons you saved.**
 - **More community packs.** Community mods of other GameCube games can run (casual).
@@ -3188,11 +3187,10 @@ What each release changed for players, in plain words.
 
 ### 0.3.40
 
-- **Orca is now YG Baiji.** The name was picked in a YouGame community poll; the baiji is the
-  Yangtze river dolphin. The window, the Mac menu and the messages say YG Baiji. Your controls,
+- **Orca is now Subspace.** The window, the Mac menu and the messages say Subspace. Your controls,
   settings and ranked ratings carry over. On Windows the firewall may ask once more, because the
   program has a new name.
-- **Hold to talk.** Hold YouGame's overlay key (or the controller shortcut) to talk to friends in a
+- **Hold to talk.** Hold the service's overlay key (or the controller shortcut) to talk to friends in a
   match; a tap still opens the menu.
 - **Rumble.** Your controller can rumble when the game rumbles, with the app's switch on.
 - **Random stage in casual.** Both players can pick Random on a casual stage select.
@@ -3202,7 +3200,7 @@ What each release changed for players, in plain words.
 ### 0.3.39
 
 - **Your graphics, your choice.** Every graphics setting that only changes what your own screen
-  shows is now yours to pick in the YouGame app: resolution, anti-aliasing, texture filtering, the
+  shows is now yours to pick in the desktop app: resolution, anti-aliasing, texture filtering, the
   backend and graphics card, and more. Settings that would change the game or show you more than
   your opponent stay the same for everyone.
 - **Orca keeps up on slower computers.** If your computer can't hold 60 frames a second in a match,
@@ -3228,7 +3226,7 @@ What each release changed for players, in plain words.
 - **Matches start about 2 seconds sooner.** Once the queue finds you an opponent, you are both in
   control of your fighters about 2 seconds earlier, and the player joining sees "Opponent found ·
   joining" and the opponent's name while the match loads.
-- **Linux: an experimental build.** The YouGame app on Linux (x86-64, X11 or XWayland) can now run
+- **Linux: an experimental build.** The desktop app on Linux (x86-64, X11 or XWayland) can now run
   Orca inside its window. It is an early test and may still have problems.
 - **Small fixes from upstream Dolphin.** A crash when the system's language setting is invalid, a
   counter overflow in the graphics statistics, and extra checks in the GameCube microphone.
@@ -3242,5 +3240,5 @@ What each release changed for players, in plain words.
 - **Reconnecting to a ranked set no longer closes Orca.** If your connection drops mid-set and you
   come back to the same room, you rejoin the set instead of Orca stopping.
 - **Your in-game name tag and controls carry into online games.** A name tag you make in the game's
-  Controls menu, named like your YouGame name, is now used as yours, so its controls (tap jump off,
+  Controls menu, named like your player name, is now used as yours, so its controls (tap jump off,
   your C-stick) play online instead of the defaults, and the name no longer shows up twice.

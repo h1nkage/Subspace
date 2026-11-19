@@ -10,7 +10,7 @@
 #include "Core/Orca/Profile.h"
 #include "Core/Orca/Status.h"
 #include "Core/Orca/UX/OverlayKey.h"
-#include "Core/Orca/UX/YgOrb.h"
+#include "Core/Orca/UX/AppOrb.h"
 #include "Core/State.h"
 #include "Core/System.h"
 #include "DolphinNoGUI/EmbedMacTiming.h"
@@ -115,7 +115,7 @@
 }
 @end
 
-// Embed mode: Orca's window floats over the YouGame app's player box but never becomes key. Clicks
+// Embed mode: Orca's window floats over the desktop app's player box but never becomes key. Clicks
 // fall through to the app's window, and pads and keys are read from HID state while the app says
 // the game has focus.
 @interface EmbedWindow : NSPanel
@@ -404,7 +404,7 @@ bool PlatformMacOS::Init()
   [m_window makeKeyAndOrderFront:NSApp];
   [m_window makeMainWindow];
   [NSApp activateIgnoringOtherApps:YES];
-  [m_window setTitle:@"YG Dolphin"];
+  [m_window setTitle:@"Subspace"];
   ObserveOcclusion();
 
   SetupMenu();
@@ -491,7 +491,7 @@ void PlatformMacOS::BeginGameActivity()
     return;
   m_game_activity = [[NSProcessInfo processInfo]
       beginActivityWithOptions:(NSActivityUserInitiated | NSActivityLatencyCritical)
-                        reason:@"YG Dolphin game"];
+                        reason:@"Subspace game"];
   if (m_game_activity)
     NOTICE_LOG_FMT(CORE, "Orca: game activity holds user-initiated, latency-critical priority");
 }
@@ -502,7 +502,7 @@ bool PlatformMacOS::InitEmbedded()
   [Application sharedApplication];
   m_app_delegate = [[AppDelegate alloc] initWithPlatform:this];
   [NSApp setDelegate:m_app_delegate];
-  // No Dock icon, app switcher entry or menu bar: Orca is part of the YouGame app.
+  // No Dock icon, app switcher entry or menu bar: Orca is part of the desktop app.
   [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
   [NSApp setPlatform:this];
   FinishLaunching();
@@ -532,7 +532,7 @@ bool PlatformMacOS::InitEmbedded()
   [m_window setCollectionBehavior:NSWindowCollectionBehaviorMoveToActiveSpace |
                                   NSWindowCollectionBehaviorIgnoresCycle |
                                   NSWindowCollectionBehaviorTransient];
-  [m_window setTitle:@"YG Dolphin"];
+  [m_window setTitle:@"Subspace"];
   m_window_delegate = [[WindowDelegate alloc] init];
   [m_window setDelegate:m_window_delegate];
   [[m_window contentView] setWantsLayer:YES];
@@ -843,15 +843,15 @@ void PlatformMacOS::ProcessEvents()
     // Track each native control separately. The union below only controls event passthrough.
     // The press state comes from this window's own mouse events (m_left_down), not
     // +[NSEvent pressedMouseButtons]: that asks WindowServer on every pass (0.3.56's budget).
-    if (IsEmbedded() || Orca::UX::YgOrb::HostEnabled())
+    if (IsEmbedded() || Orca::UX::AppOrb::HostEnabled())
     {
       NSView* view = [m_window contentView];
       const NSPoint point = [view convertPoint:[m_window mouseLocationOutsideOfEventStream]
                                       fromView:nil];
       const NSPoint pixel = [view convertPointToBacking:point];
       const NSRect bounds = [view convertRectToBacking:[view bounds]];
-      Orca::UX::YgOrb::UpdateControlsPointer(pixel.x, bounds.size.height - pixel.y, m_left_down);
-      const bool hit = Orca::UX::YgOrb::HitControls(pixel.x, bounds.size.height - pixel.y);
+      Orca::UX::AppOrb::UpdateControlsPointer(pixel.x, bounds.size.height - pixel.y, m_left_down);
+      const bool hit = Orca::UX::AppOrb::HitControls(pixel.x, bounds.size.height - pixel.y);
       if (IsEmbedded() && hit != m_embed_controls_hit)
       {
         m_embed_controls_hit = hit;
@@ -860,7 +860,7 @@ void PlatformMacOS::ProcessEvents()
     }
     // The game renders on its own thread; this loop only follows the host window.
     NSDate* expiration = [NSDate
-        dateWithTimeIntervalSinceNow:IsEmbedded() || Orca::UX::YgOrb::HostEnabled() ? 1.0 / 60 : 1];
+        dateWithTimeIntervalSinceNow:IsEmbedded() || Orca::UX::AppOrb::HostEnabled() ? 1.0 / 60 : 1];
     NSEvent* event = [NSApp nextEventMatchingMask:NSEventMaskAny
                                         untilDate:expiration
                                            inMode:NSDefaultRunLoopMode
@@ -869,7 +869,7 @@ void PlatformMacOS::ProcessEvents()
     bool handled = false;
     if (event && [event window] == m_window)
     {
-      namespace Orb = Orca::UX::YgOrb;
+      namespace Orb = Orca::UX::AppOrb;
       auto& shortcuts = InputCommon::Shortcuts::Get();
       shortcuts.SetFocus(IsEmbedded() ? IsWindowFocused() :
                                         ([m_window isKeyWindow] && [NSApp isActive]));
@@ -1005,7 +1005,7 @@ void PlatformMacOS::SetupMenu()
     [menuBar addItem:miscMenuItem];
 
     // Quit
-    NSString* quitTitle = @"Quit YG Dolphin";
+    NSString* quitTitle = @"Quit Subspace";
     NSMenuItem* quitMenuItem = [[NSMenuItem alloc] initWithTitle:quitTitle
                                                           action:@selector(shutdown)
                                                    keyEquivalent:@"q"];
@@ -1132,7 +1132,7 @@ void BringToFront()
     NSMenu* bar = [NSMenu new];
     NSMenuItem* app_item = [NSMenuItem new];
     NSMenu* app_menu = [NSMenu new];
-    [app_menu addItemWithTitle:@"Quit YG Dolphin" action:@selector(terminate:) keyEquivalent:@"q"];
+    [app_menu addItemWithTitle:@"Quit Subspace" action:@selector(terminate:) keyEquivalent:@"q"];
     [app_item setSubmenu:app_menu];
     [bar addItem:app_item];
     NSMenuItem* edit_item = [NSMenuItem new];
@@ -1158,7 +1158,7 @@ std::optional<std::string> Platform::ChooseFileMacOS(const std::string& message)
     [panel setCanChooseFiles:YES];
     [panel setCanChooseDirectories:NO];
     [panel setAllowsMultipleSelection:NO];
-    [panel setTitle:@"YG Dolphin"];
+    [panel setTitle:@"Subspace"];
     [panel setMessage:[NSString stringWithUTF8String:message.c_str()]];
     [panel setPrompt:@"Choose"];
     // Stay above other windows even if macOS won't let this process take focus from the app.

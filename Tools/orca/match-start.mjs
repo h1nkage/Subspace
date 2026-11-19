@@ -9,12 +9,12 @@
 // line (needs ORCA_JITWARM_LOG=1). The stage first appears at frame 28 in Project+ and ~170 in Brawl.
 //
 // A run folder holds:
-//   stdout.log         the run's whole output, with YG_SCENES=1 (its "Scene frame" lines) and
+//   stdout.log         the run's whole output, with ORCA_SCENES=1 (its "Scene frame" lines) and
 //                      Logger.Logs.ROLLBACK=True; the log's own MM:SS:mmm stamps place the scenes
 //   vblank_times.txt   copied from <user>/Logs after the run (delete it before the run)
 //   meta.txt           "t_start <unix seconds>" and "t_end <unix seconds>" around the process
 // The VI series is placed in time by its end: the "Diag frame times" line if the run has one
-// (YG_FRAMETIME, printed right after the last frame), else t_end.
+// (ORCA_FRAMETIME, printed right after the last frame), else t_end.
 import fs from "node:fs";
 import path from "node:path";
 

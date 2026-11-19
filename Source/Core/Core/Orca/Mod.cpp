@@ -305,7 +305,7 @@ std::optional<std::string> FlatNameProblem(std::string_view name)
     return "an empty name";
   if (name.size() > MAX_PATH_BYTES)
     return fmt::format("longer than {} bytes", MAX_PATH_BYTES);
-  // The YouGame app's runtime file names (desktop orca-policy.ts FILE_RE), which are what lands in
+  // The desktop app's runtime file names (desktop orca-policy.ts FILE_RE), which are what lands in
   // the folder.
   const auto plain = [](char c) {
     return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '+' ||
@@ -503,7 +503,7 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
     return it == o.end() ? nullptr : &it->second;
   };
 
-  // A pack for a newer YG Dolphin says so before anything else it holds that this build may not
+  // A pack for a newer Subspace says so before anything else it holds that this build may not
   // know (keys, builtins, limits): the player's message, as the session's error.
   if (const picojson::value* v = get("engine"); v && v->is<picojson::object>())
   {
@@ -946,7 +946,7 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
   if (!flat)
     return m;
 
-  // Format 2. listing: the YouGame listing the bundle is for (desktop orca-policy.ts SLUG_RE).
+  // Format 2. listing: the service listing the bundle is for (desktop orca-policy.ts SLUG_RE).
   {
     const picojson::value* v = get("listing");
     const auto slug = [](const std::string& l) {

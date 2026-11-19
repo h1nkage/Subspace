@@ -884,7 +884,7 @@ static ControllerType IdentifyControllerType(u8 data)
 }
 
 // One port's 9 bytes of the 0x21 report (status, two button bytes, sticks, triggers) as a pad, for
-// a port with a controller in it. Orca's YouGame controller source decodes the desktop app's raw
+// a port with a controller in it. Orca's the service controller source decodes the desktop app's raw
 // adapter bytes through this too, so both paths give the game the same pad for the same bytes.
 GCPadStatus DecodeChannel(const u8* channel_data)
 {

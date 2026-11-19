@@ -9,7 +9,7 @@
 #include <string>
 #include <string_view>
 
-// Machine-readable status lines for the YouGame desktop app, printed on stdout in a session:
+// Machine-readable status lines for the desktop app, printed on stdout in a session:
 //   orca state booting|lobby|playing|ended, plus drop-in states: joining <percent>, friend-joining,
 //     friend-joined, friend-left <why>, host-left, left, left lobby, no-room, friend-holding,
 //     friend-waiting ("left lobby": the host left its friends for a With Anyone queue pick)
@@ -65,14 +65,14 @@ void Report(std::string_view code, std::string_view sentence);
 //   direct   app may send "direct on|off"
 //   host     app may send "host <code>" and "queue-cancel"
 //   chat     app may send "chat <name> <text>", shown as a toast (never logged)
-//   yougame  app may send "orb ..." and "notice ..." for the YouGame button over the game; a press
+//   orb  app may send "orb ..." and "notice ..." for the app button over the game; a press
 //            on it prints "orca orb" (Windows)
 //   music    app may send "music on|off", the player's Music switch (Orca/Music.h)
 //   results  "orca result" lines, only for a profile with a verified result reader
 //   gfx      app may send "gfx <key> <value>": a live change to one of the player's drawing-only
 //            graphics settings (Orca/Perf.h ParseGfx), applied at the next frame boundary
 //   talk     Orca prints "orca overlay down|up|cancel keys|pad" for the overlay key (hold-to-talk,
-//            UX/OverlayKey.h) and the app may send "talk ..." lines (UX/YgOrb.h)
+//            UX/OverlayKey.h) and the app may send "talk ..." lines (UX/AppOrb.h)
 //   rumble   Orca prints "orca rumble <port> <0|1> <adapter|pad|none> <index>": the game's motor
 //            for the local player's controller (Orca/UX/Rumble.h), which the page plays
 //   record   Orca streams its match to the room (watchers, the saved replay in the players'
@@ -80,10 +80,10 @@ void Report(std::string_view code, std::string_view sentence);
 //            stops it everywhere, "record auto" goes back to the default (Session/Online.h
 //            RecordWanted, Rollback/ReplayStream.h)
 //   replay   product replay only: app may send "replay pause|resume|seek <frame>|names ..."
-//   hostui   app may handle "orca host ..." and "orca feedback ..." and wants YG Dolphin's
-//            native host menu; without it YG Dolphin behaves as 0.3.49 did
+//   hostui   app may handle "orca host ..." and "orca feedback ..." and wants Subspace's
+//            native host menu; without it Subspace behaves as 0.3.49 did
 inline constexpr const char* CAPS =
-    "join leave stats pause delay perf direct host chat yougame gfx";
+    "join leave stats pause delay perf direct host chat orb gfx";
 // "music": offered where Orca can tell the game's music apart (Orca/Music.h Supported).
 inline constexpr const char* MUSIC_CAP = "music";
 inline constexpr const char* RESULTS_CAP = "results";
@@ -104,7 +104,7 @@ inline constexpr const char* QUEUE2_CAP = "queue2";
 inline constexpr const char* PICK_CAPS = "pick-casual pick-ranked";
 // "talk": hold-to-talk. Orca prints "orca overlay down|up|cancel keys|pad" for the overlay key's
 // press and release instead of the "orca orb" toggle (UX/OverlayKey.h), and the app may send
-// "talk ..." lines, one row in the YouGame button's pill (UX/YgOrb.h). Before "rumble", optional
+// "talk ..." lines, one row in the app button's pill (UX/AppOrb.h). Before "rumble", optional
 // "replay", "record" and "hostui", so an app that reads fewer words drops these first.
 inline constexpr const char* TALK_CAP = "talk";
 // "rumble": every profile, after "talk", before optional "replay", "record" and "hostui".
@@ -115,7 +115,7 @@ inline constexpr const char* REPLAY_CAP = "replay";
 // "record": every profile, after optional replay and before hostui; an app without it never records.
 inline constexpr const char* RECORD_CAP = "record";
 // "hostui": every profile, after record and before coseats.
-// Only an app that agrees it gets native orb and feedback controls (UX/YgOrb.h).
+// Only an app that agrees it gets native orb and feedback controls (UX/AppOrb.h).
 inline constexpr const char* HOSTUI_CAP = "hostui";
 // Own-window rebindable menu/chat chords, including controller-input suppression. The frontend
 // enables this only after installing all its key/focus handlers; headless and Qt do not offer it.

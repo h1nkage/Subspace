@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://yougame.co/schemas/orca-ruleset.json",
+  "$id": "https://example.invalid/schemas/orca-ruleset.json",
   "title": "Orca ruleset: a competitive ruleset as data",
-  "description": "A ruleset file (format 1): the legal stages, the stage steps' timers, the clauses, the set's rules (stocks, time, time-outs, ledge-grab limits, tiebreaks), the queue's and the character order's timers and the character select's no-show timer, for one game. Orca compiles this schema in and checks every ruleset against it on load (Source/Core/Core/Orca/Engine/Schema.h, Ruleset.h); the site checks uploads with the same file (YouGame web/src/lib/orca-ruleset.schema.json, a byte copy). Both validators understand exactly the keywords used here (x-orca-keywords) and refuse a schema that uses any other, so the two can't drift; rules a schema can't state are in x-orca-rules, implemented in both and pinned by Tools/orca/mods/ruleset-vectors.json. String lengths are UTF-8 bytes. Every number is an integer.",
+  "description": "A ruleset file (format 1): the legal stages, the stage steps' timers, the clauses, the set's rules (stocks, time, time-outs, ledge-grab limits, tiebreaks), the queue's and the character order's timers and the character select's no-show timer, for one game. Orca compiles this schema in and checks every ruleset against it on load (Source/Core/Core/Orca/Engine/Schema.h, Ruleset.h); the site checks uploads with the same file (service web/src/lib/orca-ruleset.schema.json, a byte copy). Both validators understand exactly the keywords used here (x-orca-keywords) and refuse a schema that uses any other, so the two can't drift; rules a schema can't state are in x-orca-rules, implemented in both and pinned by Tools/orca/mods/ruleset-vectors.json. String lengths are UTF-8 bytes. Every number is an integer.",
   "type": "object",
   "additionalProperties": false,
   "required": [

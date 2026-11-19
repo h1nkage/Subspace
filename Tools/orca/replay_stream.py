@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-# replay_stream.py: reads a YG Baiji replay stream (.ygr, Session/Keyframe.h "Replay streams") in
+# replay_stream.py: reads a Subspace replay stream (.ssr, Session/Keyframe.h "Replay streams") in
 # Python, for tests: the header, every frame (each seat's pad bytes, ports, typed events) and the
 # session checksums it carries. Chunk payloads are zstd; this uses the zstd command line tool.
 #
-#   python3 Tools/orca/replay_stream.py <file.ygr>     prints a summary
+#   python3 Tools/orca/replay_stream.py <file.ssr>     prints a summary
 import json
 import struct
 import subprocess
 import sys
 
-STREAM_MAGIC = b"YGRS"
-CHUNK_MAGIC = b"YGRC"
+STREAM_MAGIC = b"SSRS"
+CHUNK_MAGIC = b"SSRC"
 PADS_BYTES = 4 * 8
 # Magic, first frame, frame count, live frame, checksum count, payload size, payload XXH3.
 PREAMBLE = 4 + 4 + 4 + 4 + 4 + 4 + 8

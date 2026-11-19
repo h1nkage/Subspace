@@ -18,7 +18,7 @@ namespace picojson
 class value;
 }
 
-// Parses the YouGame desktop app's controller snapshots and maps them to the local player's
+// Parses the desktop app's controller snapshots and maps them to the local player's
 // GameCube pad. Pure functions with no I/O or clocks, so unit tests cover all of it. This only
 // decides which bytes the local player sends, so it is not part of the compatibility key.
 namespace Orca::UX

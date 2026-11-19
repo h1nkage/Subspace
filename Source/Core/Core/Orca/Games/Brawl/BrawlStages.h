@@ -91,8 +91,8 @@ constexpr u32 PORT_ANY = 0xF0;
 
 // ---- Match block (MatchBlock.h, SetBlock.h) ----
 constexpr u32 kBlock = 0x806F2380;
-// Header: 'YGM1', version, mode, ruleset.
-constexpr u32 kHeaderMagic = 0x59474D31;
+// Header: 'SSM1', version, mode, ruleset.
+constexpr u32 kHeaderMagic = 0x53534D31;
 constexpr u8 kHeaderVersion = 1;
 constexpr u8 kModeCasual = 1;
 constexpr u8 kModeRanked = 2;
@@ -104,7 +104,7 @@ constexpr u32 kResultsSet = kBlock + 0x210;
 // This flow's state: the block's step region (Project+ uses the same bytes for its own flow).
 constexpr u32 kRegion = kBlock + 0x80;
 constexpr u32 kRegionSize = 0x40;
-constexpr u32 kMagic = 0x59474253;  // 'YGBS'
+constexpr u32 kMagic = 0x53534253;  // 'SSBS'
 constexpr u8 kVersion = 1;
 
 enum class Phase : u8

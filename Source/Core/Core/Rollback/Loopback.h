@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 // Test only: runs a real Orca session against a virtual remote player in the same process. A plain
-// run records every pad and the RAM checksum per frame (YG_PADREC). A second run replays that
+// run records every pad and the RAM checksum per frame (ORCA_PADREC). A second run replays that
 // recording through Orca::Net::Session with the remote's inputs arriving late, so the session
 // predicts, mispredicts and rolls back. The remote also sends the plain run's checksums, so any
 // divergence ends the session as a desync.

@@ -65,7 +65,7 @@ public:
 void ScriptedRun(bool online)
 {
   const std::string directory = File::CreateTempDir();
-  const std::string script = directory + "/input.yg";
+  const std::string script = directory + "/input.txt";
   {
     File::IOFile file(script, "w");
     const std::string rule = "0 1000 1 A SX=200\n";
@@ -74,7 +74,7 @@ void ScriptedRun(bool online)
   }
   SetEnv("ORCA_SESSION", "1");
   SetEnv("ORCA_TEST_DEV_GAME", online ? "RSBE01" : "");
-  SetEnv("YG_INPUT", script.c_str());
+  SetEnv("ORCA_INPUT", script.c_str());
   if (Orca::Online::Enabled() != online || !Rollback::Harness::Active())
     std::_Exit(3);
   Core::SetIsThrottlerTempDisabled(false);

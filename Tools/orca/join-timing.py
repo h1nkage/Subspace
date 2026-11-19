@@ -288,8 +288,8 @@ class Orca:
         environment = {'HOME': str(home), 'TMPDIR': str(tmp), 'PATH': '/usr/bin:/bin',
             'ORCA_SESSION': '1', 'ORCA_TEST_COMMANDS': '1', 'ORCA_TEST_DEV_GAME': 'orca-dropin-test',
             'ORCA_NAME': name,
-            'ORCA_PROFILE': a.profile if a.pplus else 'RSBE01', 'YG_INPUT': str(script), 'YG_SCENES': '1',
-            'YG_THROTTLE': '1', 'SDL_JOYSTICK_HIDAPI': '0', 'SDL_HIDAPI_LIBUSB': '0'}
+            'ORCA_PROFILE': a.profile if a.pplus else 'RSBE01', 'ORCA_INPUT': str(script), 'ORCA_SCENES': '1',
+            'ORCA_THROTTLE': '1', 'SDL_JOYSTICK_HIDAPI': '0', 'SDL_HIDAPI_LIBUSB': '0'}
         environment.update(extra)
         args = ['nice', '-n', '10', a.binary, '-p', 'headless', '-u', str(user), '-v', 'Null',
             '-C', 'Dolphin.DSP.Backend=No Audio Output',

@@ -125,7 +125,7 @@ u64 RamChecksum(std::span<const u8> mem1, std::span<const u8> mem2);
 // leaks into the emulated machine.
 std::optional<GCPadStatus> InputOverride(int port);
 // The pad before the input gate: the session's, the test harness's, or a neutral pad during boot
-// in a session. This is what YG_PADREC records.
+// in a session. This is what ORCA_PADREC records.
 std::optional<GCPadStatus> RawInputOverride(int port);
 
 // Called by the game profile's frame-boundary hook once per frame. Runs in the host's

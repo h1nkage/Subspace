@@ -547,7 +547,7 @@ int FastUntil()
 // FreshMove::ApplySeed): fresh for every boot and every fresh start, so RANDOM on the character
 // select, and every draw the game makes, differ from one match to the next. The host draws it and
 // the replay carries it, so a joiner's rebuild starts from the same numbers. 0 (the canonical
-// boot's own numbers, as every Orca before this) with no YouGame room; offline harness runs have no
+// boot's own numbers, as every Orca before this) with no online room; offline harness runs have no
 // history at all, so they repeat. In a dev game's room ORCA_TEST_RNG_SEED=<n> (a test knob) fixes
 // it.
 u32 NewHistorySeed()
@@ -1484,7 +1484,7 @@ void EndQueueForFriend(Match& match, bool arrived, bool invited)
   Orca::Status::Menu("cancel");
 }
 
-void RetireReassignedCoSeats(Match& match, Orca::Net::YouGameRoom* test_room = nullptr)
+void RetireReassignedCoSeats(Match& match, Orca::Net::RelayRoom* test_room = nullptr)
 {
   if (!match.session || match.joining)
     return;
@@ -1501,7 +1501,7 @@ void RetireReassignedCoSeats(Match& match, Orca::Net::YouGameRoom* test_room = n
   }
 }
 
-void HostEvents(Core::System& system, Match& match, Orca::Net::YouGameRoom* test_room = nullptr,
+void HostEvents(Core::System& system, Match& match, Orca::Net::RelayRoom* test_room = nullptr,
                 std::optional<bool> test_menus = std::nullopt)
 {
   ++match.host_boundaries;
@@ -4131,7 +4131,7 @@ std::optional<int> Boundary(Core::System& system,
       if (!match.store)
       {
         StopEmulation(system,
-                      "Couldn't join: this YG Dolphin has nowhere to get your friend's game from");
+                      "Couldn't join: this Subspace has nowhere to get your friend's game from");
         End("no keyframe store");
         return std::nullopt;
       }
@@ -4706,7 +4706,7 @@ static std::optional<int> SessionBoundary(
         {
           Orca::Status::State("friend-joined");
           match.friend_left_told = false;
-          // A matchmade room's match may begin (YouGameRoom), and the search is over.
+          // A matchmade room's match may begin (RelayRoom), and the search is over.
           bool all_seats = true;
           if (match.doubles)
             for (int seat = 0; seat < Orca::Net::MAX_SEATS; ++seat)
@@ -5472,7 +5472,7 @@ std::vector<Pads> PumpSoloSeatsForTest(Core::System& system, const std::vector<i
   return match.log;
 }
 
-Pads PumpSoloRoomForTest(Core::System& system, Orca::Net::YouGameRoom& room)
+Pads PumpSoloRoomForTest(Core::System& system, Orca::Net::RelayRoom& room)
 {
   const Common::ScopeGuard reset_count([] { Orca::UX::SetLocalPadCount(1); });
   Match match;
@@ -5575,7 +5575,7 @@ int PumpRoomReopenFailureForTest(const std::function<void()>& wait_for_failure)
   return match.running;
 }
 
-static HostRecoveryResult PumpHostForTest(Core::System& system, Orca::Net::YouGameRoom& room,
+static HostRecoveryResult PumpHostForTest(Core::System& system, Orca::Net::RelayRoom& room,
                                           Orca::Net::Game& game, Orca::Net::ReplayArchive replay,
                                           int current_frame, bool session_alive,
                                           const std::vector<int>& seated, std::optional<bool> menus,
@@ -5653,7 +5653,7 @@ static HostRecoveryResult PumpHostForTest(Core::System& system, Orca::Net::YouGa
   return result;
 }
 
-HostRecoveryResult PumpRecoveryHostForTest(Core::System& system, Orca::Net::YouGameRoom& room,
+HostRecoveryResult PumpRecoveryHostForTest(Core::System& system, Orca::Net::RelayRoom& room,
                                           Orca::Net::Game& game, Orca::Net::ReplayArchive replay,
                                           int current_frame, bool session_alive,
                                           std::unique_ptr<Orca::Net::KeyframeStore> store)
@@ -5662,7 +5662,7 @@ HostRecoveryResult PumpRecoveryHostForTest(Core::System& system, Orca::Net::YouG
                          {1}, std::nullopt, std::move(store));
 }
 
-HostRecoveryResult PumpFriendsHostForTest(Core::System& system, Orca::Net::YouGameRoom& room,
+HostRecoveryResult PumpFriendsHostForTest(Core::System& system, Orca::Net::RelayRoom& room,
                                          Orca::Net::Game& game, Orca::Net::ReplayArchive replay,
                                          int current_frame, const std::vector<int>& seated,
                                          bool on_menus,
@@ -5675,7 +5675,7 @@ HostRecoveryResult PumpFriendsHostForTest(Core::System& system, Orca::Net::YouGa
                          seated, on_menus, std::move(store), host_requested, after_admit);
 }
 
-bool PumpHeldFriendsEventsForTest(Orca::Net::YouGameRoom& room,
+bool PumpHeldFriendsEventsForTest(Orca::Net::RelayRoom& room,
     std::unique_ptr<Orca::Net::Session>& session, const std::vector<int>& seated)
 {
   Match match;

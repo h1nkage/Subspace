@@ -12,7 +12,7 @@ namespace Orca
 struct Profile;
 }
 
-// Orca's in-game UX for online play: the local controller fed by the YouGame app, the overlay,
+// Orca's in-game UX for online play: the local controller fed by the desktop app, the overlay,
 // and the players' names in the game's own name tags.
 namespace Orca::UX
 {

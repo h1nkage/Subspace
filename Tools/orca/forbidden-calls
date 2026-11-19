@@ -88,7 +88,7 @@ PEER_FILES = [
     "Source/Core/Core/Orca/UX/Chat.*",
     "Source/Core/Core/Orca/UX/Controllers.*",
     "Source/Core/Core/Orca/UX/ControllerSource.*",
-    "Source/Core/Core/Orca/UX/YgOrb.*",
+    "Source/Core/Core/Orca/UX/AppOrb.*",
     "Source/Core/DolphinNoGUI/Embed.*",
     "Source/Core/DolphinNoGUI/Platform.*",
     "Source/Core/Common/WebSocket.*",

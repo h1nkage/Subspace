@@ -53,7 +53,7 @@
 #include "Core/Orca/UX/OrbCombo.h"
 #include "Core/Orca/UX/Overlay.h"
 #include "Core/Orca/UX/OverlayKey.h"
-#include "Core/Orca/UX/YgOrbDraw.h"
+#include "Core/Orca/UX/AppOrbDraw.h"
 #include "Core/Rollback/Rollback.h"
 #include "InputCommon/GCPadStatus.h"
 #include "VideoCommon/OnScreenDisplay.h"
@@ -2248,7 +2248,7 @@ TEST(OrcaUXNameTags, ATagThePlayerMakesAgainKeepsItsSelectedDefaults)
   EXPECT_EQ(TagLayout(m, 118), FakeBrawl::CONTROLS);
   EXPECT_EQ(m.Read8(FakeBrawl::Tag(118) + 0x0C), 1);
   EXPECT_EQ(m.TagName(118), u"MYTAG");
-  EXPECT_EQ(m.TagName(0), u"");  // no YouGame tag made (it would be the lowest free slot)
+  EXPECT_EQ(m.TagName(0), u"");  // no player tag made (it would be the lowest free slot)
   EXPECT_TRUE(m.written.empty());
   // The next frame and a re-run also leave the chosen controls alone.
   const int writes = m.writes;
@@ -2404,7 +2404,7 @@ TEST(OrcaUXNameTags, OwnControlsFollowTheTagThePlayerWears)
   std::u16string last;
   // No tag anywhere: none.
   EXPECT_TRUE(ReadOwnControls(m, 0, "cy", &last).empty());
-  // Their YouGame tag exists (Orca made it): its controls.
+  // Their player tag exists (Orca made it): its controls.
   m.SetTag(119, u"CY");
   for (u32 i = 0; i < 0x2D; ++i)
     m.Write8(FakeBrawl::Tag(119) + 0x14 + i, FakeBrawl::CONTROLS[i]);
@@ -2433,7 +2433,7 @@ TEST(OrcaUXNameTags, OwnControlsFollowTheTagThePlayerWears)
     melee.Write8(FakeBrawl::Tag(4) + 0x14 + i, CustomLayout()[i]);
   melee.SetTag(119, u"CY");
   EXPECT_EQ(ReadOwnControls(melee, 0, "cy", &last), Profile(0, CustomLayout()));
-  // That tag gone from the save: their YouGame tag again. Reads never write.
+  // That tag gone from the save: their player tag again. Reads never write.
   melee.SetTag(4, u"");
   melee.recording = true;
   EXPECT_EQ(ReadOwnControls(melee, 0, "cy", &last)[0], 0);
@@ -2525,7 +2525,7 @@ TEST(OrcaUXNameTags, ASwitchToATagAtTheDefaultsIsNoChange)
   std::vector<u8> other = custom;
   other[1] = 0x04;
   {
-    // Their YouGame tag with their own controls, then a tag they make again, at the defaults:
+    // Their player tag with their own controls, then a tag they make again, at the defaults:
     // their own stay theirs (nothing to print, keep or send).
     OwnControlsWatch w;
     EXPECT_FALSE(w.Next(custom, u"ZEKE", custom, false));
@@ -2569,7 +2569,7 @@ TEST(OrcaUXNameTags, ASwitchToATagAtTheDefaultsIsNoChange)
       m.Write8(FakeBrawl::Tag(118) + 0x14 + i, custom[1 + i]);
     m.Write8(FakeBrawl::Tag(118) + 0x0C, 0);
     EXPECT_FALSE(reader.Read(m, ports, custom, 0));
-    // Off the character select with that tag gone, the YouGame tag at the defaults: none either.
+    // Off the character select with that tag gone, the player tag at the defaults: none either.
     m.SetTag(118, u"");
     GameMadeTag(m, 119, u"ZEKE");
     m.W32(FakeBrawl::SCENE, 0x806ff300);  // another scene's name: unreadable, not the select
@@ -2581,7 +2581,7 @@ TEST(OrcaUXNameTags, AcrossRestartsATagMadeAgainKeepsTheKeptControls)
 {
   // Two runs of Orca, each with fresh memory (tags made in the game die with it), the controls
   // kept from the first passed to the second as the kept file does. In each, the player joins,
-  // gets their YouGame tag, makes MYTAG again and wears it. Nothing is ever published, so the kept
+  // gets their player tag, makes MYTAG again and wears it. Nothing is ever published, so the kept
   // file, the page and the account keep their controls, and MYTAG plays with them.
   const std::vector<u8> custom = Profile(0, CustomLayout());
   std::vector<u8> kept = custom;
@@ -2617,7 +2617,7 @@ TEST(OrcaUXNameTags, TheOwnControlsReadComesAfterTheWrites)
   const std::vector<u8> custom = Profile(0, CustomLayout());
   const std::vector<Orca::Events::PortInfo> ports{{0, "zeke", false, custom}};
   {
-    // Playing alone with controls kept from an earlier run: the YouGame tag gets them, no change.
+    // Playing alone with controls kept from an earlier run: the player tag gets them, no change.
     FakeBrawl m;
     m.Join(0);
     OwnControlsReader reader;
@@ -3774,9 +3774,9 @@ TEST(OrcaUXOverlay, ChatLinesStayEightSecondsTheNewestThree)
   EXPECT_TRUE(m.View(20000, Stats::Off).chats.empty());
 }
 
-TEST(OrcaUXYgOrb, ParsesTheButtonsPlaceAndItsOffAndBlink)
+TEST(OrcaUXAppOrb, ParsesTheButtonsPlaceAndItsOffAndBlink)
 {
-  using namespace Orca::UX::YgOrb;
+  using namespace Orca::UX::AppOrb;
   auto c = ParseOrb("orb 32 32 80 0 1 3");
   ASSERT_TRUE(c);
   EXPECT_EQ(c->type, Command::Type::Place);
@@ -3802,9 +3802,9 @@ TEST(OrcaUXYgOrb, ParsesTheButtonsPlaceAndItsOffAndBlink)
   }
 }
 
-TEST(OrcaUXYgOrb, ParsesNoticesWithAndWithoutAHint)
+TEST(OrcaUXAppOrb, ParsesNoticesWithAndWithoutAHint)
 {
-  using namespace Orca::UX::YgOrb;
+  using namespace Orca::UX::AppOrb;
   auto n = ParseNotice("notice voice Ada is%20on%20voice");
   ASSERT_TRUE(n);
   EXPECT_EQ(n->kind, Kind::Voice);
@@ -3829,9 +3829,9 @@ TEST(OrcaUXYgOrb, ParsesNoticesWithAndWithoutAHint)
   }
 }
 
-TEST(OrcaUXYgOrb, LinesStayAsLongAsThePagesTheNewestThree)
+TEST(OrcaUXAppOrb, LinesStayAsLongAsThePagesTheNewestThree)
 {
-  using namespace Orca::UX::YgOrb;
+  using namespace Orca::UX::AppOrb;
   Model m;
   const auto notice = [](Kind kind, std::string text) {
     Notice n;
@@ -3870,9 +3870,9 @@ TEST(OrcaUXYgOrb, LinesStayAsLongAsThePagesTheNewestThree)
   EXPECT_EQ(lines.back().at, 4004);
 }
 
-TEST(OrcaUXYgOrb, HostControlHitTestsFollowBothDiscsAtEveryScale)
+TEST(OrcaUXAppOrb, HostControlHitTestsFollowBothDiscsAtEveryScale)
 {
-  using namespace Orca::UX::YgOrb;
+  using namespace Orca::UX::AppOrb;
   for (const float k : {0.5f, 1.0f, 2.0f, 3.0f})
   {
     SCOPED_TRACE(k);
@@ -3903,9 +3903,9 @@ TEST(OrcaUXYgOrb, HostControlHitTestsFollowBothDiscsAtEveryScale)
   EXPECT_EQ(ControlAt({}, 0, 0), -1);
 }
 
-TEST(OrcaUXYgOrb, NativeHoverAndPressBelongToOnlyTheirOriginalControl)
+TEST(OrcaUXAppOrb, NativeHoverAndPressBelongToOnlyTheirOriginalControl)
 {
-  using namespace Orca::UX::YgOrb;
+  using namespace Orca::UX::AppOrb;
   Model m;
   m.Apply(*ParseOrb("orb 16 16 40 0 0 0"), 0);
   m.Apply(*ParseOrb("orb blink"), 100);
@@ -3949,9 +3949,9 @@ TEST(OrcaUXYgOrb, NativeHoverAndPressBelongToOnlyTheirOriginalControl)
   EXPECT_FALSE(m.At(3400).feedback.pressed);
 }
 
-TEST(OrcaUXYgOrb, TheButtonShowsBlinksAndTakesPressesOnItsDisc)
+TEST(OrcaUXAppOrb, TheButtonShowsBlinksAndTakesPressesOnItsDisc)
 {
-  using namespace Orca::UX::YgOrb;
+  using namespace Orca::UX::AppOrb;
   Model m;
   EXPECT_FALSE(m.At(0).on);
   EXPECT_FALSE(m.Hit(50, 50));
@@ -4422,9 +4422,9 @@ TEST(OrcaUXOrbCombo, AStallEndsATalkPressWhenStartIsLetGoWithTheSentPadsUnchange
   EXPECT_FALSE(Orca::UX::OverlayKey::Pad().IsDown());
 }
 
-TEST(OrcaUXYgOrb, ParsesTalkLines)
+TEST(OrcaUXAppOrb, ParsesTalkLines)
 {
-  using namespace Orca::UX::YgOrb;
+  using namespace Orca::UX::AppOrb;
   auto t = ParseTalk("talk listen Ada Listening%E2%80%A6%20let%20go%20to%20send");
   ASSERT_TRUE(t);
   EXPECT_EQ(t->phase, Talk::Phase::Listen);
@@ -4449,9 +4449,9 @@ TEST(OrcaUXYgOrb, ParsesTalkLines)
   }
 }
 
-TEST(OrcaUXYgOrb, TheTalkRowIsReplacedInPlaceAndOutlivesTheNotices)
+TEST(OrcaUXAppOrb, TheTalkRowIsReplacedInPlaceAndOutlivesTheNotices)
 {
-  using namespace Orca::UX::YgOrb;
+  using namespace Orca::UX::AppOrb;
   const auto talk = [](Talk::Phase phase, std::string text) {
     Talk t;
     t.phase = phase;
@@ -4526,9 +4526,9 @@ TEST(OrcaUXYgOrb, TheTalkRowIsReplacedInPlaceAndOutlivesTheNotices)
   EXPECT_EQ(row.talk.phase, Talk::Phase::Off);
 }
 
-TEST(OrcaUXYgOrb, ThePlaceScalesFromThePagesPixelsToTheBackbuffer)
+TEST(OrcaUXAppOrb, ThePlaceScalesFromThePagesPixelsToTheBackbuffer)
 {
-  using namespace Orca::UX::YgOrb;
+  using namespace Orca::UX::AppOrb;
   Place p;
   p.x = 32;
   p.y = 32;
@@ -4552,9 +4552,9 @@ TEST(OrcaUXYgOrb, ThePlaceScalesFromThePagesPixelsToTheBackbuffer)
   EXPECT_EQ(m.At(0).view_width, 0);
 }
 
-TEST(OrcaUXYgOrb, ThePillsWordsAreCutAfterASpaceAndNeverInsideACharacter)
+TEST(OrcaUXAppOrb, ThePillsWordsAreCutAfterASpaceAndNeverInsideACharacter)
 {
-  using Orca::UX::YgOrb::FitPrefix;
+  using Orca::UX::AppOrb::FitPrefix;
   // A byte a unit wide.
   const auto w = [](std::string_view t) { return static_cast<float>(t.size()); };
   EXPECT_EQ(FitPrefix("gg wp", 10, w), 5u);
@@ -4569,9 +4569,9 @@ TEST(OrcaUXYgOrb, ThePillsWordsAreCutAfterASpaceAndNeverInsideACharacter)
   EXPECT_EQ(FitPrefix("abcde fg hij", 8, w), 8u);
 }
 
-TEST(OrcaUXYgOrb, LiveWordsKeepTheirEndAndAreCutBeforeAWord)
+TEST(OrcaUXAppOrb, LiveWordsKeepTheirEndAndAreCutBeforeAWord)
 {
-  using Orca::UX::YgOrb::FitSuffix;
+  using Orca::UX::AppOrb::FitSuffix;
   const auto w = [](std::string_view t) { return static_cast<float>(t.size()); };
   EXPECT_EQ(FitSuffix("gg wp", 10, w), 0u);
   // "you ready" is nine: it starts after a space.
@@ -4616,7 +4616,7 @@ protected:
   void SetUp() override
   {
     OrcaUXOverlayDraw::SetUp();
-    const char* was = std::getenv("YOUGAME_STDIO");
+    const char* was = std::getenv("SUBSPACE_STDIO");
     m_had_stdio = was != nullptr;
     m_stdio = was ? was : "";
     SetStdio("1");
@@ -4624,7 +4624,7 @@ protected:
     Orca::Bridge::SetWriter(+[](const std::string&) {});
     m_lines = std::make_unique<StatusLines>("");
     ASSERT_TRUE(m_lines->Ok());
-    YgOrb::Current().Apply({}, YgOrb::NowMs());
+    AppOrb::Current().Apply({}, AppOrb::NowMs());
     OverlayKey::Keys().Cancel();
     LocalPadStopped();
     Pad(0);
@@ -4635,7 +4635,7 @@ protected:
   {
     LocalPadStopped();
     Pad(0);
-    YgOrb::Current().Apply({}, YgOrb::NowMs());
+    AppOrb::Current().Apply({}, AppOrb::NowMs());
     m_lines.reset();
     Orca::Bridge::SetWriter(nullptr);
     Orca::Bridge::ResetForTests();
@@ -4646,12 +4646,12 @@ protected:
   static void SetStdio(const char* value)
   {
 #ifdef _WIN32
-    _putenv_s("YOUGAME_STDIO", value ? value : "");
+    _putenv_s("SUBSPACE_STDIO", value ? value : "");
 #else
     if (value)
-      setenv("YOUGAME_STDIO", value, 1);
+      setenv("SUBSPACE_STDIO", value, 1);
     else
-      unsetenv("YOUGAME_STDIO");
+      unsetenv("SUBSPACE_STDIO");
 #endif
   }
 
@@ -4668,7 +4668,7 @@ protected:
     io.DisplaySize = ImVec2(640, 480);
     io.DeltaTime = 1.0f / 60;
     ImGui::NewFrame();
-    YgOrb::DrawHostControls(ImGui::GetForegroundDrawList(), YgOrb::HostView(YgOrb::NowMs()));
+    AppOrb::DrawHostControls(ImGui::GetForegroundDrawList(), AppOrb::HostView(AppOrb::NowMs()));
     ImGui::Render();
     return ImGui::GetDrawData()->TotalVtxCount;
   }
@@ -4680,10 +4680,10 @@ protected:
 
 TEST_F(OrcaUXHostUI, WithoutAgreementTheOrbAndShortcutKeepTheirLegacyPaths)
 {
-  using namespace YgOrb;
+  using namespace AppOrb;
   ASSERT_TRUE(Orca::Bridge::Ready());
   EXPECT_TRUE(Orca::Status::OfferedCaps().ends_with(" record hostui coseats qdoubles rdoubles"));
-  for (const char* caps : {"", "yougame", "yougame talk"})
+  for (const char* caps : {"", "orb", "orb talk"})
   {
     SCOPED_TRACE(caps);
     Orca::Status::SetAppCaps(caps);
@@ -4722,8 +4722,8 @@ TEST_F(OrcaUXHostUI, WithoutAgreementTheOrbAndShortcutKeepTheirLegacyPaths)
 
 TEST_F(OrcaUXHostUI, LogoAndHostMenuEmitExactlyThePagesShiftTabTapOnTheChosenChannel)
 {
-  using namespace YgOrb;
-  for (const char* caps : {"yougame hostui", "yougame talk hostui"})
+  using namespace AppOrb;
+  for (const char* caps : {"orb hostui", "orb talk hostui"})
   {
     SCOPED_TRACE(caps);
     Orca::Status::SetAppCaps(caps);
@@ -4774,11 +4774,11 @@ TEST_F(OrcaUXHostUI, LogoAndHostMenuEmitExactlyThePagesShiftTabTapOnTheChosenCha
 
 TEST_F(OrcaUXHostUI, HostuiPadShortcutUsesThePagePressAndRelease)
 {
-  for (const char* caps : {"yougame hostui", "yougame talk hostui"})
+  for (const char* caps : {"orb hostui", "orb talk hostui"})
   {
     SCOPED_TRACE(caps);
     Orca::Status::SetAppCaps(caps);
-    ASSERT_TRUE(YgOrb::HostEnabled());
+    ASSERT_TRUE(AppOrb::HostEnabled());
     EXPECT_EQ(Pad(PAD_BUTTON_UP), PAD_BUTTON_UP);
     EXPECT_EQ(Pad(PAD_BUTTON_UP | PAD_BUTTON_START), 0);
     const bool talk = Orca::Status::Cap(Orca::Status::TALK_CAP);
@@ -4797,8 +4797,8 @@ TEST_F(OrcaUXHostUI, HostuiPadShortcutUsesThePagePressAndRelease)
 
 TEST_F(OrcaUXHostUI, NativeDeltaDoesNotLightBlinkOrOpenTheOrb)
 {
-  using namespace YgOrb;
-  Orca::Status::SetAppCaps("yougame talk hostui");
+  using namespace AppOrb;
+  Orca::Status::SetAppCaps("orb talk hostui");
   ASSERT_TRUE(HostEnabled());
   Current().Apply(*ParseOrb("orb 16 16 40 1 0 0"), NowMs());
   UpdateControlsPointer(84, 36, false);
@@ -4851,8 +4851,8 @@ TEST_F(OrcaUXHostUI, NativeDeltaDoesNotLightBlinkOrOpenTheOrb)
 
 TEST_F(OrcaUXHostUI, DeltaDrawsARedDiscAndWhiteOutlineWithIndependentAlphaAndPressScale)
 {
-  using namespace YgOrb;
-  Orca::Status::SetAppCaps("yougame hostui");
+  using namespace AppOrb;
+  Orca::Status::SetAppCaps("orb hostui");
   // Inspect the real ImGui mesh at normal and Retina sizes; no native window is created.
   for (const float k : {1.0f, 2.0f})
   {
@@ -4929,7 +4929,7 @@ TEST_F(OrcaUXHostUI, DeltaDrawsARedDiscAndWhiteOutlineWithIndependentAlphaAndPre
 
 TEST_F(OrcaUXHostUI, LaterCapsReplaceTheAgreementIncludingDuringAShortcutPress)
 {
-  using namespace YgOrb;
+  using namespace AppOrb;
   Orca::Status::SetAppCaps("talk");
   Pad(PAD_BUTTON_UP | PAD_BUTTON_START);
   EXPECT_EQ(m_lines->Take(), "orca overlay down pad\n");
@@ -4962,9 +4962,9 @@ TEST_F(OrcaUXHostUI, LaterCapsReplaceTheAgreementIncludingDuringAShortcutPress)
   EXPECT_EQ(m_lines->Take(), "");
 }
 
-TEST(OrcaUXYgOrb, FeedbackWaitsForCompletionAndThenFiveSeconds)
+TEST(OrcaUXAppOrb, FeedbackWaitsForCompletionAndThenFiveSeconds)
 {
-  using namespace Orca::UX::YgOrb;
+  using namespace Orca::UX::AppOrb;
   FeedbackCooldown feedback;
   ASSERT_TRUE(feedback.FeedbackDue(0));
   EXPECT_FALSE(feedback.FeedbackDue(100000));  // Still encoding.
@@ -4975,9 +4975,9 @@ TEST(OrcaUXYgOrb, FeedbackWaitsForCompletionAndThenFiveSeconds)
   EXPECT_FALSE(feedback.FeedbackDue(110000));
 }
 
-TEST(OrcaUXYgOrb, FeedbackPublishesACompletePngBeforeReturningItsLine)
+TEST(OrcaUXAppOrb, FeedbackPublishesACompletePngBeforeReturningItsLine)
 {
-  using namespace Orca::UX::YgOrb;
+  using namespace Orca::UX::AppOrb;
   const std::string dir = File::CreateTempDir();
   ASSERT_FALSE(dir.empty());
   Common::ScopeGuard cleanup([&] { File::DeleteDirRecursively(dir); });
@@ -5005,9 +5005,9 @@ TEST(OrcaUXYgOrb, FeedbackPublishesACompletePngBeforeReturningItsLine)
     EXPECT_FALSE(PublishFeedback(directory, invalid, true));
 }
 
-TEST(OrcaUXYgOrb, FeedbackRejectsAnUnavailableRenderer)
+TEST(OrcaUXAppOrb, FeedbackRejectsAnUnavailableRenderer)
 {
-  using namespace Orca::UX::YgOrb;
+  using namespace Orca::UX::AppOrb;
   using namespace Common::Log;
   class CaptureLog final : public LogListener
   {
@@ -5028,18 +5028,18 @@ TEST(OrcaUXYgOrb, FeedbackRejectsAnUnavailableRenderer)
   const std::string dir = File::CreateTempDir();
   ASSERT_FALSE(dir.empty());
   const std::string old_user = File::GetUserPath(D_USER_IDX);
-  const char* old_stdio = std::getenv("YOUGAME_STDIO");
+  const char* old_stdio = std::getenv("SUBSPACE_STDIO");
   const bool had_stdio = old_stdio != nullptr;
   const std::string saved_stdio = old_stdio ? old_stdio : "";
   std::string logs;
   const auto set_stdio = [](const char* value) {
 #ifdef _WIN32
-    _putenv_s("YOUGAME_STDIO", value ? value : "");
+    _putenv_s("SUBSPACE_STDIO", value ? value : "");
 #else
     if (value)
-      setenv("YOUGAME_STDIO", value, 1);
+      setenv("SUBSPACE_STDIO", value, 1);
     else
-      unsetenv("YOUGAME_STDIO");
+      unsetenv("SUBSPACE_STDIO");
 #endif
   };
   Common::ScopeGuard cleanup([&] {
@@ -5078,7 +5078,7 @@ TEST(OrcaUXYgOrb, FeedbackRejectsAnUnavailableRenderer)
   EXPECT_TRUE(std::filesystem::is_empty(dir));
 }
 
-TEST(OrcaUXYgOrb, FeedbackRejectsStartingStoppingAndFailedRenderers)
+TEST(OrcaUXAppOrb, FeedbackRejectsStartingStoppingAndFailedRenderers)
 {
   const std::string dir = File::CreateTempDir();
   ASSERT_FALSE(dir.empty());
@@ -5111,7 +5111,7 @@ TEST(OrcaUXYgOrb, FeedbackRejectsStartingStoppingAndFailedRenderers)
   EXPECT_TRUE(std::filesystem::is_empty(dir));
 }
 
-TEST(OrcaUXYgOrb, FeedbackRequestsCanRaceRendererTeardown)
+TEST(OrcaUXAppOrb, FeedbackRequestsCanRaceRendererTeardown)
 {
   const std::string dir = File::CreateTempDir();
   ASSERT_FALSE(dir.empty());

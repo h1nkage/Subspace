@@ -18,7 +18,7 @@ namespace Core
 class CPUThreadGuard;
 }
 
-// Orca mods, phase 1 (YouGame docs/ORCA_MODS.md, "Phase 1 contract"): a session reads its game from
+// Orca mods, phase 1 (service docs/ORCA_MODS.md, "Phase 1 contract"): a session reads its game from
 // a mod bundle laid out as a run folder (ORCA_MOD_DIR) instead of Data/Sys/Orca/<profile>.*:
 //
 //   mod.json        engine settings and what the mod offers (ParseManifest)
@@ -28,22 +28,22 @@ class CPUThreadGuard;
 //   orca/patches/<name>.patches, orca/textures/..., orca/jitwarm
 //
 // A flat bundle (mod.json format 2, Core/Orca/Bundle.h) is the same game data as at most eight files
-// in one folder (signed, or unsigned when the YouGame app delivered it), which a session finds by
+// in one folder (signed, or unsigned when the desktop app delivered it), which a session finds by
 // itself: a game update that rides as a listing's runtime files. Without ORCA_MOD_DIR or a flat
 // bundle nothing here runs and Orca is exactly what it was (legacy profiles).
 namespace Orca::Mod
 {
 // The script API version this engine implements; mod.json's engine.api must not be above it.
 inline constexpr int ENGINE_API = 1;
-// The running YG Dolphin's version, X.Y.Z (CMake's ORCA_VERSION). mod.json's engine.minOrca must not
+// The running Subspace's version, X.Y.Z (CMake's ORCA_VERSION). mod.json's engine.minOrca must not
 // be above it: ParseManifest refuses such a pack first, with UPDATE_MESSAGE's words.
 std::string_view EngineVersion();
 // Whether X.Y.Z `version` is `minimum` or newer, number by number (both IsVersion: decimal, any
 // length; "0.3.10" is newer than "0.3.9").
 bool VersionAtLeast(std::string_view version, std::string_view minimum);
-// The player's message for a pack that needs a newer YG Dolphin (fmt: the pack's minOrca).
+// The player's message for a pack that needs a newer Subspace (fmt: the pack's minOrca).
 inline constexpr std::string_view UPDATE_MESSAGE =
-    "This pack needs YG Dolphin {} or newer. Update the YouGame app and try again.";
+    "This pack needs Subspace {} or newer. Update the desktop app and try again.";
 // The SD image builder's version, in the cached image's name and the key (through the image hash).
 inline constexpr std::string_view SD_BUILDER = "fat2";
 // An SD card is SDSC: at most 2 GiB (above, Dolphin presents SDHC, which needs the game's IOS to
@@ -69,7 +69,7 @@ inline constexpr int MAX_JSON_DEPTH = 16;
 // Today's FIRST_KEYFRAME_FRAME (Rollback/OnlineMatch.cpp) and FIRST_FRIEND_FRAME (UX/OnlineMenu.h).
 inline constexpr u32 DEFAULT_FIRST_KEYFRAME_FRAME = 300;
 // A flat bundle: at most this many files, mod.json and mod.sig included (a listing's runtime files:
-// YouGame desktop orca-policy.ts and web lib/orca.ts allow eight), and this many patches files.
+// desktop orca-policy.ts and web lib/orca.ts allow eight), and this many patches files.
 inline constexpr size_t FLAT_MAX_FILES = 8;
 inline constexpr size_t FLAT_MAX_PATCHES = 4;
 inline constexpr std::string_view FLAT_MANIFEST = "mod.json";
@@ -100,7 +100,7 @@ struct Tree
 // space, or a Windows device name (CON, NUL, COM1, ...), at most MAX_PATH_BYTES bytes. A bundle never
 // holds a tree.json of its own (the app writes the run folder's), so ParseTree refuses one listed.
 std::optional<std::string> PathProblem(std::string_view path);
-// Why a flat bundle's file name is refused, or nullopt: a name the YouGame app lays out as a runtime
+// Why a flat bundle's file name is refused, or nullopt: a name the desktop app lays out as a runtime
 // file ([A-Za-z0-9+ ()_-], then also '.', at most MAX_PATH_BYTES bytes), never "..", a folder, a
 // Windows device name or a name ending in a dot or a space, nor one of the bundle's own (mod.json,
 // mod.sig, tree.json).
@@ -215,7 +215,7 @@ struct Manifest
   std::optional<RankedRules> ranked_rules;          // brawl-rev2-results only
   std::vector<std::string> rulesets;
   std::vector<std::string> offers;
-  // Format 2 only. The listing the bundle is for (a YouGame slug: Orca refuses it under another
+  // Format 2 only. The listing the bundle is for (a service slug: Orca refuses it under another
   // listing) and its serial (Bundle.h MIN_FLAT_SERIAL). File names at the bundle's root: the SD
   // image used as it is ("sdImage"), the game patches in the order they apply, the JIT seed
   // (host-only), and the texture pack, which is the engine's own (Sys/Orca/Textures, as in legacy)

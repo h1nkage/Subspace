@@ -59,6 +59,12 @@ if(NOT DOLPHIN_WC_REVISION)
   set(DOLPHIN_WC_COMMITS_AHEAD_MASTER 0)
 endif()
 
+# Subspace: the name the NetPlay window's Revision column (and the title bar) shows, set by
+# build-netplay.bat. Every player in a lobby needs the same one: Dolphin refuses a different version.
+if(DEFINED ENV{SUBSPACE_VERSION_NAME} AND NOT "$ENV{SUBSPACE_VERSION_NAME}" STREQUAL "")
+  set(DOLPHIN_WC_DESCRIBE "$ENV{SUBSPACE_VERSION_NAME}")
+endif()
+
 # If this is a tag (i.e. a release), then set the current patch version and
 # the number of commits ahead to zero.
 if(DOLPHIN_WC_TAG)

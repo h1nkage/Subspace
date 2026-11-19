@@ -16,6 +16,7 @@
 #include "Core/Orca/Games/Brawl/Queue.h"
 #include "Core/Orca/Games/Brawl/Relabel.h"
 #include "Core/Orca/Games/Brawl/SetBlock.h"
+#include "Core/Orca/Session/Online.h"
 
 namespace Orca::UX::NativeText
 {
@@ -331,7 +332,9 @@ CssWords Wanted(const GuestMemory& m, const std::vector<Events::PortInfo>& ports
     return w;
   w.on_css = true;
   const Queue::View v = Queue::ReadView(m, ports);
-  for (int port = 0; port < 4; ++port)
+  // Rooms from Dolphin's NetPlay window (ORCA_LOCAL_ROOM) leave the plates to the game: they show
+  // the tag each player picks (BrawlModule gives them none), as in an offline game.
+  for (int port = 0; port < 4 && !Orca::Online::LocalRoom(); ++port)
   {
     const u32 area = Area(m, task, port);
     const Events::PortInfo* p = PortOf(ports, port);

@@ -9,7 +9,7 @@
 #include "Core/Orca/UX/OverlayKey.h"
 #include "InputCommon/GCPadStatus.h"
 
-// Controller shortcut for the YouGame overlay: hold D-pad Up and press Start. A GameCube pad has no
+// Controller shortcut for the app overlay: hold D-pad Up and press Start. A GameCube pad has no
 // Home button. Orca prints `orca orb` and the app opens the overlay. With the app's "talk" cap it
 // prints the press and the release of Start instead (UX/OverlayKey.h), so holding it talks.
 //

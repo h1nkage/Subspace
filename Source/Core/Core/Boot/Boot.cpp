@@ -501,7 +501,7 @@ static bool SetDefaultDisc(DVD::DVDInterface& dvd_interface)
     if (!Orca::SessionDiscReady(*disc))
     {
       Orca::Status::Error("disc_revision", Orca::DiscRevisionRefusal(
-          "YG Dolphin couldn't read that Brawl disc as Rev 2.", alias_reason));
+          "Subspace couldn't read that Brawl disc as Rev 2.", alias_reason));
       return false;
     }
   }

@@ -48,3 +48,7 @@ CMakeLists.txt.user
 .cache/clangd
 # Ignore CMake user presets
 CMakeUserPresets.json
+
+# Subspace: local build logs and installer logs
+/*.log
+/vs-installer-logs/

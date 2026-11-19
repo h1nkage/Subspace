@@ -13,7 +13,7 @@
 // The one-schema validator for game data (Orca split S5, pack-contract.md section 3): a JSON schema
 // file (Tools/orca/mods/ruleset.schema.json first) is compiled into Orca and is also the site's
 // copy, and both sides interpret the same small subset of JSON Schema, so a file one accepts the
-// other accepts. The site's twin is YouGame web/src/lib/orca-data-schema.ts.
+// other accepts. The site's twin is service web/src/lib/orca-data-schema.ts.
 //
 // The subset, chosen so every value a schema admits is typed and bounded:
 //   - type object (properties, required, additionalProperties: false, always), array (items,

@@ -16,7 +16,7 @@
 #include "Common/IOFile.h"
 #include "Core/Orca/UX/GameFont.h"
 #include "Core/Orca/UX/Kit.h"
-#include "Core/Orca/UX/YgCard.h"
+#include "Core/Orca/UX/AppCard.h"
 #include "VideoCommon/AbstractFramebuffer.h"
 #include "VideoCommon/AbstractGfx.h"
 #include "VideoCommon/AbstractPipeline.h"
@@ -358,7 +358,7 @@ TEST(OrcaKitDraw, EveryPrimitiveDrawsWithoutTheGamesFont)
 }
 
 // The overlay's pieces: the turn pulse on a one-second beat, the portrait ribbon keeping its words
-// inside it, the set dots, the searching ring, and the YouGame cards (the site's avatar colours,
+// inside it, the set dots, the searching ring, and the service cards (the site's avatar colours,
 // chat wrapped inside its card), all drawn in an ImGui frame without an assert.
 TEST(OrcaKitDraw, DesignFPieces)
 {
@@ -371,11 +371,11 @@ TEST(OrcaKitDraw, DesignFPieces)
 
   // The site's avatarColor (web/src/lib/site.ts): ada #1D4ED8, bo #0F766E, case-blind; a Latin-1
   // name hashed as JavaScript's UTF-16 units of its lower case (Ángel #DC2626, byte-wise it isn't).
-  EXPECT_EQ(Yg::AvatarColour("ada"), IM_COL32(29, 78, 216, 255));
-  EXPECT_EQ(Yg::AvatarColour("ADA"), IM_COL32(29, 78, 216, 255));
-  EXPECT_EQ(Yg::AvatarColour("bo"), IM_COL32(15, 118, 110, 255));
-  EXPECT_EQ(Yg::AvatarColour("\u00c1ngel"), IM_COL32(220, 38, 38, 255));
-  EXPECT_EQ(Yg::AvatarColour("\u00c1NGEL"), IM_COL32(220, 38, 38, 255));
+  EXPECT_EQ(AppCard::AvatarColour("ada"), IM_COL32(29, 78, 216, 255));
+  EXPECT_EQ(AppCard::AvatarColour("ADA"), IM_COL32(29, 78, 216, 255));
+  EXPECT_EQ(AppCard::AvatarColour("bo"), IM_COL32(15, 118, 110, 255));
+  EXPECT_EQ(AppCard::AvatarColour("\u00c1ngel"), IM_COL32(220, 38, 38, 255));
+  EXPECT_EQ(AppCard::AvatarColour("\u00c1NGEL"), IM_COL32(220, 38, 38, 255));
 
   ImGuiContext* context = ImGui::CreateContext();
   ImGuiIO& io = ImGui::GetIO();
@@ -476,29 +476,29 @@ TEST(OrcaKitDraw, DesignFPieces)
     // The chat's card: wider than nothing, no wider than asked, its lines within its width.
     const float width = 0.36f * io.DisplaySize.x;
     const std::string text = "gg, that last stock though. one more after this? rematch on Battlefield";
-    const Kit::Box card = Yg::ChatCard(dl, ImVec2(10, 10), u, "BO", text, width);
+    const Kit::Box card = AppCard::ChatCard(dl, ImVec2(10, 10), u, "BO", text, width);
     EXPECT_GT(card.max.x - card.min.x, 10 * u);
     EXPECT_LE(card.max.x - card.min.x, width + 0.01f);
-    const std::vector<std::string> lines = Yg::Wrap(text, 1.95f * u, width - 9 * u);
+    const std::vector<std::string> lines = AppCard::Wrap(text, 1.95f * u, width - 9 * u);
     EXPECT_GE(lines.size(), 1u);
-    const Kit::Box tall = Yg::ChatCard(dl, ImVec2(10, 10), u, "BO", text, 30 * u);
+    const Kit::Box tall = AppCard::ChatCard(dl, ImVec2(10, 10), u, "BO", text, 30 * u);
     EXPECT_GT(tall.max.y - tall.min.y, card.max.y - card.min.y);
     // A message without spaces (a link, a laugh) wraps through the word: every line fits.
     const float room = 30 * u;
-    const std::vector<std::string> long_word = Yg::Wrap(std::string(140, 'h'), 1.95f * u, room);
+    const std::vector<std::string> long_word = AppCard::Wrap(std::string(140, 'h'), 1.95f * u, room);
     EXPECT_GT(long_word.size(), 1u);
     std::size_t letters = 0;
     for (const std::string& line : long_word)
     {
-      EXPECT_LE(Yg::TextWidth(line, 1.95f * u), room + 0.5f);
+      EXPECT_LE(AppCard::TextWidth(line, 1.95f * u), room + 0.5f);
       letters += line.size();
     }
     EXPECT_EQ(letters, 140u);
-    const Kit::Box notice = Yg::NoticeCard(dl, ImVec2(10, 10), u, "bo joined", width);
+    const Kit::Box notice = AppCard::NoticeCard(dl, ImVec2(10, 10), u, "bo joined", width);
     EXPECT_LE(notice.max.x - notice.min.x, width + 0.01f);
     // Faded out: the box, nothing drawn.
     const int faded = dl->VtxBuffer.Size;
-    Yg::ChatCard(dl, ImVec2(10, 10), u, "BO", "gone", width, 0);
+    AppCard::ChatCard(dl, ImVec2(10, 10), u, "BO", "gone", width, 0);
     EXPECT_EQ(dl->VtxBuffer.Size, faded);
     ImGui::Render();
   }

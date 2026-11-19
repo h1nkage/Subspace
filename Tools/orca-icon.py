@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Draws Orca's placeholder icon: a white orca dorsal fin over a wave on YouGame's red tile.
+# Draws Orca's placeholder icon: a white orca dorsal fin over a wave on the service's red tile.
 # Writes Data/Orca.png (1024 px), Data/Orca.icns (macOS) and Installer/Orca.ico (Windows).
 # Needs Pillow; the .icns step needs macOS's iconutil.
 #
@@ -15,7 +15,7 @@ import tempfile
 from PIL import Image, ImageDraw
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RED = (255, 0, 0, 255)  # YouGame's red (web/public/icons)
+RED = (255, 0, 0, 255)  # The service's red (web/public/icons)
 WHITE = (255, 255, 255, 255)
 SCALE = 4  # drawn at 4096 px, then reduced, for smooth edges
 SIZE = 1024

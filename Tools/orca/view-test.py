@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # view-test.py: screenshots of the embed `view` and `dim` lines (ORCA.md "Embedding"), headless. A
-# solo session renders into ORCA_TEST_PRESENT and gets the stdin lines the YouGame page sends when
+# solo session renders into ORCA_TEST_PRESENT and gets the stdin lines the app page sends when
 # its menu opens beside the game, then closes, then shows an invite toast. Each step saves a PNG in
 # <out>/user/ScreenShots. Check by eye that the picture keeps its size and place, the frame meter
 # and chat card stay inside the window, and the dim covers everything. It also checks that
@@ -28,10 +28,10 @@ os.makedirs(user)
 env = {
     "HOME": os.environ["HOME"], "PATH": os.environ["PATH"],
     "ORCA_SESSION": "1", "ORCA_TEST_COMMANDS": "1", "ORCA_TEST_PRESENT": "1280x720",
-    "YG_INPUT": os.path.join(HERE, "inputs", "bf-mario-link-results.txt"),
-    "YG_THROTTLE": "1",
+    "ORCA_INPUT": os.path.join(HERE, "inputs", "bf-mario-link-results.txt"),
+    "ORCA_THROTTLE": "1",
 }
-# InternalResolution 0 (Auto) as the YouGame app runs it: the view keeps its integral scale.
+# InternalResolution 0 (Auto) as the desktop app runs it: the view keeps its integral scale.
 args = [BIN, "-p", "headless", "-v", "Metal", "-u", user,
         "-C", "Dolphin.DSP.Backend=No Audio Output",
         "-C", "Graphics.Settings.InternalResolution=0", "-e", DISC]
@@ -83,7 +83,7 @@ CUT = "540 80 840 720"
 try:
     if not expect("orca caps", 60):
         sys.exit("no `orca caps` from Orca")
-    send("caps join leave stats pause delay perf direct host chat yougame")
+    send("caps join leave stats pause delay perf direct host chat orb")
     send("perf fps")
     time.sleep(FIGHT_S)
     # A run's first screenshot starts the dump thread and comes out under the next one's name.

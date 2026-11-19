@@ -1,7 +1,7 @@
 // Copyright 2026 YouGame
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include "Core/Orca/UX/YgOrbDraw.h"
+#include "Core/Orca/UX/AppOrbDraw.h"
 
 #include <algorithm>
 #include <array>
@@ -12,9 +12,9 @@
 #include <string_view>
 #include <vector>
 
-#include "Core/Orca/UX/YgCard.h"
+#include "Core/Orca/UX/AppCard.h"
 
-namespace Orca::UX::YgOrb
+namespace Orca::UX::AppOrb
 {
 namespace
 {
@@ -39,7 +39,7 @@ std::string BadgeText(int badge)
 Kit::Box BadgeBox(const Place& p, float k)
 {
   const float px = 11.5f * k;
-  const float w = std::max(19.0f * k, Yg::TextWidth(BadgeText(p.badge), px) + 8.0f * k);
+  const float w = std::max(19.0f * k, AppCard::TextWidth(BadgeText(p.badge), px) + 8.0f * k);
   const float right = p.x + p.size + 7.0f * k, top = p.y - 6.0f * k;
   return Kit::Box{ImVec2(right - w, top), ImVec2(right, top + 19.0f * k)};
 }
@@ -79,7 +79,7 @@ void DrawButton(ImDrawList* dl, const Model::View& view)
   }
   const float k = p.size / 40, alpha = ButtonAlpha(p);
   const ImVec2 c(p.x + p.size / 2, p.y + p.size / 2);
-  Yg::RoundLogo(dl, ImVec2(p.x, p.y), p.size, alpha);
+  AppCard::RoundLogo(dl, ImVec2(p.x, p.y), p.size, alpha);
   // Blink: a white ring grows from the disc's edge to 2.1x its size and fades. Listening: the same
   // ring in voice green, over and over.
   if (view.ring >= 0)
@@ -107,8 +107,8 @@ void DrawButton(ImDrawList* dl, const Model::View& view)
     dl->AddRectFilled(b.min, b.max, Rgba(255, 255, 255, alpha), r);
     const std::string text = BadgeText(p.badge);
     const float px = 11.5f * k;
-    const float w = Yg::TextWidth(text, px);
-    Yg::Text(dl, ImVec2((b.min.x + b.max.x - w) / 2, b.min.y + (b.max.y - b.min.y - px) / 2), px,
+    const float w = AppCard::TextWidth(text, px);
+    AppCard::Text(dl, ImVec2((b.min.x + b.max.x - w) / 2, b.min.y + (b.max.y - b.min.y - px) / 2), px,
              Rgba(221, 0, 0, alpha), text);
   }
 }
@@ -174,14 +174,14 @@ const AvatarMemo& AvatarFor(std::string_view name)
   }
   AvatarMemo& a = s_avatars[s_avatar_next++ % s_avatars.size()];
   a.name = name;
-  a.colour = Yg::AvatarColour(name);
-  a.initial = Yg::InitialOf(name);
+  a.colour = AppCard::AvatarColour(name);
+  a.initial = AppCard::InitialOf(name);
   return a;
 }
 void DrawAvatar(ImDrawList* dl, ImVec2 c, float r, std::string_view name, float alpha)
 {
   const AvatarMemo& a = AvatarFor(name);
-  Yg::AvatarOf(dl, c, r, a.colour, a.initial, alpha);
+  AppCard::AvatarOf(dl, c, r, a.colour, a.initial, alpha);
 }
 
 // Pill metrics matching the app's own pill, on the button's 40-unit grid scaled by `k`. Text starts
@@ -219,7 +219,7 @@ constexpr std::string_view ELLIPSIS = "…";
 // Fits `text` on one line. Returns the kept prefix and whether it was cut (draw "…" after it).
 std::pair<std::string_view, bool> OneLine(std::string_view text, float px, float width)
 {
-  const auto measure = [px](std::string_view t) { return Yg::TextWidth(t, px); };
+  const auto measure = [px](std::string_view t) { return AppCard::TextWidth(t, px); };
   if (measure(text) <= width)
     return {text, false};
   const float room = std::max(0.0f, width - measure(ELLIPSIS));
@@ -233,7 +233,7 @@ std::pair<std::string_view, bool> OneLine(std::string_view text, float px, float
 // whether it was cut (draw "…" before it).
 std::pair<std::string_view, bool> TailLine(std::string_view text, float px, float width)
 {
-  const auto measure = [px](std::string_view t) { return Yg::TextWidth(t, px); };
+  const auto measure = [px](std::string_view t) { return AppCard::TextWidth(t, px); };
   if (measure(text) <= width)
     return {text, false};
   const float room = std::max(0.0f, width - measure(ELLIPSIS));
@@ -251,7 +251,7 @@ struct TwoLines
 };
 TwoLines Wrap2(std::string_view text, float px, float width)
 {
-  const auto measure = [px](std::string_view t) { return Yg::TextWidth(t, px); };
+  const auto measure = [px](std::string_view t) { return AppCard::TextWidth(t, px); };
   TwoLines out;
   std::size_t n = FitPrefix(text, width, measure);
   // If nothing fits, take one whole UTF-8 character anyway.
@@ -279,12 +279,12 @@ TwoLines Wrap2(std::string_view text, float px, float width)
 float TextWithEllipsis(ImDrawList* dl, ImVec2 pos, float px, ImU32 colour, std::string_view text,
                        bool cut)
 {
-  Yg::Text(dl, pos, px, colour, text);
-  float w = Yg::TextWidth(text, px);
+  AppCard::Text(dl, pos, px, colour, text);
+  float w = AppCard::TextWidth(text, px);
   if (cut)
   {
-    Yg::Text(dl, ImVec2(pos.x + w, pos.y), px, colour, ELLIPSIS);
-    w += Yg::TextWidth(ELLIPSIS, px);
+    AppCard::Text(dl, ImVec2(pos.x + w, pos.y), px, colour, ELLIPSIS);
+    w += AppCard::TextWidth(ELLIPSIS, px);
   }
   return w;
 }
@@ -383,8 +383,8 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
     if (!shown[i]->key.empty() && !shown[i]->verb.empty())
       hint = shown[i];
   }
-  const float key_w = hint ? Yg::TextWidth(hint->key, m.key_px) + 2 * m.key_pad : 0;
-  const float hint_w = hint ? m.hint_gap + key_w + 5 * m.k + Yg::TextWidth(hint->verb, m.verb_px) : 0;
+  const float key_w = hint ? AppCard::TextWidth(hint->key, m.key_px) + 2 * m.key_pad : 0;
+  const float hint_w = hint ? m.hint_gap + key_w + 5 * m.k + AppCard::TextWidth(hint->verb, m.verb_px) : 0;
   const float words_room =
       std::max(60 * m.k, max_w - m.pad_left - m.pad_right - hint_w - m.avatar - m.avatar_gap);
 
@@ -406,11 +406,11 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
       l.b = body.first;
       l.cut = body.cut;
       l.body = body;
-      words = std::max(Yg::TextWidth(name, m.name_px) + (name_cut ? Yg::TextWidth(ELLIPSIS, m.name_px) : 0),
-                       Yg::TextWidth(body.first, m.text_px));
+      words = std::max(AppCard::TextWidth(name, m.name_px) + (name_cut ? AppCard::TextWidth(ELLIPSIS, m.name_px) : 0),
+                       AppCard::TextWidth(body.first, m.text_px));
       if (!body.second.empty())
-        words = std::max(words, Yg::TextWidth(body.second, m.text_px) +
-                                    (body.cut ? Yg::TextWidth(ELLIPSIS, m.text_px) : 0));
+        words = std::max(words, AppCard::TextWidth(body.second, m.text_px) +
+                                    (body.cut ? AppCard::TextWidth(ELLIPSIS, m.text_px) : 0));
       const int lines = body.second.empty() ? 1 : 2;
       l.height = std::max(m.avatar, m.name_px * m.line + lines * m.text_px * m.line);
     }
@@ -421,8 +421,8 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
       const auto [nm, nm_cut] =
           named ? OneLine(r.name, m.name_px, words_room / 2) : std::pair<std::string_view, bool>{};
       const float name_w =
-          named ? Yg::TextWidth(nm, m.name_px) + (nm_cut ? Yg::TextWidth(ELLIPSIS, m.name_px) : 0) : 0;
-      const float space = named ? Yg::TextWidth(" ", m.text_px) : 0;
+          named ? AppCard::TextWidth(nm, m.name_px) + (nm_cut ? AppCard::TextWidth(ELLIPSIS, m.name_px) : 0) : 0;
+      const float space = named ? AppCard::TextWidth(" ", m.text_px) : 0;
       const float room = std::max(20 * m.k, words_room - name_w - space);
       const auto [said, cut] =
           LiveWords(r) ? TailLine(r.text, m.text_px, room) : OneLine(r.text, m.text_px, room);
@@ -433,8 +433,8 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
         l.head_cut = cut;
       else
         l.cut = cut;
-      words = name_w + space + Yg::TextWidth(said, m.text_px) +
-              (cut ? Yg::TextWidth(ELLIPSIS, m.text_px) : 0);
+      words = name_w + space + AppCard::TextWidth(said, m.text_px) +
+              (cut ? AppCard::TextWidth(ELLIPSIS, m.text_px) : 0);
       l.height = std::max(m.avatar, m.text_px * m.line);
     }
     l.width = m.avatar + m.avatar_gap + words;
@@ -447,11 +447,11 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
   const float w = std::min(max_w, m.pad_left + content_w + hint_w + m.pad_right);
   const float h = std::max(p.size, content_h + 2 * m.pad_y);
   const ImVec2 min(p.x, p.y), max(p.x + w, p.y + h);
-  // Background: shadow, slate fill, hairline edge, as in YgCard.
+  // Background: shadow, slate fill, hairline edge, as in AppCard.
   dl->AddRectFilled(ImVec2(min.x, min.y + 3 * m.k), ImVec2(max.x, max.y + 6 * m.k),
                     Rgba(0, 0, 0, 0.35f * alpha), m.radius);
   dl->AddRectFilled(min, max, Rgba(15, 23, 42, 0.95f * alpha), m.radius);
-  dl->AddRect(min, max, Yg::Edge(0.22f * alpha), m.radius, 0, std::max(1.0f, m.k));
+  dl->AddRect(min, max, AppCard::Edge(0.22f * alpha), m.radius, 0, std::max(1.0f, m.k));
 
   float y = p.y + (h - content_h) / 2;
   const float x0 = p.x + m.pad_left;
@@ -466,17 +466,17 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
     {
       const ImVec2 c(x0 + r_av, y + r_av);
       DrawAvatar(dl, c, r_av, r.name, a);
-      TextWithEllipsis(dl, ImVec2(tx, y), m.name_px, Yg::Ink(a), l.a, l.name_cut);
+      TextWithEllipsis(dl, ImVec2(tx, y), m.name_px, AppCard::Ink(a), l.a, l.name_cut);
       const float by = y + m.name_px * m.line;
       const TwoLines& body = l.body;
       if (body.second.empty())
       {
-        Yg::Text(dl, ImVec2(tx, by), m.text_px, Yg::Ink2(a), body.first);
+        AppCard::Text(dl, ImVec2(tx, by), m.text_px, AppCard::Ink2(a), body.first);
       }
       else
       {
-        Yg::Text(dl, ImVec2(tx, by), m.text_px, Yg::Ink2(a), body.first);
-        TextWithEllipsis(dl, ImVec2(tx, by + m.text_px * m.line), m.text_px, Yg::Ink2(a),
+        AppCard::Text(dl, ImVec2(tx, by), m.text_px, AppCard::Ink2(a), body.first);
+        TextWithEllipsis(dl, ImVec2(tx, by + m.text_px * m.line), m.text_px, AppCard::Ink2(a),
                          body.second, body.cut);
       }
     }
@@ -485,7 +485,7 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
       const ImVec2 c(x0 + r_av, y + l.height / 2);
       if (r.type == PillRow::Type::Toast)
       {
-        Yg::Logo(dl, ImVec2(c.x - r_av, c.y - r_av), m.avatar, a);
+        AppCard::Logo(dl, ImVec2(c.x - r_av, c.y - r_av), m.avatar, a);
       }
       else if (r.type == PillRow::Type::Talk)
       {
@@ -534,15 +534,15 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
       if (!l.a.empty())
       {
         x += TextWithEllipsis(dl, ImVec2(x, ty + (m.text_px - m.name_px) * 0.6f), m.name_px,
-                              Yg::Ink(a), l.a, l.name_cut) +
-             Yg::TextWidth(" ", m.text_px);
+                              AppCard::Ink(a), l.a, l.name_cut) +
+             AppCard::TextWidth(" ", m.text_px);
       }
       if (l.head_cut)
       {
-        Yg::Text(dl, ImVec2(x, ty), m.text_px, Yg::Ink2(a), ELLIPSIS);
-        x += Yg::TextWidth(ELLIPSIS, m.text_px);
+        AppCard::Text(dl, ImVec2(x, ty), m.text_px, AppCard::Ink2(a), ELLIPSIS);
+        x += AppCard::TextWidth(ELLIPSIS, m.text_px);
       }
-      TextWithEllipsis(dl, ImVec2(x, ty), m.text_px, Yg::Ink2(a), l.b, l.cut);
+      TextWithEllipsis(dl, ImVec2(x, ty), m.text_px, AppCard::Ink2(a), l.b, l.cut);
     }
     // The hint at the pill's right end: the key in a keycap, then the verb.
     if (hint == &r)
@@ -551,13 +551,13 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
       const float hx = max.x - m.pad_right - hint_w + m.hint_gap;
       const ImVec2 kmin(hx, cy - m.key_h / 2), kmax(hx + key_w, cy + m.key_h / 2);
       dl->AddRectFilled(kmin, kmax, Rgba(255, 255, 255, 0.16f * a), 5 * m.k);
-      Yg::Text(dl, ImVec2(hx + m.key_pad, cy - m.key_px * 0.62f), m.key_px, Rgba(255, 255, 255, a),
+      AppCard::Text(dl, ImVec2(hx + m.key_pad, cy - m.key_px * 0.62f), m.key_px, Rgba(255, 255, 255, a),
                r.key);
-      Yg::Text(dl, ImVec2(kmax.x + 5 * m.k, cy - m.verb_px * 0.62f), m.verb_px, Yg::Ink2(0.9f * a),
+      AppCard::Text(dl, ImVec2(kmax.x + 5 * m.k, cy - m.verb_px * 0.62f), m.verb_px, AppCard::Ink2(0.9f * a),
                r.verb);
     }
     y += l.height + m.gap;
   }
   return Kit::Box{min, max};
 }
-}  // namespace Orca::UX::YgOrb
+}  // namespace Orca::UX::AppOrb

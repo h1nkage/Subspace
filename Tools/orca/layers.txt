@@ -63,7 +63,7 @@ engine            Data/Sys/Orca/**
 game-data         Data/Sys/Orca/*.patches                 # game code patches (a validator in S5)
 game-data         Data/Sys/Orca/*.jitwarm                 # JIT warm-up seeds
 game-data         Data/Sys/Orca/Textures/**/*.png         # label textures
-engine            Data/Sys/Orca/Fonts/**                  # YouGame card font: an engine asset
+engine            Data/Sys/Orca/Fonts/**                  # The service card font: an engine asset
 engine            Data/Sys/Orca/Input/**                  # default pad mapping: an engine asset
 # Profiles: [Forced] can set any Dolphin setting on the session's layer (after the universal list,
 # so it can undo it), and [Profile] holds owner-only fields (FrameHook, KeepGameCode, Launcher,
@@ -113,9 +113,9 @@ game-data         Source/Core/Core/Orca/Games/**/Rulesets/*.json     review
 # there; its tables become ruleset data in S5).
 engine            Source/Core/Core/Orca/UX/**
 engine-sensitive  Source/Core/Core/Orca/UX/Chat.*         # peer chat text
-engine-sensitive  Source/Core/Core/Orca/UX/ControllerSource.* # curl SSE client, YOUGAME_TOKEN
+engine-sensitive  Source/Core/Core/Orca/UX/ControllerSource.* # curl SSE client, SUBSPACE_TOKEN
 engine-sensitive  Source/Core/Core/Orca/UX/Controllers.*  # the app's controller JSON
-engine-sensitive  Source/Core/Core/Orca/UX/YgOrb.*        # the app's orb and notice commands
+engine-sensitive  Source/Core/Core/Orca/UX/AppOrb.*        # the app's orb and notice commands
 engine-sensitive  Source/Core/Core/Orca/UX/GameFont.*     # RFNT reader (fonts from the disc)
 engine-sensitive  Source/Core/Core/Orca/UX/GamePatches.*  # .patches parser and applier
 engine-sensitive  Source/Core/Core/Orca/UX/QueueApp.*     # S2: the queue identity codec (peer bytes)

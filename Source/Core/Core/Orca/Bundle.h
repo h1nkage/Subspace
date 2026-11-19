@@ -15,14 +15,14 @@
 #include "Core/Orca/Mod.h"
 
 // Orca flat bundles: a game's data (its profile, patches, JIT seed and, for a launcher game, the
-// launcher and the SD image) as at most eight files in one folder. They ride as a YouGame
+// launcher and the SD image) as at most eight files in one folder. They ride as a service
 // listing's runtime files, which the app lays out in userData/orca/run/<slug>/, so Project+ and Brawl
 // can change without an Orca release or an app release.
 //
 //   mod.json   format 2 (Mod.h ParseManifest): the profile, the listing it is for, its serial, and
 //              the name of every other file
 //   mod.sig    "ed25519 <public key> <signature>\n", 64 and 128 lowercase hex digits; optional for
-//              the app's bundles (a listing), whose files YouGame's download checked, and checked
+//              the app's bundles (a listing), whose files the service's download checked, and checked
 //              whenever it is there
 //   ...        the files mod.json names, nothing else (hidden files such as the app's .copies.json
 //              aside)
@@ -106,7 +106,7 @@ struct BootLauncher
 // Checks the folder `dir` as a flat bundle signed by one of `keys`: nullopt and why on anything
 // wrong. With `boot`, the bundle's launcher must be the one the boot runs, and the line for it is
 // over the boot's own bytes (never the file read a second time). `listing`, when not empty, must be
-// mod.json's, and then mod.sig may be missing (the app's bundle, which YouGame's download checked):
+// mod.json's, and then mod.sig may be missing (the app's bundle, which the service's download checked):
 // every other check holds, and no key is needed. A mod.sig that is there is always checked. Hashes
 // the SD image only once everything else, the signature included, holds.
 std::optional<FlatBundle> LoadFlatBundle(const std::string& dir, std::span<const PublicKey> keys,
@@ -119,8 +119,8 @@ void SetLocalPack(std::string folder);
 bool LocalPackRequested();
 
 // Where a session looks for a flat bundle: ORCA_MOD_DIR when set; else a launcher boot's own
-// folder (where Project+'s sd.raw already lies); else, for a disc boot of a YouGame listing, the
-// app's run folder beside the user folder: <-u user>/../run/<YOUGAME_GAME>/ (YouGame desktop
+// folder (where Project+'s sd.raw already lies); else, for a disc boot of a service listing, the
+// app's run folder beside the user folder: <-u user>/../run/<SUBSPACE_GAME>/ (desktop
 // orca.ts: userData/orca/{user,run/<slug>}). Empty when there is nowhere to look.
 std::string FlatBundleDir(const std::string* executable_path);
 

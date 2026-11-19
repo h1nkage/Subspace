@@ -1,7 +1,7 @@
-# Play YG Dolphin without YouGame
+# Play Subspace offline
 
-YG Dolphin can play Brawl and the official Project+ v3.2 files offline without a YouGame
-account or the YouGame app. You need your own Brawl disc image and a keyboard or a controller
+Subspace can play Brawl and the official Project+ v3.2 files offline without an online
+service, an account or the desktop app. You need your own Brawl disc image and a keyboard or a controller
 mapped as a GameCube pad. No game disc or Project+ files come with the engine.
 
 This guide covers the 0.3.58 release and the standalone source changes. **`--pack` requires a
@@ -13,16 +13,9 @@ that option.** The source version number has stayed at 0.3.58.
 Download and extract the whole archive for your machine. Keep the executable and its data
 files together.
 
-| Machine | YG Dolphin 0.3.58 |
-| --- | --- |
-| Windows x64 | [Windows download](https://yougame.co/api/orca/download/0.3.58/windows-x64) |
-| Apple Silicon Mac | [macOS download](https://yougame.co/api/orca/download/0.3.58/macos-arm64) |
-
-These use the public production route `/api/orca/download/<ver>/<target>`. Source code and
-build instructions are in [yougame-co/orca-netplay](https://github.com/yougame-co/orca-netplay)
-and [ORCA.md](../ORCA.md#building). The Mac archive is for Apple Silicon; it is not an Intel
-Mac build. The download service still belongs to YouGame; once downloaded, offline play
-does not need it.
+There are no hosted downloads: build Subspace yourself ([ORCA.md](../ORCA.md#building), or
+[DOLPHIN-NETPLAY.md](DOLPHIN-NETPLAY.md#building-windows) on Windows). The Mac build is for Apple
+Silicon; it is not an Intel Mac build.
 
 ## First run and your disc
 
@@ -31,18 +24,18 @@ USA revision 1 dump also plays as revision 2 automatically. Other revisions and 
 revision 1 copies are refused. You can select a supported disc image such as `.iso`, `.wbfs`
 or `.rvz`; leave it as a file, without mounting it.
 
-On macOS, open **YG Dolphin.app**. It asks for your disc on first run and remembers the path.
+On macOS, open **Subspace.app**. It asks for your disc on first run and remembers the path.
 If the remembered file has moved, it asks again. To choose a particular disc from Terminal:
 
 ```sh
-"./YG Dolphin.app/Contents/MacOS/Orca" -e "/Games/Brawl.wbfs"
+"./Subspace.app/Contents/MacOS/Orca" -e "/Games/Brawl.wbfs"
 ```
 
-On Windows, open PowerShell in the extracted folder containing `yg-dolphin.exe` and run:
+On Windows, open PowerShell in the extracted folder containing `subspace.exe` and run:
 
 ```powershell
 $env:ORCA_SESSION = "1"
-& ".\yg-dolphin.exe" -p win32 -u ".\StandaloneUser" -e "D:\Games\Brawl.wbfs"
+& ".\subspace.exe" -p win32 -u ".\StandaloneUser" -e "D:\Games\Brawl.wbfs"
 ```
 
 Windows' engine frontend has no standalone disc picker: use `-e`. Save that command in a
@@ -56,7 +49,7 @@ progress between sessions. Savestates, reset and Wii power operations are restri
 
 ## Controls and settings
 
-Without YouGame, input comes from Dolphin's controller mappings. There is no controller setup
+Without the service, input comes from Dolphin's controller mappings. There is no controller setup
 window in this engine frontend. Port 1 uses the keyboard by default. On a fresh Mac user folder,
 it also maps the first SDL gamepad; plug it in before launching and focus the game window.
 
@@ -74,10 +67,10 @@ buttons for A/B/X/Y, right shoulder for Z, Start, both triggers and the D-pad.
 
 Close the engine before editing settings. Controller mappings live in `Config/GCPadNew.ini`
 inside the user folder. You can configure an emulated GameCube pad in Dolphin's normal
-controller window using a separate user folder, then copy that mapping file into YG Dolphin's
+controller window using a separate user folder, then copy that mapping file into Subspace's
 user folder. Map port 2 separately for a second local player; sessions normally enable two
 GameCube ports. Wii Remotes are disabled. Native GameCube adapter handling is disabled in a
-session: YouGame's adapter helper is not available standalone. Use a keyboard or a gamepad
+session: The service's adapter helper is not available standalone. Use a keyboard or a gamepad
 that Dolphin can map as an emulated GameCube controller.
 
 For Windows gamepads, a starting mapping is the source file
@@ -101,11 +94,11 @@ User folders:
 ## Project+ offline
 
 Download the **official Project+ v3.2 netplay files** from the Project+ project's release.
-Keep its `Project+ Netplay Launcher.dol` and matching `sd.raw` side by side. YG Dolphin's
+Keep its `Project+ Netplay Launcher.dol` and matching `sd.raw` side by side. Subspace's
 `PPLUS32` profile requires those exact official files and your Brawl disc. A different Project+
 version or an edited card needs its own local pack.
 
-On Mac, place this `orca-launch.ini` next to **YG Dolphin.app**, with the official launcher
+On Mac, place this `orca-launch.ini` next to **Subspace.app**, with the official launcher
 and card in a `pplus` folder beside the app:
 
 ```ini
@@ -122,7 +115,7 @@ with no `.` or `..` path component. This automatic ini launch is a **Mac app** f
 For explicit launch on Mac:
 
 ```sh
-ORCA_PROFILE=PPLUS32 "./YG Dolphin.app/Contents/MacOS/Orca" \
+ORCA_PROFILE=PPLUS32 "./Subspace.app/Contents/MacOS/Orca" \
   -C "Dolphin.Core.DefaultISO=/Games/Brawl.wbfs" \
   -e "/Games/pplus/Project+ Netplay Launcher.dol"
 ```
@@ -132,7 +125,7 @@ On Windows, use the profile explicitly:
 ```powershell
 $env:ORCA_SESSION = "1"
 $env:ORCA_PROFILE = "PPLUS32"
-& ".\yg-dolphin.exe" -p win32 -u ".\StandaloneUser" `
+& ".\subspace.exe" -p win32 -u ".\StandaloneUser" `
   -C "Dolphin.Core.DefaultISO=D:\Games\Brawl.wbfs" `
   -e "D:\Games\pplus\Project+ Netplay Launcher.dol"
 ```
@@ -147,7 +140,7 @@ to return to a no-argument Brawl launch, or pass the disc with `-e`.
 (`mod.json`, `tree.json`, and its files) or a format-2 flat pack (`mod.json` and the files it
 names, without `mod.sig`). A folder is resolved from your current working directory; an
 absolute path works too. This option selects session mode itself and overrides `ORCA_MOD_DIR`.
-It needs no signing service, account or YouGame app.
+It needs no signing service, account or desktop app.
 
 With Python 3 and a source checkout, make a Brawl tree pack:
 
@@ -164,13 +157,13 @@ python3 Tools/orca/mods/make-bundle.py --tree /Games/my-brawl-pack
 Run it on Mac:
 
 ```sh
-"./YG Dolphin.app/Contents/MacOS/Orca" --pack "/Games/my-brawl-pack" -e "/Games/Brawl.wbfs"
+"./Subspace.app/Contents/MacOS/Orca" --pack "/Games/my-brawl-pack" -e "/Games/Brawl.wbfs"
 ```
 
 Or on Windows:
 
 ```powershell
-& ".\yg-dolphin.exe" -p win32 -u ".\StandaloneUser" `
+& ".\subspace.exe" -p win32 -u ".\StandaloneUser" `
   --pack "D:\Games\my-brawl-pack" -e "D:\Games\Brawl.wbfs"
 ```
 
@@ -182,7 +175,7 @@ build/Binaries/dolphin-emu-nogui -p macos -u ./StandaloneUser \
 ```
 
 A Windows source build calls the executable `DolphinNoGUI.exe`; use it in place of
-`yg-dolphin.exe` in the command above. `--pack` enables the session on both platforms.
+`subspace.exe` in the command above. `--pack` enables the session on both platforms.
 
 For a launcher pack, pass its launcher with `-e` and your Brawl disc with
 `-C "Dolphin.Core.DefaultISO=<disc path>"`. A tree pack containing `sd/` also needs
@@ -199,19 +192,18 @@ orca pack local <folder-name> (unsigned, offline)
 Local-pack mode refuses **all online rooms**, including Casual, Ranked and friends rooms,
 even with two identical packs. It offers no results, locks or queue2 capabilities and cannot
 submit rated games. Its compatibility identity also differs from ordinary pack sessions.
-Signed community packs with `mod.sig` must still open through YouGame.
+Signed community packs with `mod.sig` must still open through the service.
 
-Only run local packs you trust. A local pack runs outside the YouGame app's sandbox, like any
+Only run local packs you trust. A local pack runs outside the desktop app's sandbox, like any
 mod you load into a plain emulator.
 
 ## Limits and bug reports
 
-Online play currently needs YouGame's servers and app integration. Standalone does not provide
+Online play currently needs the service's servers and app integration. Standalone does not provide
 an independent matchmaking server, public queues, ratings, accounts or a direct-IP online mode.
-Signed community packs need YouGame. This guide does not promise that arbitrary Brawl mods
+Signed community packs need the service. This guide does not promise that arbitrary Brawl mods
 work: their launcher, manifest and engine support must agree.
 
-Report engine or standalone problems in
-[orca-netplay issues](https://github.com/yougame-co/orca-netplay/issues). Include your OS,
+Report engine or standalone problems in this repository's issue tracker. Include your OS,
 engine version/commit, the command you used, the pack type, and the error text or relevant log
 lines. Do not attach a disc image or copyrighted mod files.

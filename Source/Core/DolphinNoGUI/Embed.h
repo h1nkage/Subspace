@@ -9,11 +9,11 @@
 #include <string_view>
 #include <vector>
 
-// Embed mode: Orca draws inside the YouGame desktop app's window instead of its own. The app starts
+// Embed mode: Orca draws inside the desktop app's window instead of its own. The app starts
 // it with
 //   --embed --parent <handle> --rect X Y W H     (or --rect X,Y,W,H)   [--embed-adopted]
 // then sends one command per line on stdin and reads one event per line on stdout. Lines starting
-// with "yg " are the stdio bridge's (Orca/Bridge.h), never commands.
+// with "br " are the stdio bridge's (Orca/Bridge.h), never commands.
 // See ORCA.md, "Embedding".
 // With cap "shortcuts": `embed shortcuts menu=Shift+Tab chat=Shift+Enter` atomically replaces
 // the two window shortcuts. Either field may be omitted; a bare command clears both. Each combo
@@ -25,7 +25,7 @@
 // a physical backend label. Embedded input is classified from existing controller snapshots
 // while the app grants game focus; standalone windows use their own keyboard events.
 // Malformed lines keep the previous bindings. Chords and their modifiers are hidden from controller
-// mappings; edges use `yg {"overlay":"down|up"}` or `yg {"chat":"down|up|cancel"}` on stdout.
+// mappings; edges use `br {"overlay":"down|up"}` or `br {"chat":"down|up|cancel"}` on stdout.
 namespace Embed
 {
 struct Rect

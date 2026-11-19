@@ -8,13 +8,19 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QComboBox>
+#include <QDir>
+#include <QDirIterator>
+#include <QFile>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QProcess>
+#include <QProcessEnvironment>
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QSpinBox>
@@ -29,7 +35,9 @@
 #include <fmt/ranges.h>
 #endif
 
+#include "Common/CommonPaths.h"
 #include "Common/Config/Config.h"
+#include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
 #include "Common/TraversalClient.h"
 #include "Core/NetPlayCommon.h"
@@ -119,6 +127,8 @@ NetPlayDialog::NetPlayDialog(const GameListModel& game_list_model,
 
 NetPlayDialog::~NetPlayDialog()
 {
+  StopOrcaEngine();
+
   auto& settings = Settings::Instance().GetQSettings();
 
   settings.setValue(QStringLiteral("netplaydialog/geometry"), saveGeometry());
@@ -472,6 +482,22 @@ void NetPlayDialog::OnStart()
       return;
   }
 
+  // Games YG Dolphin has a profile for (vanilla Brawl) play with rollback: every player's own
+  // engine, in a room this lobby carries. Players connect exactly as for ordinary NetPlay.
+  if (const auto game = FindGameFile(m_current_game_identifier); game && IsRollbackGame(*game))
+  {
+    std::string error;
+    if (!Settings::Instance().GetNetPlayServer()->StartOrcaRoom(&error))
+    {
+      ModalMessageBox::information(this, tr("Rollback NetPlay"), QString::fromStdString(error));
+      return;
+    }
+    DisplayMessage(tr("Starting rollback NetPlay: the host's game opens first, then everyone "
+                      "else's joins it."),
+                   "green");
+    return;
+  }
+
   if (m_strict_settings_sync_action->isChecked() && Config::Get(Config::GFX_EFB_SCALE) == 0)
   {
     ModalMessageBox::critical(
@@ -497,6 +523,10 @@ void NetPlayDialog::reject()
   if (ModalMessageBox::question(this, tr("Confirmation"),
                                 tr("Are you sure you want to quit NetPlay?")) == QMessageBox::Yes)
   {
+    // Quitting NetPlay ends a rollback game as it ends an ordinary one.
+    if (const auto server = Settings::Instance().GetNetPlayServer())
+      server->StopOrcaRoom();
+    StopOrcaEngine();
     QDialog::reject();
   }
 }
@@ -1270,4 +1300,255 @@ void NetPlayDialog::SetHostWiiSyncData(std::vector<u64> titles, std::string redi
   const auto client = Settings::Instance().GetNetPlayClient();
   if (client)
     client->SetWiiSyncData(nullptr, std::move(titles), std::move(redirect_folder));
+}
+
+// ---- Rollback NetPlay (YG Dolphin engine) ----
+
+bool NetPlayDialog::IsRollbackGame(const UICommon::GameFile& game)
+{
+  return File::Exists(File::GetSysDirectory() + "Orca/" + game.GetGameID() + ".ini");
+}
+
+// called from ---NETPLAY--- thread
+void NetPlayDialog::LaunchOrca(const NetPlay::OrcaLaunch& launch)
+{
+  QueueOnObject(this, [this, launch] { StartOrcaEngine(launch); });
+}
+
+namespace
+{
+// The YG engine is built next to Dolphin (Binary/<arch>/ on Windows, the build's Binaries/ folder
+// elsewhere).
+QString FindOrcaEngine()
+{
+  const QString dir = QCoreApplication::applicationDirPath();
+  for (const QString& name :
+       {QStringLiteral("SubspaceNoGUI.exe"), QStringLiteral("DolphinNoGUI.exe"),
+        QStringLiteral("dolphin-emu-nogui"),
+        QStringLiteral("DolphinNoGUI"), QStringLiteral("dolphin-nogui")})
+  {
+    const QString path = dir + QLatin1Char('/') + name;
+    if (QFileInfo(path).isExecutable())
+      return path;
+  }
+  return {};
+}
+// Copies a folder's files and subfolders into `to`. False on any failure.
+bool CopyFolder(const QString& from, const QString& to)
+{
+  const QDir source(from);
+  if (!source.exists() || !QDir().mkpath(to))
+    return false;
+  QDirIterator it(from, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden,
+                  QDirIterator::Subdirectories);
+  while (it.hasNext())
+  {
+    const QString path = it.next();
+    const QString target = to + QLatin1Char('/') + source.relativeFilePath(path);
+    if (it.fileInfo().isDir())
+    {
+      if (!QDir().mkpath(target))
+        return false;
+    }
+    else
+    {
+      QFile::remove(target);
+      if (!QFile::copy(path, target))
+        return false;
+    }
+  }
+  return true;
+}
+
+// The user folder the engine plays rollback games in (<user folder>/Rollback), made fresh for
+// every game. Every player's must hold the same things the engine's compatibility key reads, or
+// their games refuse each other (Orca/Session/Online.cpp CompatibilityKeyParts): so it gets the
+// build's standard save for the game (Sys/Orca/Saves/<game ID>, laid out as the save's title
+// folder; no save when the build has none) and no per-game settings, never the player's own save
+// or INIs. The player's settings that don't change the game (controllers, hotkeys, video) are
+// copied in. Returns the folder, or "" with *error.
+QString PrepareRollbackUserFolder(const std::string& game_id, QString* error)
+{
+  const QString user = QString::fromStdString(File::GetUserPath(D_USER_IDX));
+  const QString root = user + QStringLiteral("Rollback");
+  const QString config = root + QStringLiteral("/Config");
+  if (!QDir().mkpath(config))
+  {
+    *error = QStringLiteral("can't create %1").arg(config);
+    return {};
+  }
+  for (const char* name : {"Dolphin.ini", "GFX.ini", "GCPadNew.ini", "GCKeyNew.ini", "Hotkeys.ini"})
+  {
+    const QString target = config + QLatin1Char('/') + QLatin1String(name);
+    QFile::remove(target);
+    const QString source = user + QStringLiteral("Config/") + QLatin1String(name);
+    if (QFile::exists(source) && !QFile::copy(source, target))
+    {
+      *error = QStringLiteral("can't copy %1").arg(QLatin1String(name));
+      return {};
+    }
+  }
+  QDir(root + QStringLiteral("/GameSettings")).removeRecursively();
+
+  // A disc's save lives under title 00010000/<the game ID's first four characters, in hex>.
+  if (game_id.size() >= 4)
+  {
+    const QString title =
+        root + QStringLiteral("/Wii/title/00010000/") +
+        QString::fromLatin1(QByteArray::fromStdString(game_id.substr(0, 4)).toHex());
+    QDir(title).removeRecursively();
+    const QString standard = QString::fromStdString(File::GetSysDirectory()) +
+                             QStringLiteral("Orca/Saves/") + QString::fromStdString(game_id);
+    if (QDir(standard).exists() && !CopyFolder(standard, title))
+    {
+      *error = QStringLiteral("can't copy the standard save");
+      return {};
+    }
+  }
+  return root;
+}
+}  // namespace
+
+void NetPlayDialog::StartOrcaEngine(const NetPlay::OrcaLaunch& launch)
+{
+  const auto game = FindGameFile(m_current_game_identifier);
+  if (!game)
+  {
+    DisplayMessage(tr("Rollback: you don't have the selected game, so your game can't start."),
+                   "red");
+    return;
+  }
+  const QString engine = FindOrcaEngine();
+  if (engine.isEmpty())
+  {
+    DisplayMessage(tr("Rollback: the YG engine (DolphinNoGUI) isn't next to Dolphin. Build the "
+                      "dolphin-nogui target too."),
+                   "red");
+    return;
+  }
+
+  QString folder_error;
+  const QString rollback_user = PrepareRollbackUserFolder(game->GetGameID(), &folder_error);
+  if (rollback_user.isEmpty())
+  {
+    DisplayMessage(tr("Rollback: your game can't start (%1).").arg(folder_error), "red");
+    return;
+  }
+
+  StopOrcaEngine();
+  m_orca_process = new QProcess(this);
+
+  QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+  // Never inherit YouGame's or a test's variables from the shell Dolphin started in.
+  for (const char* name : {"YOUGAME_STDIO", "YOUGAME_BRIDGE", "YOUGAME_TOKEN", "YOUGAME_GAME",
+                           "ORCA_TEST_DEV_GAME", "ORCA_TEST_PLAYER", "ORCA_TEST_ROOM"})
+  {
+    env.remove(QString::fromLatin1(name));
+  }
+  env.insert(QStringLiteral("ORCA_SESSION"), QStringLiteral("1"));
+  env.insert(QStringLiteral("ORCA_LOCAL_ROOM"), QStringLiteral("1"));
+  env.insert(QStringLiteral("ORCA_SITE"), QString::fromStdString(launch.site));
+  env.insert(QStringLiteral("ORCA_ROOM"), QString::fromStdString(launch.room));
+  env.insert(QStringLiteral("ORCA_JOIN"), launch.joining ? QStringLiteral("1") : QStringLiteral("0"));
+  env.insert(QStringLiteral("ORCA_NAME"), QString::fromStdString(launch.name).left(32));
+  m_orca_process->setProcessEnvironment(env);
+
+  // The engine's output goes to Logs/orca-engine.log, and its "orca error <code> <sentence>" line,
+  // if any, becomes the lobby's message when the game closes.
+  m_orca_log = std::make_unique<QFile>(
+      QString::fromStdString(File::GetUserPath(D_LOGS_IDX) + "orca-engine.log"));
+  if (!m_orca_log->open(QIODevice::WriteOnly | QIODevice::Truncate))
+    m_orca_log.reset();
+  m_orca_output.clear();
+  m_orca_error.clear();
+  m_orca_error_passed = false;
+  m_orca_process->setProcessChannelMode(QProcess::MergedChannels);
+
+  // The rollback folder: this player's settings, the build's standard save, nothing personal that
+  // would make this game differ from the other players'.
+  const QStringList arguments{QStringLiteral("-u"), rollback_user, QStringLiteral("-e"),
+                              QString::fromStdString(game->GetFilePath())};
+
+  QProcess* process = m_orca_process;
+  connect(process, &QProcess::readyReadStandardOutput, this, [this, process] {
+    if (process != m_orca_process)
+      return;
+    const QByteArray chunk = process->readAllStandardOutput();
+    if (m_orca_log)
+    {
+      m_orca_log->write(chunk);
+      m_orca_log->flush();
+    }
+    m_orca_output += chunk;
+    qsizetype end;
+    while ((end = m_orca_output.indexOf('\n')) >= 0)
+    {
+      const QString line = QString::fromUtf8(m_orca_output.left(end)).trimmed();
+      m_orca_output.remove(0, end + 1);
+      // "orca error <code> <sentence>"
+      if (line.startsWith(QStringLiteral("orca error ")))
+      {
+        const qsizetype sentence = line.indexOf(QLatin1Char(' '), 11);
+        m_orca_error = sentence > 0 ? line.mid(sentence + 1) : line.mid(11);
+        m_orca_error_passed = false;
+      }
+      // A non-fatal error (an assert the game survives) is followed by more of the game's states.
+      else if (!m_orca_error.isEmpty() && line.startsWith(QStringLiteral("orca state ")) &&
+               line != QStringLiteral("orca state ended"))
+      {
+        m_orca_error_passed = true;
+      }
+    }
+    // A line that never ends is not kept forever.
+    if (m_orca_output.size() > 64 * 1024)
+      m_orca_output.clear();
+  });
+  connect(process, &QProcess::finished, this, [this, process](int code, QProcess::ExitStatus) {
+    if (process != m_orca_process)
+      return;
+    if (!m_orca_error.isEmpty() && !m_orca_error_passed)
+      DisplayMessage(tr("Your game closed: %1").arg(m_orca_error), "red");
+    else if (!m_orca_error.isEmpty())
+      DisplayMessage(tr("Your game window closed."), "");
+    else if (code != 0)
+      DisplayMessage(tr("Your game closed (exit code %1). Details: Logs\\orca-engine.log in your "
+                        "Dolphin user folder.")
+                         .arg(code),
+                     "red");
+    else
+      DisplayMessage(tr("Your game window closed."), "");
+    m_orca_process->deleteLater();
+    m_orca_process = nullptr;
+    m_orca_log.reset();
+  });
+  connect(process, &QProcess::errorOccurred, this, [this, process](QProcess::ProcessError error) {
+    if (process != m_orca_process || error != QProcess::FailedToStart)
+      return;
+    DisplayMessage(tr("Rollback: the YG engine failed to start."), "red");
+  });
+
+  m_orca_process->start(engine, arguments);
+  DisplayMessage(launch.joining ? tr("Your game is starting and will join the host's.") :
+                                  tr("Your game is starting; everyone else joins once it's up."),
+                 "green");
+}
+
+void NetPlayDialog::StopOrcaEngine()
+{
+  if (!m_orca_process)
+    return;
+  QProcess* process = m_orca_process;
+  m_orca_process = nullptr;
+  process->disconnect(this);
+  if (process->state() != QProcess::NotRunning)
+  {
+    process->terminate();
+    if (!process->waitForFinished(3000))
+    {
+      process->kill();
+      process->waitForFinished(1000);
+    }
+  }
+  process->deleteLater();
+  m_orca_log.reset();
 }

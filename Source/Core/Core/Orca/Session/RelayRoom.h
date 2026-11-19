@@ -22,11 +22,11 @@ namespace Orca::Engine
 struct GameResult;
 }
 
-// A private YouGame room carrying an Orca drop-in session. The host plays from boot and friends
+// A private online room carrying an Orca drop-in session. The host plays from boot and friends
 // join by room code (up to four players). Each player's seat is its room slot (seat 0, the host, is
-// port 1), and session packets travel as relayed room messages. Tickets come from the YouGame
-// desktop app's bridge, on stdin and stdout (YOUGAME_STDIO=1, Orca/Bridge.h) or on loopback
-// (YOUGAME_BRIDGE / YOUGAME_TOKEN), or for tests from the site as an anonymous dev game
+// port 1), and session packets travel as relayed room messages. Tickets come from the
+// desktop app's bridge, on stdin and stdout (SUBSPACE_STDIO=1, Orca/Bridge.h) or on loopback
+// (SUBSPACE_BRIDGE / SUBSPACE_TOKEN), or for tests from the site as an anonymous dev game
 // (ORCA_TEST_DEV_GAME), whose rooms never meet real players. All network work runs on one thread.
 namespace Orca::Net
 {
@@ -87,12 +87,12 @@ struct KeyframeInfo
   // A batch capture is deleted by its host after all consumers finish.
   bool shared = false;
   // The encrypted replay itself, when it is small enough to travel in the offer (`kf` field `b`,
-  // INLINE_KEYFRAME_MAX) instead of through YouGame's store; empty otherwise. The joiner checks it
+  // INLINE_KEYFRAME_MAX) instead of through the service's store; empty otherwise. The joiner checks it
   // exactly as a download: size, hash, then decryption and unpacking.
   std::vector<u8> inline_blob;
 };
 
-// A small replay travels inline in the room's `kf` offer instead of through YouGame's keyframe
+// A small replay travels inline in the room's `kf` offer instead of through the service's keyframe
 // store: at most this many bytes of the encrypted blob, as base64 at most INLINE_KEYFRAME_MAX_TEXT
 // characters, so the offer stays well under the rooms Worker's 64 KB cap on an Orca `msg` (its
 // ORCA_MESSAGE_BYTES). A queue match's replay is a few KB; a larger one (a host with a long history
@@ -212,11 +212,11 @@ enum class RoomState
 struct RoomTestStep;
 struct RoomTestSnapshot;
 
-class YouGameRoom final : public Transport
+class RelayRoom final : public Transport
 {
 public:
-  explicit YouGameRoom(RoomOptions options);
-  ~YouGameRoom() override;
+  explicit RelayRoom(RoomOptions options);
+  ~RelayRoom() override;
 
   RoomState GetState() const;
   // This Orca's room slot (its seat), once in the room (-1 before).
@@ -366,10 +366,10 @@ public:
   void TestDropConnection(std::chrono::seconds ticket_age = {});
 
 private:
-  YouGameRoom(RoomOptions options, bool start_io);
+  RelayRoom(RoomOptions options, bool start_io);
   friend std::vector<RoomTestSnapshot> TraceRoomForTest(const RoomOptions&,
                                                       const std::vector<RoomTestStep>&,
-                                                      const std::function<void(YouGameRoom&)>&);
+                                                      const std::function<void(RelayRoom&)>&);
   struct Impl;
   std::unique_ptr<Impl> m_impl;
 };
@@ -413,7 +413,7 @@ bool ParseRoomJson(const std::string& text, picojson::value* value);
 // the match void and stays to wait for the verdict, rather than ending its room (leaving a live
 // ranked set loses it). False: its room ends with the reason, as in a friends room.
 bool DropKeepsRoom(const std::string& queue, bool match_live, bool set_over);
-// Whether a keep-alive (YouGameRoom::KeepAlive) goes out now: the emulation thread asked for one
+// Whether a keep-alive (RelayRoom::KeepAlive) goes out now: the emulation thread asked for one
 // since the last went, and the last is at least KEEP_ALIVE_EVERY old.
 constexpr std::chrono::milliseconds KEEP_ALIVE_EVERY{2000};
 bool KeepAliveDue(std::chrono::steady_clock::time_point now,
@@ -421,7 +421,7 @@ bool KeepAliveDue(std::chrono::steady_clock::time_point now,
                   std::optional<std::chrono::steady_clock::time_point> sent);
 // The `finish` for a room's match: a winner, or void when `winner` is empty.
 std::string FinishMessage(const std::string& match, const std::string& winner);
-// The games of a room match this player knows of (YouGameRoom::KnownSetGames), kept by match id for
+// The games of a room match this player knows of (RelayRoom::KnownSetGames), kept by match id for
 // the life of the process (exposed for tests): records `known` for `match` and returns the most
 // this process ever knew of it. A player whose room link dropped comes back on a fresh room with
 // the same match, and what it knew comes back with it. Only this player's own count: nothing the
@@ -448,7 +448,7 @@ std::optional<KeyframeInfo> KeyframeOfferFromJson(const picojson::object& messag
 // A packet from a direct link to the player at `slot`: as through the relay, only for that player's
 // own seat, and never with drop-in history (only the relay carries that, in order).
 bool DecodeDirectPacket(const std::string& payload, int slot, Packet* packet);
-// YouGame's direct-link switch in a ticket reply: top-level `direct`, false turning links off.
+// The service's direct-link switch in a ticket reply: top-level `direct`, false turning links off.
 // Absent or not a boolean: on.
 bool TicketAllowsDirect(const picojson::object& reply);
 // What to tell the player when the room refused the connection (WebSocket::Connect's error), and
@@ -532,5 +532,5 @@ struct RoomTestSnapshot
 };
 std::vector<RoomTestSnapshot> TraceRoomForTest(const RoomOptions& options,
                                              const std::vector<RoomTestStep>& steps,
-                                             const std::function<void(YouGameRoom&)>& observe = {});
+                                             const std::function<void(RelayRoom&)>& observe = {});
 }  // namespace Orca::Net

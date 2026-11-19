@@ -2,7 +2,7 @@
 # Group > Brawl, a CPU on panel 3, a pick, Start, B on the stage select, B out to the top page,
 # PLAY ONLINE > With Friends: the third character select. There port 1 presses A on panel 4's
 # player-type button, which does nothing (panels 2-4 are hidden), then goes up and picks. The
-# select starts with port 1 alone, as Brawl's own menu resets the record. YG_EXIT_AFTER=2950.
+# select starts with port 1 alone, as Brawl's own menu resets the record. ORCA_EXIT_AFTER=2950.
 @scStrap mash 30 99999 1 40 A
 @scBoot mash 30 99999 1 40 A
 @scTitle mash 30 99999 1 40 A

@@ -2,9 +2,9 @@
 # bf-css-lockin.txt has it (the player's own character select, Samus steered in for port 2, both
 # lock in; game 2's character order with A, B and Start), with bf-sss-cursors.txt's stage selects
 # (the two cursors' proposals and agreement). Port 2 walks off each game.
-# Run with ORCA_TEST_QUEUE=ranked:solo ORCA_UX_TEST_NAMES=ada,bo YG_RESULTS=1 ORCA_TEST_SET_RULES=1,8
+# Run with ORCA_TEST_QUEUE=ranked:solo ORCA_UX_TEST_NAMES=ada,bo ORCA_RESULTS=1 ORCA_TEST_SET_RULES=1,8
 # ORCA_TEST_QUEUE_PICK=2106:3:2:-7.5:14.23:1532 (the solo character select's frame + 300), e.g. the
-# sync test from the main menu on (YG_SYNCTEST=7 YG_SYNCTEST_FROM=1440).
+# sync test from the main menu on (ORCA_SYNCTEST=7 ORCA_SYNCTEST_FROM=1440).
 @scStrap mash 30 99999 1 40 A
 @scBoot mash 30 99999 1 40 A
 @scTitle mash 30 99999 1 40 A

@@ -59,7 +59,8 @@
 #include "Core/IOS/FS/FileSystem.h"
 #include "Core/IOS/IOS.h"
 #include "Core/IOS/Uids.h"
-#include "Core/NetPlayClient.h"  //for NetPlayUI
+#include "Core/NetPlayClient.h"
+#include "Core/Orca/Local/RoomServer.h"  //for NetPlayUI
 #include "Core/NetPlayCommon.h"
 #include "Core/SyncIdentifier.h"
 
@@ -90,6 +91,9 @@ namespace NetPlay
 {
 NetPlayServer::~NetPlayServer()
 {
+  if (m_orca_room)
+    m_orca_room->Stop();
+
   if (is_connected)
   {
     m_do_loop = false;
@@ -115,6 +119,9 @@ NetPlayServer::~NetPlayServer()
 #ifdef USE_UPNP
   Common::UPnP::StopPortmapping();
 #endif
+
+  m_orca_room.reset();
+  m_orca_sink.reset();
 }
 
 // called from ---GUI--- thread
@@ -122,6 +129,9 @@ NetPlayServer::NetPlayServer(const u16 port, const bool forward_port, NetPlayUI*
                              const NetTraversalConfig& traversal_config)
     : m_dialog(dialog)
 {
+  m_orca_sink = std::make_unique<OrcaSink>(*this);
+  m_orca_room = std::make_unique<Orca::Local::RoomServer>(*m_orca_sink);
+
   if (Common::OfflineReplay())
     return;
 
@@ -563,6 +573,10 @@ unsigned int NetPlayServer::OnDisconnect(const Client& player)
   sf::Packet spac;
   spac << MessageID::PlayerLeave;
   spac << pid;
+
+  // A player who quits the lobby quits its rollback room too; the host quitting ends it.
+  m_orca_room->PlayerLeftLobby(pid);
+  std::erase_if(m_orca_uploads, [pid](const auto& upload) { return upload.first.first == pid; });
 
   enet_peer_disconnect(player.socket, 0);
 
@@ -1270,6 +1284,9 @@ unsigned int NetPlayServer::OnData(sf::Packet& packet, Client& player)
   }
   break;
 
+  case MessageID::OrcaRoom:
+    return OnOrcaRoom(packet, player);
+
   default:
     PanicAlertFmtT("Unknown message with id:{0} received from player:{1} Kicking player!",
                    static_cast<u8>(mid), player.pid);
@@ -1277,6 +1294,217 @@ unsigned int NetPlayServer::OnData(sf::Packet& packet, Client& player)
     return 1;
   }
 
+  return 0;
+}
+
+// ---- Rollback rooms (Orca/Local) ----
+
+class NetPlayServer::OrcaSink final : public Orca::Local::RoomServer::Sink
+{
+public:
+  explicit OrcaSink(NetPlayServer& server) : m_server(server) {}
+
+  void OpenResult(u8 pid, u32 conn, u16 status, const std::string& body) override
+  {
+    sf::Packet packet;
+    packet << MessageID::OrcaRoom << Orca::Local::Op::OpenResult << conn << status << body;
+    m_server.OrcaSend(pid, std::move(packet), DEFAULT_CHANNEL);
+  }
+
+  void Text(u8 pid, u32 conn, const std::string& text) override
+  {
+    sf::Packet packet;
+    packet << MessageID::OrcaRoom << Orca::Local::Op::Text << conn << text;
+    m_server.OrcaSend(pid, std::move(packet), DEFAULT_CHANNEL);
+  }
+
+  void Closed(u8 pid, u32 conn) override
+  {
+    sf::Packet packet;
+    packet << MessageID::OrcaRoom << Orca::Local::Op::Closed << conn;
+    m_server.OrcaSend(pid, std::move(packet), DEFAULT_CHANNEL);
+  }
+
+  void KfResult(u8 pid, u32 req, u16 status, std::vector<u8> body) override
+  {
+    // In parts on the chunked-data channel, so a big keyframe never delays room messages.
+    const u64 total = body.size();
+    u64 offset = 0;
+    do
+    {
+      const u64 size = std::min<u64>(Orca::Local::KF_PART_BYTES, total - offset);
+      sf::Packet packet;
+      packet << MessageID::OrcaRoom << Orca::Local::Op::KfResult << req << status << total
+             << offset;
+      if (size != 0)
+        packet.append(body.data() + offset, static_cast<size_t>(size));
+      m_server.OrcaSend(pid, std::move(packet), CHUNKED_DATA_CHANNEL);
+      offset += size;
+    } while (offset < total);
+  }
+
+  void Launch(u8 pid, const Orca::Local::LaunchInfo& launch) override
+  {
+    sf::Packet packet;
+    packet << MessageID::OrcaRoom << Orca::Local::Op::Launch << launch.room << launch.ticket
+           << static_cast<u8>(launch.joining) << static_cast<u8>(launch.room_pids.size());
+    for (const u8 room_pid : launch.room_pids)
+      packet << room_pid;
+    m_server.OrcaSend(pid, std::move(packet), DEFAULT_CHANNEL);
+  }
+
+private:
+  NetPlayServer& m_server;
+};
+
+void NetPlayServer::OrcaSend(PlayerId pid, sf::Packet&& packet, u8 channel_id)
+{
+  // Relaying straight from the server thread keeps a room message's trip as short as a pad's.
+  if (std::this_thread::get_id() == m_thread.get_id())
+  {
+    if (const auto it = m_players.find(pid); it != m_players.end())
+      Send(it->second.socket, packet, channel_id);
+  }
+  else
+  {
+    SendAsync(std::move(packet), pid, channel_id);
+  }
+}
+
+// called from ---GUI--- thread
+bool NetPlayServer::StartOrcaRoom(std::string* error)
+{
+  std::vector<Orca::Local::RoomServer::Player> players;
+  {
+    std::lock_guard lkp(m_crit.players);
+    const auto host = m_players.find(1);
+    if (host == m_players.end())
+    {
+      *error = "The host isn't connected to its own lobby.";
+      return false;
+    }
+    players.push_back({1, host->second.name});
+    // Everyone else who plays: a GameCube port assigned, in port order.
+    for (const PlayerId pid : m_pad_map)
+    {
+      if (pid <= 1 || !m_players.contains(pid) ||
+          std::any_of(players.begin(), players.end(), [pid](const auto& p) { return p.pid == pid; }))
+      {
+        continue;
+      }
+      players.push_back({pid, m_players.at(pid).name});
+    }
+  }
+  const bool was_running = m_orca_room->Running();
+  if (!was_running && players.size() < 2)
+  {
+    *error = "Nobody else has a controller port yet. Assign ports with \"Assign Controller "
+             "Ports\", then press Start.";
+    return false;
+  }
+  if (m_orca_room->Start(players) <= 0)
+  {
+    *error = was_running ? "Everyone with a controller port is already in the game (rollback rooms "
+                           "seat four)." :
+                           "The rollback room could not be opened.";
+    return false;
+  }
+  return true;
+}
+
+bool NetPlayServer::OrcaRoomRunning() const
+{
+  return m_orca_room->Running();
+}
+
+void NetPlayServer::StopOrcaRoom()
+{
+  m_orca_room->Stop();
+}
+
+// called from ---NETPLAY--- thread
+unsigned int NetPlayServer::OnOrcaRoom(sf::Packet& packet, Client& player)
+{
+  using Orca::Local::Op;
+  Op op;
+  packet >> op;
+  switch (op)
+  {
+  case Op::Open:
+  {
+    u32 conn = 0;
+    std::string room, ticket;
+    packet >> conn >> room >> ticket;
+    if (!packet)
+      return 1;
+    m_orca_room->Open(player.pid, conn, room, ticket);
+    break;
+  }
+  case Op::Text:
+  {
+    u32 conn = 0;
+    std::string text;
+    packet >> conn >> text;
+    if (!packet)
+      return 1;
+    m_orca_room->Text(player.pid, conn, text);
+    break;
+  }
+  case Op::Close:
+  {
+    u32 conn = 0;
+    packet >> conn;
+    if (!packet)
+      return 1;
+    m_orca_room->Close(player.pid, conn);
+    break;
+  }
+  case Op::KfPut:
+  {
+    u32 req = 0;
+    std::string room, id;
+    packet >> req >> room >> id;
+    const u64 total = Common::PacketReadU64(packet);
+    const u64 offset = Common::PacketReadU64(packet);
+    if (!packet)
+      return 1;
+    size_t size = 0;
+    const u8* data = Orca::Local::RestOfPacketData(packet, &size);
+    const auto key = std::make_pair(player.pid, req);
+    Orca::Local::PartAssembly& upload = m_orca_uploads[key];
+    if (!upload.Add(total, offset, data, size))
+    {
+      m_orca_uploads.erase(key);
+      const std::string refusal = R"({"code":"too_large"})";
+      m_orca_sink->KfResult(player.pid, req, 413, {refusal.begin(), refusal.end()});
+      break;
+    }
+    if (upload.Complete())
+    {
+      std::vector<u8> body = upload.Take();
+      m_orca_uploads.erase(key);
+      m_orca_room->KfPut(player.pid, req, room, id, std::move(body));
+    }
+    break;
+  }
+  case Op::KfGet:
+  case Op::KfDelete:
+  {
+    u32 req = 0;
+    std::string room, id;
+    packet >> req >> room >> id;
+    if (!packet)
+      return 1;
+    if (op == Op::KfGet)
+      m_orca_room->KfGet(player.pid, req, room, id);
+    else
+      m_orca_room->KfDelete(player.pid, req, room, id);
+    break;
+  }
+  default:
+    // Newer ops from a newer client: ignored, not fatal.
+    break;
+  }
   return 0;
 }
 

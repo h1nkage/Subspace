@@ -1,7 +1,7 @@
 # Two matches in one process (ORCA.md, "Match start"): the 2-minute Mario (P1) vs Link (P2) match
 # on Battlefield of bf-mario-link-results.txt, its results screen, then Mario vs Donkey Kong on
 # Final Destination (a stage and a fighter the first match never loaded). scMelee starts at frames
-# 2134 and 10800 (Brawl rev 2, the same on every machine); YG_EXIT_AFTER=19000 ends at the second
+# 2134 and 10800 (Brawl rev 2, the same on every machine); ORCA_EXIT_AFTER=19000 ends at the second
 # results screen.
 # Rules count frames from entry into each scene (@scene), so menu timing can drift.
 @scStrap mash 30 99999 1 40 A

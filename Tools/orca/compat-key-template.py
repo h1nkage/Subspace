@@ -29,7 +29,7 @@
 #   compat-key-template.py selftest [--vectors Tools/orca/mods/compat-key-vectors.json]
 #   compat-key-template.py vectors --template <t.json> --name <name> --real <name> <pack> <log> ...
 #       [--xxhsum <xxHash's CLI>] --out Tools/orca/mods/compat-key-vectors.json
-#     rebuilds the shared vectors from real runs' logs (copy the file byte for byte to YouGame's
+#     rebuilds the shared vectors from real runs' logs (copy the file byte for byte to the service's
 #     web/src/lib/orca-compat-keys.vectors.json).
 #
 # Run-time inputs the template pins (re-check them when the app changes how it runs Orca): the
@@ -710,7 +710,7 @@ def main(argv):
 
 
 # ---------------------------------------------------------------------------------------------------
-# Shared vectors (Tools/orca/mods/compat-key-vectors.json; YouGame keeps a byte-identical copy at
+# Shared vectors (Tools/orca/mods/compat-key-vectors.json; the service keeps a byte-identical copy at
 # web/src/lib/orca-compat-keys.vectors.json, and its tests run the same cases through the TS port).
 
 XXH3_LENGTHS = [0, 1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 96, 97, 127, 128, 129,
@@ -814,7 +814,7 @@ def make_vectors(template_name, t, real, xxhsum):
         strs.append({"text": text, "xxh3": _xxhsum(xxhsum, d) if xxhsum else f"{xxh3_64(d):016x}"})
     return {
         "about": "Shared vectors for the lobby compatibility key (Tools/orca/compat-key-template.py "
-                 "and YouGame web/src/lib/orca-compat-keys.ts must both pass every one). `real` are "
+                 "and service web/src/lib/orca-compat-keys.ts must both pass every one). `real` are "
                  "keys a real Orca logged; `derive` are built from those packs by one change each; "
                  "`xxh3` values come from " + ("xxhsum -H3 (xxHash's own CLI)" if xxhsum else
                                                "this tool's port") + ".",

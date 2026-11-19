@@ -132,7 +132,7 @@ TEST(OrcaStatus, LegacyRebootReagreesOnlyTheAppsListedCapabilities)
 TEST(OrcaStatus, AppSetResultsMarkHarnessInputAndPreserveNormalBytes)
 {
   const std::string old_session = Orca::GetEnv("ORCA_SESSION");
-  const std::string old_input = Orca::GetEnv("YG_INPUT");
+  const std::string old_input = Orca::GetEnv("ORCA_INPUT");
   const std::string old_commands = Orca::GetEnv("ORCA_TEST_COMMANDS");
   const auto old_profile = Orca::ActiveProfile() ? std::optional{*Orca::ActiveProfile()} : std::nullopt;
   Common::ScopeGuard restore([&] {
@@ -140,7 +140,7 @@ TEST(OrcaStatus, AppSetResultsMarkHarnessInputAndPreserveNormalBytes)
     Orca::Status::SetAppCaps("");
     Orca::SetActiveProfile(old_profile);
     SetEnv("ORCA_SESSION", old_session);
-    SetEnv("YG_INPUT", old_input);
+    SetEnv("ORCA_INPUT", old_input);
     SetEnv("ORCA_TEST_COMMANDS", old_commands);
   });
   SetEnv("ORCA_SESSION", "1");
@@ -152,7 +152,7 @@ TEST(OrcaStatus, AppSetResultsMarkHarnessInputAndPreserveNormalBytes)
   ASSERT_TRUE(Orca::Status::Cap("results"));
   for (int mode = 0; mode < 3; ++mode)
   {
-    SetEnv("YG_INPUT", mode == 1 ? "fixture-pads.txt" : "");
+    SetEnv("ORCA_INPUT", mode == 1 ? "fixture-pads.txt" : "");
     SetEnv("ORCA_TEST_COMMANDS", mode == 2 ? "1" : "");
     std::FILE* output = std::tmpfile();
     ASSERT_NE(output, nullptr);
@@ -183,12 +183,12 @@ TEST(OrcaStatus, ReportsBrandOnlyTheSentence)
   ASSERT_NE(out, nullptr);
   Common::ScopeGuard close([&] { std::fclose(out); });
   Orca::Status::SetOutput(out);
-  Orca::Status::Report("orca_code", "Restart Orca from /Applications/Orca.app.\nUpdate YG Baiji.");
+  Orca::Status::Report("orca_code", "Restart Orca from /Applications/Orca.app.\nUpdate Subspace.");
   std::rewind(out);
   char buffer[256]{};
   ASSERT_NE(std::fgets(buffer, sizeof(buffer), out), nullptr);
-  EXPECT_EQ(std::string(buffer), "orca error orca_code Restart YG Dolphin from "
-                                "/Applications/Orca.app. Update YG Dolphin.\n");
+  EXPECT_EQ(std::string(buffer), "orca error orca_code Restart Subspace from "
+                                "/Applications/Orca.app. Update Subspace.\n");
 }
 
 TEST(OrcaStatus, CoSeatsCapsAreAppendOnlyAndFitLegacyReaders)
@@ -217,8 +217,8 @@ TEST(OrcaStatus, CoSeatsCapsAreAppendOnlyAndFitLegacyReaders)
       SCOPED_TRACE(std::string(game) + (product ? " product" : " session"));
       SetEnv("ORCA_REPLAY_SOURCE", product ? "fixture-replay.orca" : "");
       std::string before = product ?
-          "leave stats pause delay perf chat yougame gfx" :
-          "join leave stats pause delay perf direct host chat yougame gfx";
+          "leave stats pause delay perf chat orb gfx" :
+          "join leave stats pause delay perf direct host chat orb gfx";
       before += " music results locks queue2 pick-casual pick-ranked talk rumble";
       if (product)
       {
@@ -282,7 +282,7 @@ TEST(OrcaStatusDeathTest, ErrorsAndLegacyReportsBrandTheOutputAndListener)
             std::_Exit(2);
           Orca::Status::SetOutput(out);
           Orca::Status::SetErrorListener([](std::string_view code, std::string_view sentence) {
-            if (code != "orca_code" || sentence != "YG Dolphin needs /Applications/Orca.app")
+            if (code != "orca_code" || sentence != "Subspace needs /Applications/Orca.app")
               std::_Exit(3);
           });
           if (report)
@@ -292,7 +292,7 @@ TEST(OrcaStatusDeathTest, ErrorsAndLegacyReportsBrandTheOutputAndListener)
           std::rewind(out);
           char buffer[256]{};
           const bool ok = std::fgets(buffer, sizeof(buffer), out) &&
-              std::string(buffer) == "orca error orca_code YG Dolphin needs /Applications/Orca.app\n" &&
+              std::string(buffer) == "orca error orca_code Subspace needs /Applications/Orca.app\n" &&
               Orca::Status::ExitCode() == 1;
           std::fclose(out);
           std::_Exit(ok ? 0 : 4);

@@ -26,6 +26,8 @@ class QGridLayout;
 class QGroupBox;
 class QLabel;
 class QLineEdit;
+class QFile;
+class QProcess;
 class QPushButton;
 class QSpinBox;
 class QSplitter;
@@ -99,6 +101,8 @@ public:
 
   void SetHostWiiSyncData(std::vector<u64> titles, std::string redirect_folder) override;
 
+  void LaunchOrca(const NetPlay::OrcaLaunch& launch) override;
+
 signals:
   void Stop();
 
@@ -118,6 +122,11 @@ private:
   void SetOptionsEnabled(bool enabled);
 
   void SendMessage(const std::string& message);
+
+  // Rollback NetPlay: games with a YG Dolphin profile run in the YG engine, one per player.
+  static bool IsRollbackGame(const UICommon::GameFile& game);
+  void StartOrcaEngine(const NetPlay::OrcaLaunch& launch);
+  void StopOrcaEngine();
 
   // Chat
   QGroupBox* m_chat_box;
@@ -181,4 +190,12 @@ private:
   bool m_host_input_authority = false;
 
   StartGameCallback m_start_game_callback;
+  QProcess* m_orca_process = nullptr;
+  // The engine's output: copied to Logs/orca-engine.log, and scanned for its error line so the
+  // lobby can say why a game closed.
+  std::unique_ptr<QFile> m_orca_log;
+  QByteArray m_orca_output;
+  QString m_orca_error;
+  // The game went on after m_orca_error (a later state line): it wasn't what closed the game.
+  bool m_orca_error_passed = false;
 };

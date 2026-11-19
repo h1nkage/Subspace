@@ -8,7 +8,7 @@
 #       [--queue ranked|casual] [--games N] [--late-watch S] [--relay [--watch-drop S]]
 #       [--scenario rejoin|kill|...] [--recorder ada|bo]
 #
-# --site is a local stand-in site with dev tickets and a local rooms Worker behind it (YouGame
+# --site is a local stand-in site with dev tickets and a local rooms Worker behind it (The service
 # rooms/scripts/replay-stub-site.mjs + `wrangler dev`). The queue-e2e run's own checks (the same
 # verdicts on both sides, matched checksums) must pass.
 # 1. Live: once the set's room is up, Watcher follows the host's set stream from its first frame, 12
@@ -106,11 +106,11 @@ def play(name, source, extra=(), timeout=900):
 
 
 def watch_url(dev, room):
-    # YG_SITE_COOKIE: a Cookie header value for --site (a staging site's team access cookie, handed in
+    # ORCA_SITE_COOKIE: a Cookie header value for --site (a staging site's team access cookie, handed in
     # by a wrapper). Never logged; queue-e2e.mjs sends it too.
     headers = {"content-type": "application/json", "user-agent": "Mozilla/5.0 (AGENT TEST replay-set-check)"}
-    if os.environ.get("YG_SITE_COOKIE"):
-        headers["cookie"] = os.environ["YG_SITE_COOKIE"]
+    if os.environ.get("ORCA_SITE_COOKIE"):
+        headers["cookie"] = os.environ["ORCA_SITE_COOKIE"]
     req = urllib.request.Request(f"{SITE}/api/multiplayer/ticket", method="POST",
                                  data=json.dumps({"dev": dev, "watch": room}).encode(), headers=headers)
     reply = json.loads(urllib.request.urlopen(req, timeout=10).read())
@@ -160,11 +160,11 @@ if not matched.wait(600):
     sys.exit("FAIL: queue-e2e never matched the two players")
 host, joiner, room, work = state["host"], state["joiner"], state["room"], state["work"]
 log(f"matched: host {host}, joiner {joiner}, room {room}, work {work}")
-before = set(glob.glob(os.path.join(work, f"rec-{host}-*.ygr")))
+before = set(glob.glob(os.path.join(work, f"rec-{host}-*.ssr")))
 set_file = None
 deadline = time.time() + 180
 while time.time() < deadline and not set_file:
-    new = sorted(set(glob.glob(os.path.join(work, f"rec-{host}-*.ygr"))) - before)
+    new = sorted(set(glob.glob(os.path.join(work, f"rec-{host}-*.ssr"))) - before)
     if new:
         set_file = new[-1]
     time.sleep(0.5)
@@ -241,7 +241,7 @@ for name in ("Watcher", "LateWatcher"):
 joiner_file = None
 # Every history starts at the same canonical origin and frame; the set's is the one whose first frame
 # (its seed and menu exit) is the host's.
-for path in sorted(glob.glob(os.path.join(work, f"rec-{joiner}-*.ygr"))):
+for path in sorted(glob.glob(os.path.join(work, f"rec-{joiner}-*.ssr"))):
     s = replay_stream.read(path)
     if (s.info["origin_hash"] == set_stream.info["origin_hash"] and s.first == set_stream.first and
             s.frames[:1] == set_stream.frames[:1] and (not joiner_file or len(s.frames) > len(joiner_stream.frames))):
@@ -288,7 +288,7 @@ if RELAY:
               (f": {copies[-1]['frames']} frames, {copies[-1]['bytes']} bytes, players "
                f"{[p['n'] for p in copies[-1]['players']]}" if copies else ""))
         if copies:
-            kept_path = os.path.join(work, f"kept-{state['room']}.ygr")
+            kept_path = os.path.join(work, f"kept-{state['room']}.ssr")
             with open(kept_path, "wb") as f:
                 f.write(site_get(f"/test/orca-replays/{copies[-1]['i']}"))
             kept = replay_stream.read(kept_path)

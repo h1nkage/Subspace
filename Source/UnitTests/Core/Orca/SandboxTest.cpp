@@ -1,7 +1,7 @@
 // Copyright 2026 YouGame
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Orca in the YouGame app's sandbox (ORCA.md "The sandbox"): the stdio bridge's parsing and routing
+// Orca in the desktop app's sandbox (ORCA.md "The sandbox"): the stdio bridge's parsing and routing
 // (Orca/Bridge.h), and the switches a sandboxed launch turns on (Orca/Sandbox.h, --embed-adopted).
 
 #include <algorithm>
@@ -37,7 +37,7 @@
 #include "Core/Orca/PackJail.h"
 #include "Core/Orca/Sandbox.h"
 #include "Core/Orca/Session/DirectLink.h"
-#include "Core/Orca/Session/YouGameRoom.h"
+#include "Core/Orca/Session/RelayRoom.h"
 #include "Core/Orca/UX/ControllerSource.h"
 #include "DolphinNoGUI/Embed.h"
 #include "InputCommon/GCPadStatus.h"
@@ -109,7 +109,7 @@ protected:
     Bridge::SetWriter(nullptr);
     Bridge::ResetForTests();
   }
-  ScopedEnv m_stdio{"YOUGAME_STDIO", "1"};
+  ScopedEnv m_stdio{"SUBSPACE_STDIO", "1"};
 };
 
 double NowMs()
@@ -136,7 +136,7 @@ std::string PadLine(int sequence, int buttons, int stick_x)
   }
   const double t = NowMs();
   return fmt::format(
-      R"(yg {{"push":{{"type":"controllers","snapshot":{{"schema":1,"session":"stdio","sequence":{},)"
+      R"(br {{"push":{{"type":"controllers","snapshot":{{"schema":1,"session":"stdio","sequence":{},)"
       R"("sentAt":{:.3f},"receivedAt":{:.3f},"source":"native","state":"connected","message":"",)"
       R"("owned":true,"suspended":false,"invalidReports":0,"ports":[{}],"pads":[]}}}}}})",
       sequence, t, t, ports);
@@ -156,7 +156,7 @@ u64 NewestId()
   if (lines.empty())
     return 0;
   picojson::value v;
-  if (!lines.back().starts_with("yg ") || !picojson::parse(v, lines.back().substr(3)).empty() ||
+  if (!lines.back().starts_with("br ") || !picojson::parse(v, lines.back().substr(3)).empty() ||
       !v.is<picojson::object>())
   {
     return 0;
@@ -200,53 +200,53 @@ TEST(OrcaBridgeLines, ParsesOnlyTheShapesTheAppSends)
 {
   using Kind = Bridge::Inbound::Kind;
   const auto kind = [](const std::string& line) { return Bridge::Parse(line).kind; };
-  EXPECT_EQ(kind(R"(yg {"re":3,"ok":true,"result":{"url":"wss://x"}})"), Kind::Reply);
-  EXPECT_EQ(Bridge::Parse(R"(yg {"re":3,"ok":false,"error":"no"})").re, 3u);
-  EXPECT_EQ(kind(R"(yg {"push":{"type":"controllers","snapshot":{}}})"), Kind::Controllers);
-  EXPECT_EQ(kind(R"(yg {"push":{"slug":"brawl","cmd":"leave"}})"), Kind::Push);
+  EXPECT_EQ(kind(R"(br {"re":3,"ok":true,"result":{"url":"wss://x"}})"), Kind::Reply);
+  EXPECT_EQ(Bridge::Parse(R"(br {"re":3,"ok":false,"error":"no"})").re, 3u);
+  EXPECT_EQ(kind(R"(br {"push":{"type":"controllers","snapshot":{}}})"), Kind::Controllers);
+  EXPECT_EQ(kind(R"(br {"push":{"slug":"brawl","cmd":"leave"}})"), Kind::Push);
   // A page's push that claims to be controllers but names a game is the page's, not the helper's.
-  EXPECT_EQ(kind(R"(yg {"push":{"type":"controllers","slug":"brawl"}})"), Kind::Push);
+  EXPECT_EQ(kind(R"(br {"push":{"type":"controllers","slug":"brawl"}})"), Kind::Push);
 
   // Everything else is ignored: not bridge lines, bad ids, missing fields, unknown messages.
   for (const char* line : {"rect 1 2 3 4",
-                           "yg",
-                           "yg ",
-                           "yg{}",
-                           "yg {}",
-                           "yg []",
-                           "yg null",
-                           "yg {\"re\":1}",
-                           R"(yg {"re":0,"ok":true})",
-                           R"(yg {"re":-1,"ok":true})",
-                           R"(yg {"re":1.5,"ok":true})",
-                           R"(yg {"re":"1","ok":true})",
-                           R"(yg {"re":9007199254740992,"ok":true})",
-                           R"(yg {"re":1,"ok":"yes"})",
-                           R"(yg {"push":1})",
-                           R"(yg {"push":[]})",
-                           R"(yg {"push":{},"extra":1})",
-                           R"(yg {"key":"escape"})",
-                           R"(yg {"id":1,"type":"hello"})",
-                           R"(yg {"future":{"type":"rumble"}})",
-                           "yg {\"re\":1,\"ok\":true",
-                           "YG {\"re\":1,\"ok\":true}",
-                           R"(yg {"re":1e400,"ok":true})"})
+                           "br",
+                           "br ",
+                           "br{}",
+                           "br {}",
+                           "br []",
+                           "br null",
+                           "br {\"re\":1}",
+                           R"(br {"re":0,"ok":true})",
+                           R"(br {"re":-1,"ok":true})",
+                           R"(br {"re":1.5,"ok":true})",
+                           R"(br {"re":"1","ok":true})",
+                           R"(br {"re":9007199254740992,"ok":true})",
+                           R"(br {"re":1,"ok":"yes"})",
+                           R"(br {"push":1})",
+                           R"(br {"push":[]})",
+                           R"(br {"push":{},"extra":1})",
+                           R"(br {"key":"escape"})",
+                           R"(br {"id":1,"type":"hello"})",
+                           R"(br {"future":{"type":"rumble"}})",
+                           "br {\"re\":1,\"ok\":true",
+                           "BR {\"re\":1,\"ok\":true}",
+                           R"(br {"re":1e400,"ok":true})"})
   {
     EXPECT_EQ(kind(line), Kind::Ignored) << line;
   }
   // Nested past the limit, and longer than the limit.
-  EXPECT_EQ(kind("yg {\"push\":" + std::string(20, '[') + std::string(20, ']') + "}"),
+  EXPECT_EQ(kind("br {\"push\":" + std::string(20, '[') + std::string(20, ']') + "}"),
             Kind::Ignored);
   const std::string filler(Bridge::MAX_INBOUND, 'a');
-  EXPECT_EQ(kind(R"(yg {"push":{"slug":"s","cmd":")" + filler + "\"}}"), Kind::Ignored);
+  EXPECT_EQ(kind(R"(br {"push":{"slug":"s","cmd":")" + filler + "\"}}"), Kind::Ignored);
 }
 
 // ---- Routing ----
 
 TEST_F(OrcaBridge, PassesCommandsOnInOrderAndKeepsBridgeLinesOut)
 {
-  const auto rest = Bridge::Route({"rect 0 0 640 480", R"(yg {"key":"escape"})", "yg nonsense",
-                                   "show", R"(yg {"re":99,"ok":true,"result":{}})", "quit"});
+  const auto rest = Bridge::Route({"rect 0 0 640 480", R"(br {"key":"escape"})", "br nonsense",
+                                   "show", R"(br {"re":99,"ok":true,"result":{}})", "quit"});
   EXPECT_EQ(rest, (std::vector<std::string>{"rect 0 0 640 480", "show", "quit"}));
   const Bridge::Stats s = Bridge::GetStats();
   EXPECT_EQ(s.ignored, 2u);
@@ -254,13 +254,13 @@ TEST_F(OrcaBridge, PassesCommandsOnInOrderAndKeepsBridgeLinesOut)
   EXPECT_EQ(s.replies, 0u);
 }
 
-TEST_F(OrcaBridge, OffWithoutYougameStdio)
+TEST_F(OrcaBridge, OffWithoutAppStdio)
 {
-  ScopedEnv off("YOUGAME_STDIO", nullptr);
+  ScopedEnv off("SUBSPACE_STDIO", nullptr);
   EXPECT_FALSE(Bridge::Enabled());
   int calls = 0;
   const u64 token = Bridge::SetPushHandler([&](const picojson::object&) { ++calls; });
-  const auto rest = Bridge::Route({R"(yg {"push":{"slug":"brawl","cmd":"leave"}})", "show"});
+  const auto rest = Bridge::Route({R"(br {"push":{"slug":"brawl","cmd":"leave"}})", "show"});
   EXPECT_EQ(rest, std::vector<std::string>{"show"});
   EXPECT_EQ(calls, 0);
   EXPECT_EQ(Bridge::GetStats().ignored, 1u);
@@ -272,14 +272,14 @@ TEST_F(OrcaBridge, LobbyPushesGoToTheCurrentHandlerOnly)
   std::vector<std::string> seen;
   const u64 first = Bridge::SetPushHandler(
       [&](const picojson::object& e) { seen.push_back("first " + e.at("cmd").to_str()); });
-  Bridge::Route({R"(yg {"push":{"slug":"brawl","cmd":"leave"}})"});
+  Bridge::Route({R"(br {"push":{"slug":"brawl","cmd":"leave"}})"});
   // A newer room's handler replaces it; the old room clearing its token later changes nothing.
   const u64 second = Bridge::SetPushHandler(
       [&](const picojson::object& e) { seen.push_back("second " + e.at("cmd").to_str()); });
   Bridge::ClearPushHandler(first);
-  Bridge::Route({R"(yg {"push":{"slug":"brawl","cmd":"kick","id":"c2"}})"});
+  Bridge::Route({R"(br {"push":{"slug":"brawl","cmd":"kick","id":"c2"}})"});
   Bridge::ClearPushHandler(second);
-  Bridge::Route({R"(yg {"push":{"slug":"brawl","cmd":"leave"}})"});
+  Bridge::Route({R"(br {"push":{"slug":"brawl","cmd":"leave"}})"});
   EXPECT_EQ(seen, (std::vector<std::string>{"first leave", "second kick"}));
   EXPECT_EQ(Bridge::GetStats().pushes, 2u);
   EXPECT_EQ(Bridge::GetStats().ignored, 1u);  // no handler for the last one
@@ -292,7 +292,7 @@ TEST_F(OrcaBridge, OnlyTheNewestControllerSnapshotOfAReadIsParsed)
     sequences.push_back(event.get("snapshot").get("sequence").get<double>());
   });
   const auto rest = Bridge::Route({PadLine(5, 1, 128), "show", PadLine(6, 2, 128),
-                                   PadLine(7, 4, 128), R"(yg {"push":{"slug":"s","cmd":"x"}})"});
+                                   PadLine(7, 4, 128), R"(br {"push":{"slug":"s","cmd":"x"}})"});
   EXPECT_EQ(rest, std::vector<std::string>{"show"});
   EXPECT_EQ(sequences, std::vector<double>{7});
   EXPECT_EQ(Bridge::GetStats().coalesced, 2u);
@@ -321,7 +321,7 @@ TEST_F(OrcaBridge, SnapshotsReachTheControllerCache)
   EXPECT_EQ(pad->button & PAD_BUTTON_X, PAD_BUTTON_X);
   EXPECT_EQ(pad->stickX, 90);
   // A malformed snapshot is refused and changes nothing.
-  Bridge::Route({R"(yg {"push":{"type":"controllers","snapshot":{"schema":9}}})"});
+  Bridge::Route({R"(br {"push":{"type":"controllers","snapshot":{"schema":9}}})"});
   EXPECT_EQ(GetControllerTiming().refused, 1u);
   EXPECT_EQ(LatestPad()->stickX, 90);
   StopControllerStream();
@@ -342,7 +342,7 @@ TEST_F(OrcaBridge, RequestsOnlyWhatOrcaAsksForAndOnlyWithAPipe)
   Bridge::SetWriter(&Capture);
   EXPECT_TRUE(Bridge::Ready());
   {
-    ScopedEnv off("YOUGAME_STDIO", nullptr);
+    ScopedEnv off("SUBSPACE_STDIO", nullptr);
     EXPECT_FALSE(Bridge::Ready());
   }
   for (const char* type : {"submitScore", "mpFriend", "controllers", "", "save"})
@@ -375,8 +375,8 @@ TEST_F(OrcaBridge, ARequestGetsItsOwnReply)
       {
         answered = id;
         Bridge::Route(
-            {fmt::format(R"(yg {{"re":{},"ok":true,"result":{{"room":"stale"}}}})", id + 100),
-             fmt::format(R"(yg {{"re":{},"ok":true,"result":{{"room":"r{}"}}}})", id, id)});
+            {fmt::format(R"(br {{"re":{},"ok":true,"result":{{"room":"stale"}}}})", id + 100),
+             fmt::format(R"(br {{"re":{},"ok":true,"result":{{"room":"r{}"}}}})", id, id)});
       }
       std::this_thread::sleep_for(1ms);
     }
@@ -397,7 +397,7 @@ TEST_F(OrcaBridge, ARequestGetsItsOwnReply)
   const auto lines = Written();
   ASSERT_EQ(lines.size(), 2u);
   picojson::value first;
-  ASSERT_TRUE(lines[0].starts_with("yg {"));
+  ASSERT_TRUE(lines[0].starts_with("br {"));
   ASSERT_TRUE(picojson::parse(first, lines[0].substr(3)).empty());
   EXPECT_EQ(first.get("type").to_str(), "mpTicket");
   EXPECT_EQ(first.get("room").to_str(), "abcdef12");
@@ -414,7 +414,7 @@ TEST_F(OrcaBridge, ARequestGivesUpOnTimeoutCancelAndAClosedStdin)
   EXPECT_FALSE(Bridge::Request(Object("hello"), 100ms).has_value());
   EXPECT_GE(std::chrono::steady_clock::now() - start, 100ms);
   // A reply after giving up is nobody's.
-  Bridge::Route({fmt::format(R"(yg {{"re":{},"ok":true,"result":{{}}}})", NewestId())});
+  Bridge::Route({fmt::format(R"(br {{"re":{},"ok":true,"result":{{}}}})", NewestId())});
   EXPECT_EQ(Bridge::GetStats().unmatched, 1u);
 
   std::atomic<bool> cancel{false};
@@ -736,13 +736,13 @@ private:
     reply["re"] = picojson::value(static_cast<double>(id));
     reply["ok"] = picojson::value(true);
     reply["result"] = picojson::value(result);
-    Bridge::Route({"yg " + picojson::value(reply).serialize()});
+    Bridge::Route({"br " + picojson::value(reply).serialize()});
   }
 
   void Handle(const std::string& line)
   {
     picojson::value v;
-    if (!line.starts_with("yg ") || !picojson::parse(v, line.substr(3)).empty() ||
+    if (!line.starts_with("br ") || !picojson::parse(v, line.substr(3)).empty() ||
         !v.is<picojson::object>())
     {
       Problem("not a request: " + line);
@@ -779,7 +779,9 @@ private:
         dev[key] = v.get(key);
       Common::HttpRequest http(std::chrono::seconds(15));
       const auto response = http.Post(
-          "https://yougame.co/api/multiplayer/ticket", picojson::value(dev).serialize(),
+          std::string(std::getenv("ORCA_SITE") ? std::getenv("ORCA_SITE") : "") +
+              "/api/multiplayer/ticket",
+          picojson::value(dev).serialize(),
           {{"Content-Type", "application/json"}}, Common::HttpRequest::AllowedReturnCodes::All);
       picojson::value ticket;
       if (!response ||
@@ -829,9 +831,9 @@ private:
   std::thread m_thread;
 };
 
-// Under the app on the stdio bridge (YOUGAME_STDIO=1): the invite's room comes from hello, the
+// Under the app on the stdio bridge (SUBSPACE_STDIO=1): the invite's room comes from hello, the
 // ticket from mpTicket, the room is mirrored to the page with mpRoom, and the page's Leave arrives
-// as a push. The friend joins with a dev ticket. ORCA_LIVE_TEST=1 (yougame.co's rooms; anonymous
+// as a push. The friend joins with a dev ticket. ORCA_LIVE_TEST=1 (example.invalid's rooms; anonymous
 // dev tickets for the dev game orca-stdio-test, so no account and no real player is involved).
 TEST(OrcaLive, StdioBridgeMirrorsTheRoomAndTakesLeave)
 {
@@ -840,18 +842,18 @@ TEST(OrcaLive, StdioBridgeMirrorsTheRoomAndTakesLeave)
     GTEST_SKIP() << "set ORCA_LIVE_TEST=1";
   using namespace Orca::Net;
   const std::string room = fmt::format("orcas{}", static_cast<u64>(NowMs()) % 10000000);
-  ScopedEnv stdio("YOUGAME_STDIO", "1");
-  ScopedEnv game("YOUGAME_GAME", "orca-test");
-  ScopedEnv bridge("YOUGAME_BRIDGE", nullptr);
+  ScopedEnv stdio("SUBSPACE_STDIO", "1");
+  ScopedEnv game("SUBSPACE_GAME", "orca-test");
+  ScopedEnv bridge("SUBSPACE_BRIDGE", nullptr);
   ScopedEnv dev("ORCA_TEST_DEV_GAME", nullptr);
   FakeApp app(room);
 
   RoomOptions options;
-  // The protocol's prefix: yougame.co refuses an Orca lobby without it since 0.3.32 went current
+  // The protocol's prefix: example.invalid refuses an Orca lobby without it since 0.3.32 went current
   // (orca_outdated, web lib/orca-protocol.ts), dev games included.
   options.compatibility = "orca2:stdio-live-test";
   options.mode = "orca-test";
-  YouGameRoom a(options);
+  RelayRoom a(options);
   for (int i = 0; i < 1500 && a.GetState() == RoomState::Connecting; ++i)
     std::this_thread::sleep_for(10ms);
   ASSERT_EQ(a.GetState(), RoomState::Waiting)
@@ -859,15 +861,15 @@ TEST(OrcaLive, StdioBridgeMirrorsTheRoomAndTakesLeave)
   EXPECT_EQ(a.Code(), room);
 
   // The friend, without the app (its environment is read on its own thread, at its ticket).
-  SetEnv("YOUGAME_STDIO", nullptr);
+  SetEnv("SUBSPACE_STDIO", nullptr);
   SetEnv("ORCA_TEST_DEV_GAME", "orca-stdio-test");
   options.room_code = room;
   options.joining = true;
-  YouGameRoom b(options);
+  RelayRoom b(options);
   for (int i = 0; i < 1500 && b.Code().empty() && b.GetState() != RoomState::Ended; ++i)
     std::this_thread::sleep_for(10ms);
   SetEnv("ORCA_TEST_DEV_GAME", nullptr);
-  SetEnv("YOUGAME_STDIO", "1");
+  SetEnv("SUBSPACE_STDIO", "1");
   for (int i = 0; i < 1500 && !(a.Connected() && b.Connected()); ++i)
     std::this_thread::sleep_for(10ms);
   ASSERT_TRUE(a.Connected()) << a.Status();
@@ -882,10 +884,10 @@ TEST(OrcaLive, StdioBridgeMirrorsTheRoomAndTakesLeave)
   EXPECT_TRUE(mirrored_ready());
 
   // Another game's Leave is not this one's; this game's ends the room (no "caps leave" here).
-  Bridge::Route({R"(yg {"push":{"slug":"another-game","cmd":"leave"}})"});
+  Bridge::Route({R"(br {"push":{"slug":"another-game","cmd":"leave"}})"});
   std::this_thread::sleep_for(300ms);
   EXPECT_NE(a.GetState(), RoomState::Ended);
-  Bridge::Route({R"(yg {"push":{"slug":"orca-test","cmd":"leave"}})"});
+  Bridge::Route({R"(br {"push":{"slug":"orca-test","cmd":"leave"}})"});
   for (int i = 0; i < 1000 && a.GetState() != RoomState::Ended; ++i)
     std::this_thread::sleep_for(10ms);
   EXPECT_EQ(a.GetState(), RoomState::Ended);
@@ -985,7 +987,7 @@ protected:
       connections.emplace_back(n, abstract);
       return n == 5 && !abstract;
     };
-    probes.home = "/run/yg/home";
+    probes.home = "/run/app/home";
     probes.display = ":5";
   }
   void TearDown() override { std::filesystem::remove_all(root); }

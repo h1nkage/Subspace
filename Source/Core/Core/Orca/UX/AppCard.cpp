@@ -1,7 +1,7 @@
 // Copyright 2026 YouGame
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include "Core/Orca/UX/YgCard.h"
+#include "Core/Orca/UX/AppCard.h"
 
 #include <algorithm>
 #include <array>
@@ -15,7 +15,7 @@
 #include "Common/FileUtil.h"
 #include "Common/StringUtil.h"
 
-namespace Orca::UX::Yg
+namespace Orca::UX::AppCard
 {
 namespace
 {
@@ -24,7 +24,7 @@ ImU32 Rgba(int r, int g, int b, float a)
   return IM_COL32(r, g, b, static_cast<int>(std::lround(std::clamp(a, 0.0f, 1.0f) * 255)));
 }
 
-// The YouGame site's dark card colours.
+// The service site's dark card colours.
 constexpr std::array<int, 3> CARD{15, 23, 42};
 constexpr std::array<int, 3> EDGE{148, 163, 184};
 constexpr std::array<int, 3> INK{248, 250, 252};
@@ -36,7 +36,7 @@ ImU32 Of(const std::array<int, 3>& c, float a)
   return Rgba(c[0], c[1], c[2], a);
 }
 
-constexpr const char* FONT_NAME = "Orca YouGame Roboto";
+constexpr const char* FONT_NAME = "Orca App Roboto";
 
 // Roboto, added to ImGui's atlas on first use, or ImGui's default font if it can't load. The video
 // backend can replace the atlas, so the font is looked up by name each time and re-added if gone.
@@ -331,4 +331,4 @@ void AvatarOf(ImDrawList* dl, ImVec2 centre, float r, ImU32 colour, std::string_
   Put(dl, ImVec2(centre.x - is.x / 2, centre.y - is.y / 2), ipx, Rgba(255, 255, 255, alpha),
       initial);
 }
-}  // namespace Orca::UX::Yg
+}  // namespace Orca::UX::AppCard

@@ -290,7 +290,7 @@ void KeyboardMouse::UpdateCursor(bool should_center_mouse)
   double root_x = 0, root_y = 0, win_x = 0, win_y = 0;
   Window root = 0, child = 0;
 
-  // Orca: a window that went away (the YouGame app's, embedded) answers an X error, which no longer
+  // Orca: a window that went away (the desktop app's, embedded) answers an X error, which no longer
   // ends the process: read nothing then, rather than freeing a mask that was never filled in.
   XWindowAttributes win_attribs = {};
   if (!XGetWindowAttributes(m_display, m_window, &win_attribs))

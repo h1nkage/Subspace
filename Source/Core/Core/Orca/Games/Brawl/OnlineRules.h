@@ -115,8 +115,13 @@ struct CssHand
   // port 1's hand over panel 2's player-type button reads 1, port 2's over its own 1), or -1 where
   // it can't be read.
   int panel = -1;
+  // The hand's state (+0xA4, the select's per-hand switch at 0x8068A040): 7 its panel's name list,
+  // 8 the name keypad (typing a new tag), whose keys sit low on the panel, where A is otherwise
+  // kept from the player-type and name buttons. 0 where it can't be read.
+  u32 state = 0;
   bool operator==(const CssHand&) const = default;
 };
+constexpr u32 CSS_HAND_STATE_KEYPAD = 8;
 // Port `port`'s (0-3) player area on the character select (muSelCharPlayerArea, at the select
 // task's +0x44 + 4 x port), or 0 anywhere else or before the task is built. Callers check the
 // fields they read.
@@ -149,8 +154,10 @@ constexpr bool CssBackTakesA(const CssHand& hand, bool a_held)
 constexpr u32 CSS_AREA_NAME_LIST = 0x200;
 constexpr bool CssNameTakesA(const CssHand& hand, int port, bool list_open)
 {
-  return list_open || (hand.valid && hand.target == CSS_HAND_BUTTON &&
-                       hand.button == CSS_BUTTON_NAME && hand.panel == port);
+  // The keypad for a new tag (opened from the list) takes A anywhere: its keys are the panel's.
+  return list_open || (hand.valid && hand.state == CSS_HAND_STATE_KEYPAD) ||
+         (hand.valid && hand.target == CSS_HAND_BUTTON && hand.button == CSS_BUTTON_NAME &&
+          hand.panel == port);
 }
 // Whether port `port`'s (0-3) name list is open; false anywhere but the character select.
 bool ReadCssNameList(const GuestMemory& memory, int port);

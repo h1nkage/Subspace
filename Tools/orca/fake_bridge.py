@@ -1,12 +1,12 @@
 # Copyright 2026 YouGame
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# A stand-in for the YouGame desktop app's loopback bridge, for testing Orca's room client:
+# A stand-in for the desktop app's loopback bridge, for testing Orca's room client:
 # POST /sdk (hello, mpTicket via an anonymous dev ticket, mpRoom recorded), GET /events (SSE: the
 # page's Leave two seconds after the room reads ready). Prints its port. Usage:
 #   FAKE_ROOM=orcabr123 FAKE_LOG=/tmp/bridge.log python3 Tools/orca/fake_bridge.py &
-#   ORCA_LIVE_TEST=1 ORCA_TEST_BRIDGE_ROOM=orcabr123 YOUGAME_BRIDGE=http://127.0.0.1:<port> \
-#     YOUGAME_TOKEN=t0ken YOUGAME_GAME=orca-test ./Binaries/Tests/tests \
+#   ORCA_LIVE_TEST=1 ORCA_TEST_BRIDGE_ROOM=orcabr123 SUBSPACE_BRIDGE=http://127.0.0.1:<port> \
+#     SUBSPACE_TOKEN=t0ken SUBSPACE_GAME=orca-test ./Binaries/Tests/tests \
 #     --gtest_filter='OrcaLive.BridgeMirrorsTheRoomAndTakesLeave'
 # Run that test alone: with a bridge configured, every room goes through it.
 #
@@ -36,7 +36,7 @@ COOKIE = os.environ.get("FAKE_COOKIE", ""); TICKET_SLUG = os.environ.get("FAKE_T
 # FAKE_ORCA_BUILD: the "orca build <version> [<commit>]" the page names in a real ticket (the site's
 # protocol floor refuses a listing's Orca ticket with no build, 409 orca_outdated; lib/orca-protocol.ts).
 ORCA_BUILD = os.environ.get("FAKE_ORCA_BUILD", "0.3.34").split()
-SITE = os.environ.get("FAKE_SITE", "https://yougame.co"); NO_LEAVE = os.environ.get("FAKE_NO_LEAVE") == "1"
+SITE = os.environ.get("FAKE_SITE", "https://example.invalid"); NO_LEAVE = os.environ.get("FAKE_NO_LEAVE") == "1"
 # FAKE_TICKET_DROP_FIRST=1: the first mpTicket gets no reply (the connection just closes), as when
 # the page's ticket never comes back.
 DROP_FIRST = os.environ.get("FAKE_TICKET_DROP_FIRST") == "1"
@@ -207,7 +207,7 @@ class H(BaseHTTPRequestHandler):
             try:
                 if at and time.time() >= at:
                     self.wfile.write(("data: " + json.dumps({"slug": "someone-else", "cmd": "leave"}) + "\n\n").encode())
-                    self.wfile.write(("data: " + json.dumps({"yg": 1, "slug": SLUG, "cmd": "leave"}) + "\n\n").encode())
+                    self.wfile.write(("data: " + json.dumps({"br": 1, "slug": SLUG, "cmd": "leave"}) + "\n\n").encode())
                     self.wfile.flush(); log({"sent": "leave"})
                 else:
                     self.wfile.write(b": ping\n\n"); self.wfile.flush()

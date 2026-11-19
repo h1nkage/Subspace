@@ -1,5 +1,5 @@
 {
- "about": "Shared vectors for the lobby compatibility key (Tools/orca/compat-key-template.py and YouGame web/src/lib/orca-compat-keys.ts must both pass every one). `real` are keys a real Orca logged; `derive` are built from those packs by one change each; `xxh3` values come from xxhsum -H3 (xxHash's own CLI).",
+ "about": "Shared vectors for the lobby compatibility key (Tools/orca/compat-key-template.py and service web/src/lib/orca-compat-keys.ts must both pass every one). `real` are keys a real Orca logged; `derive` are built from those packs by one change each; `xxh3` values come from xxhsum -H3 (xxHash's own CLI).",
  "derive": [
   {
    "keys": [

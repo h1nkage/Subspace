@@ -293,11 +293,10 @@ void MenuBar::AddToolsMenu()
 
   tools_menu->addSeparator();
 
-  // Orca: online play goes through YouGame's own queue and friend join; the stock NetPlay host and
-  // browser would put a player outside it. Hidden, code kept (brawl-rollback #67333, 0.3.101).
-  tools_menu->addAction(tr("Start &NetPlay..."), this, &MenuBar::StartNetPlay)->setVisible(false);
-  tools_menu->addAction(tr("Browse &NetPlay Sessions...."), this, &MenuBar::BrowseNetPlay)
-      ->setVisible(false);
+  // Online play is Dolphin's NetPlay again: host or join a lobby (host code or IP); games with a
+  // Subspace profile then play with rollback (Core/Orca/Local).
+  tools_menu->addAction(tr("Start &NetPlay..."), this, &MenuBar::StartNetPlay);
+  tools_menu->addAction(tr("Browse &NetPlay Sessions...."), this, &MenuBar::BrowseNetPlay);
 
   tools_menu->addSeparator();
 

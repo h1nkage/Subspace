@@ -15,7 +15,7 @@ opts in with room.recovery:true; --no-recovery omits that field. A log-triggered
 drops only the room socket, retaining the direct link and the same room seat.
 
 --role-binary ROLE=PATH overrides --binary for one process. --version-refusals
-checks the lobby and YG Dolphin version at the WebSocket upgrade, as the rooms
+checks the lobby and Subspace version at the WebSocket upgrade, as the rooms
 Worker does. --role-version ROLE=X.Y.Z supplies the page's ticket ob (the dev
 binary requests a ticket without the desktop page). --owner-relaunch also lets
 the owner reopen its empty room on another lobby, logging orca_room_started_over.
@@ -43,9 +43,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 
-HOST_OLDER = ("Your friend is on an older YG Dolphin. Ask them to press Play to update it "
+HOST_OLDER = ("Your friend is on an older Subspace. Ask them to press Play to update it "
               "and send you a new invite.")
-HOST_NEWER = "Your friend is on a newer YG Dolphin. Press Play to update yours."
+HOST_NEWER = "Your friend is on a newer Subspace. Press Play to update yours."
 LOBBY_MISMATCH = "This room uses a different lobby protocol or configuration"
 
 
@@ -103,7 +103,7 @@ class FixturePage:
         self.requested = False
 
     def receive(self, line):
-        if not line.startswith("yg "):
+        if not line.startswith("br "):
             return []
         request = json.loads(line[3:])
         kind = request.get("type")
@@ -115,12 +115,12 @@ class FixturePage:
             body.update(dev="orca-doubles-test", player_id=f"Doubles{self.role}",
                         name=f"Doubles{self.role}")
             result = post_fixture(self.site, "/api/multiplayer/ticket", body)
-        messages = ["yg " + json.dumps({"re": request["id"], "ok": True, "result": result}) + "\n"]
+        messages = ["br " + json.dumps({"re": request["id"], "ok": True, "result": result}) + "\n"]
         mine = [p for p in request.get("participants", []) if p.get("connectionId") == request.get("me")]
         if (kind == "mpRoom" and self.add and not self.requested and len(mine) == 1 and
                 request.get("lobby", {}).get("maxLocalPlayers") == 2):
             self.requested = True
-            messages.append("yg " + json.dumps({"push": {"slug": "doubles-fixture", "cmd": "local-add"}}) + "\n")
+            messages.append("br " + json.dumps({"push": {"slug": "doubles-fixture", "cmd": "local-add"}}) + "\n")
         return messages
 
 
@@ -1313,8 +1313,8 @@ def run(args):
                                "ORCA_TEST_PLAYER": f"Doubles{role}", "ORCA_NAME": f"Doubles{role}",
                                "ORCA_DIRECT": "1", "ORCA_DIRECT_LOOPBACK": "1", "ORCA_DIRECT_STUN": "0"}
                 if role in local:
-                    environment["YOUGAME_STDIO"] = "1"
-                    environment["YOUGAME_GAME"] = "doubles-fixture"
+                    environment["SUBSPACE_STDIO"] = "1"
+                    environment["SUBSPACE_GAME"] = "doubles-fixture"
                 if args.queue or role == args.friend_from_queue:
                     # Public matchmaking is entered by host/join from the game's own lobby.
                     # ORCA_ROOM's startup shortcut intentionally does not arm the queue header.
@@ -1330,7 +1330,7 @@ def run(args):
                     environment["ORCA_DIRECT_FORCE"] = "turn"
                 if os.name == "nt":
                     environment["SystemRoot"] = os.environ.get("SystemRoot", r"C:\Windows")
-                environment["YG_SCENES"] = "1"
+                environment["ORCA_SCENES"] = "1"
                 if role_blackouts:
                     # The knob adds test=true to the compatibility key. Keep every peer in
                     # that test setup, while only the requested role blacks out during the run.
@@ -1340,7 +1340,7 @@ def run(args):
                     environment["ORCA_UX_PROBE"] = str(Path(args.probe).resolve())
                 input_path = role_inputs.get(str(role), args.input)
                 if input_path and not local:
-                    environment["YG_INPUT"] = str(Path(input_path).resolve())
+                    environment["ORCA_INPUT"] = str(Path(input_path).resolve())
                 if args.profile or args.pplus:
                     environment["ORCA_PROFILE"] = "PPLUS32" if args.pplus else args.profile
                 if args.mod_dir:

@@ -41,7 +41,7 @@ class SinkFixture
 public:
   SinkFixture()
   {
-    SetEnv("ORCA_REPLAY_SOURCE", "fixture.ygr");
+    SetEnv("ORCA_REPLAY_SOURCE", "fixture.ssr");
     SetEnv("ORCA_SESSION", "1");
     m_dir = File::CreateTempDir();
     EXPECT_FALSE(m_dir.empty());

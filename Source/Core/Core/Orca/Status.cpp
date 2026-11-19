@@ -391,7 +391,7 @@ int Finish()
             !s_stopping.load(std::memory_order_relaxed);
   }
   if (stuck)
-    Error("boot", "YG Dolphin couldn't start the game");
+    Error("boot", "Subspace couldn't start the game");
   State("ended");
   return ExitCode();
 }

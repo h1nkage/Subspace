@@ -5,12 +5,12 @@
 //
 // Defaults: frames 6000-9000 (the fight; the script reaches scMelee at frame 5995), unthrottled,
 // muted, Null video, a fresh user dir. Useful variables (KEY=VAL):
-//   YG_THROTTLE=1             real-time pacing instead of unthrottled
-//   YG_SAVE_ONLY_FROM=5900    a rollback snapshot at every frame (as an online match that predicts)
-//   YG_SNAPTIME=1             time those snapshots (state / MEM1 / MEM2)
-//   YG_NTCOPY=1               non-temporal MEM1/MEM2 copies (x86-64)
-//   YG_PAGEDIFF=6000          dirty 4 KB pages per frame vs 1/2/4 frames earlier (slow; ignore its fps)
-//   YG_EXIT_AFTER, YG_FRAMETIME to move the window.
+//   ORCA_THROTTLE=1             real-time pacing instead of unthrottled
+//   ORCA_SAVE_ONLY_FROM=5900    a rollback snapshot at every frame (as an online match that predicts)
+//   ORCA_SNAPTIME=1             time those snapshots (state / MEM1 / MEM2)
+//   ORCA_NTCOPY=1               non-temporal MEM1/MEM2 copies (x86-64)
+//   ORCA_PAGEDIFF=6000          dirty 4 KB pages per frame vs 1/2/4 frames earlier (slow; ignore its fps)
+//   ORCA_EXIT_AFTER, ORCA_FRAMETIME to move the window.
 // Set PERF_AUDIO=1 to keep the default audio backend.
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -42,12 +42,12 @@ fs.rmSync(user, { recursive: true, force: true });
 fs.mkdirSync(user, { recursive: true });
 
 const env = { ...process.env };
-for (const k of Object.keys(env)) if (k.startsWith("ORCA_") || k.startsWith("YG_")) delete env[k];
+for (const k of Object.keys(env)) if (k.startsWith("ORCA_") || k.startsWith("ORCA_")) delete env[k];
 Object.assign(env, {
   ORCA_SESSION: "1",
-  YG_EXIT_AFTER: "9000",
-  YG_FRAMETIME: "6000",
-  YG_INPUT: path.join(here, "inputs", "bf-mario-link-results.txt"),
+  ORCA_EXIT_AFTER: "9000",
+  ORCA_FRAMETIME: "6000",
+  ORCA_INPUT: path.join(here, "inputs", "bf-mario-link-results.txt"),
 });
 for (const p of pairs) {
   const i = p.indexOf("=");

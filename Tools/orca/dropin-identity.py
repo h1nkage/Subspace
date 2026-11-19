@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # dropin-identity.py: each player's own name-tag controls in a friend's game (UX/NameTags.h, the
-# session's value channel in Rollback/OnlineMatch.cpp "Ports"). Two Orcas over a real YouGame room
+# session's value channel in Rollback/OnlineMatch.cpp "Ports"). Two Orcas over a real online room
 # (dev tickets, a local keyframe folder), headless and muted.
 #
 #   Tools/orca/dropin-identity.py <dolphin-emu-nogui> <disc> [--pplus <launcher.dol>]
 #
 # 1. Host and Friend each boot their own game, solo in a room of their own, and join port 1 of
-#    their character select (each gets its YouGame tag there). Each then sets its own tag's
+#    their character select (each gets its player tag there). Each then sets its own tag's
 #    controls (a probe write, as the game's controls menu would): Host A as jump, B as grab, tap
 #    jump off (GameCube and Classic); Friend L and R as grab, Y and X as nothing, rumble on.
 # 2. Friend sends "join <host's room>" from its character select, as a queue match's joiner does:
@@ -16,7 +16,7 @@
 #    layout and rumble), and as the match starts the game copies each port's tag layout for its
 #    controller (a GameCube controller's 12 bytes) into its per-port table (0x805B7480): both Orcas
 #    must show port 1 with Host's and port 2 with Friend's. No session may report a desync, and the
-#    frames both ran from the host's keyframe on must hash alike (YG_HASHLOG; only a frame first
+#    frames both ran from the host's keyframe on must hash alike (ORCA_HASHLOG; only a frame first
 #    run on a guessed input may differ there, before its re-run). Runs two Orca processes.
 import os
 import queue
@@ -81,16 +81,16 @@ class Orca:
         env = {
             "HOME": os.environ["HOME"],
             "TMPDIR": os.environ.get("TMPDIR", WORK),
-            "YG_THROTTLE": "1",
+            "ORCA_THROTTLE": "1",
             "PATH": os.environ["PATH"],
             "ORCA_SESSION": "1",
             "ORCA_TEST_COMMANDS": "1",
             "ORCA_TEST_DEV_GAME": "orca-dropin-test",
             "ORCA_TEST_KEYFRAME_DIR": os.path.join(WORK, "kf"),
             "ORCA_NAME": name,
-            "YG_INPUT": INPUT,
-            "YG_SCENES": "1",
-            "YG_HASHLOG": os.path.join(WORK, f"hash-{name}.txt"),
+            "ORCA_INPUT": INPUT,
+            "ORCA_SCENES": "1",
+            "ORCA_HASHLOG": os.path.join(WORK, f"hash-{name}.txt"),
         }
         if PPLUS:
             env["ORCA_PROFILE"] = os.environ.get("ORCA_PROFILE", "PPLUS32")

@@ -189,15 +189,15 @@ def run(name, steps, expected, codes, back, css_count):
         "HOME": os.environ["HOME"],
         "PATH": os.environ["PATH"],
         "ORCA_SESSION": "1",
-        "YG_SCENES": "1",
-        "YG_INPUT": input_path,
-        "YG_EXIT_AFTER": str(exit_after),
+        "ORCA_SCENES": "1",
+        "ORCA_INPUT": input_path,
+        "ORCA_EXIT_AFTER": str(exit_after),
     }
     if PPLUS:
         env["ORCA_PROFILE"] = "PPLUS32"
     if SHOTS and VIDEO != "Null":
-        env["YG_SHOT_EVERY"] = "5"
-        env["YG_SHOT_FROM"] = "250" if PPLUS else "1000"
+        env["ORCA_SHOT_EVERY"] = "5"
+        env["ORCA_SHOT_FROM"] = "250" if PPLUS else "1000"
     args = [BIN, "-p", "headless", "-u", user, "-v", VIDEO,
             "-C", "Dolphin.DSP.Backend=No Audio Output",
             "-C", "Logger.Options.Verbosity=4", "-C", "Logger.Options.WriteToConsole=True"]

@@ -16,7 +16,7 @@
 #include "Common/CommonTypes.h"
 #include "Core/Orca/UX/OverlayKey.h"
 
-// The YouGame button and its notice lines, drawn by Orca over a full-screen game in place of the
+// The app button and its notice lines, drawn by Orca over a full-screen game in place of the
 // app's own button, which Orca's window covers. The app drives it over stdin:
 //   orb <x> <y> <size> <lit> <away> <badge>
 //       Show the button: top-left (x, y) and size in the view's device pixels (see ScaledPlace),
@@ -32,8 +32,8 @@
 //       stay until the next line. sent and error fade by themselves. off removes it.
 // With hostui, a click on the disc emits the page's overlay tap. Without it, macOS clicks pass
 // through to the app and Windows prints `orca orb`. Host-only: no emulated state. This header
-// has no ImGui so DolphinNoGUI can include it; YgOrbDraw.h draws it.
-namespace Orca::UX::YgOrb
+// has no ImGui so DolphinNoGUI can include it; AppOrbDraw.h draws it.
+namespace Orca::UX::AppOrb
 {
 enum class Kind
 {
@@ -253,4 +253,4 @@ void Apply(const Command& command);
 void Show(Notice notice);
 void SetTalk(Talk talk);
 void SetViewSize(int width, int height);
-}  // namespace Orca::UX::YgOrb
+}  // namespace Orca::UX::AppOrb

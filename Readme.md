@@ -1,33 +1,27 @@
-# YG Dolphin (formerly YG Baiji and Orca) - GameCube and Wii rollback netplay
+# Subspace - GameCube and Wii rollback netplay
 
-> **2026-10-13: YG Baiji is now YG Dolphin.** Players see YG Dolphin from 0.3.42 on. The code,
-> files and contracts keep the codename Orca. Packages are `YG Dolphin.app`, `yg-dolphin.exe`
-> and `yg-dolphin/yg-dolphin`; the Mac program stays `Contents/MacOS/Orca`. Tags are
-> `yg-dolphin-<version>` from 0.3.42; older `yg-baiji-` and `orca-` tags keep their names.
-> Earlier notes are left as they were.
+> Players see the name Subspace. The code, its files and its protocols keep the codename Orca
+> (`Core/Orca`, `Sys/Orca/`, `orca <verb>` lines, the `ORCA_*` variables), and so do ORCA.md and
+> ORCA_ARCHITECTURE.md. Packages are `Subspace.app`, `subspace.exe` and `subspace/subspace`; the
+> Mac program stays `Contents/MacOS/Orca`. Tags are `subspace-<version>`.
 
-> **2026-10-12: Orca is now called YG Baiji.** The name was picked in a YouGame community poll; the
-> baiji is the Yangtze river dolphin. Players see the new name from 0.3.40 on. The code, its files
-> and its protocols keep the codename Orca (`Core/Orca`, `Sys/Orca/`, `orca <verb>` lines, the
-> `ORCA_*` variables), and so do ORCA.md and ORCA_ARCHITECTURE.md. Releases up to 0.3.39 keep their
-> `orca-<version>` tags; later ones are tagged `yg-baiji-<version>`. Nothing written before this
-> note was reworded.
-
-YG Dolphin is the rollback netcode core behind online play for Super Smash Bros. Brawl and Project+
-on [YouGame](https://yougame.co). It is a fork of the
+Subspace is a rollback netcode core for online play of Super Smash Bros. Brawl and Project+. No
+hosted service is built in: play online through Dolphin's NetPlay window
+([docs/DOLPHIN-NETPLAY.md](docs/DOLPHIN-NETPLAY.md)), or point `ORCA_SITE` at a room service of
+your own. It is a fork of the
 [Dolphin](https://github.com/dolphin-emu/dolphin) emulator: an exact whole-machine snapshot at each
 frame boundary, controller input injected at the SI device, and re-run frames that skip host
 rendering, with per-game profiles.
 
-- **Play:** YG Dolphin ships inside the [YouGame desktop app](https://yougame.co/desktop) for Mac and
-  Windows. Bring your own disc image; none are included or distributed here.
+- **Play:** build it with Dolphin's NetPlay window ([docs/DOLPHIN-NETPLAY.md](docs/DOLPHIN-NETPLAY.md)).
+  Bring your own disc image; none are included or distributed here.
 - **How it works:** [ORCA_ARCHITECTURE.md](ORCA_ARCHITECTURE.md) explains the rollback design and how
   it compares with Slippi and Brawlback. [ORCA.md](ORCA.md) has the engineering detail: building,
   testing and each subsystem.
 - **License:** like Dolphin, GPL-2.0-or-later, with per-file SPDX tags; in aggregate the repository
   is GPLv3-compatible ([COPYING](COPYING), [LICENSES/](LICENSES)).
 
-YG Dolphin is not affiliated with or endorsed by the Dolphin project or Nintendo. Dolphin's own
+Subspace is not affiliated with or endorsed by the Dolphin project or Nintendo. Dolphin's own
 readme follows.
 
 ---

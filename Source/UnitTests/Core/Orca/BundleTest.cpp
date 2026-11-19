@@ -587,7 +587,7 @@ TEST(OrcaBundle, LoadsASignedBundle)
   const Signer signer(1);
   const std::string root = TempDir();
   Flat p = MakePPlus(root + "pplus/", signer);
-  // The app's own hidden file beside the bundle (YouGame desktop orca-files.ts) is left alone.
+  // The app's own hidden file beside the bundle (desktop orca-files.ts) is left alone.
   ASSERT_TRUE(File::WriteStringToFile(p.dir + ".copies.json", "{}"));
   std::string error;
   const auto bundle = p.Load(signer, &error);
@@ -823,7 +823,7 @@ TEST(OrcaBundle, RefusesTamperedBundles)
   File::DeleteDirRecursively(root);
 }
 
-// The app's bundle (a listing) may come without mod.sig: YouGame's download checked its files. It
+// The app's bundle (a listing) may come without mod.sig: The service's download checked its files. It
 // gets every other check, and the same tree hash (so the same key) as the signed bundle of the
 // same files. A mod.sig that is there is checked as ever, and without a listing it is required.
 TEST(OrcaBundle, UnsignedAppBundleLoadsAndSignedStaysStrict)
@@ -951,7 +951,7 @@ TEST(OrcaBundle, BootLauncherIsCheckedAsItsFile)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
   const ScopedEnv no_dir("ORCA_MOD_DIR", "");
-  const ScopedEnv game("YOUGAME_GAME", "project-rollback");
+  const ScopedEnv game("SUBSPACE_GAME", "project-rollback");
   const Signer signer(1);
   const PublicKey key = signer.Key();
   Orca::Mod::TrustKeysForTests(std::span(&key, 1));
@@ -1458,7 +1458,7 @@ TEST(OrcaBundleDeathTest, LocalRefusalReturnsBootFailureWithoutAnAlert)
           std::exit(!booted && code == 1 &&
                             Orca::Mod::ResolvedKind() == Orca::Mod::BundleKind::Refused ? 1 : 3);
         },
-        testing::ExitedWithCode(1), "orca error profile YG Dolphin refused this game's pack:");
+        testing::ExitedWithCode(1), "orca error profile Subspace refused this game's pack:");
   }
 #else
   GTEST_SKIP() << "Subprocess assertions are unavailable on this platform";
@@ -1472,7 +1472,7 @@ TEST(OrcaBundle, FindsItsFolder)
   const std::string old_user = File::GetUserPath(D_USER_IDX);
   File::SetUserPath(D_USER_IDX, root + "user/");
   {
-    const ScopedEnv game("YOUGAME_GAME", "open-brawl");
+    const ScopedEnv game("SUBSPACE_GAME", "open-brawl");
     EXPECT_EQ(Orca::Mod::FlatBundleDir(nullptr), root + "user/../run/open-brawl/");
     const std::string launcher = root + "run/project-rollback/Project+ Netplay Launcher.dol";
     EXPECT_EQ(Orca::Mod::FlatBundleDir(&launcher), root + "run/project-rollback/");
@@ -1482,7 +1482,7 @@ TEST(OrcaBundle, FindsItsFolder)
   }
   for (const char* bad : {"", "../x", "Open-Brawl", "a/b", "a b"})
   {
-    const ScopedEnv game("YOUGAME_GAME", bad);
+    const ScopedEnv game("SUBSPACE_GAME", bad);
     EXPECT_EQ(Orca::Mod::FlatBundleDir(nullptr), "") << bad;
   }
   File::SetUserPath(D_USER_IDX, old_user);
@@ -1500,7 +1500,7 @@ TEST(OrcaBundle, ResolvesOrRefuses)
   };
   const ScopedEnv session("ORCA_SESSION", "1");
   const ScopedEnv no_dir("ORCA_MOD_DIR", "");
-  const ScopedEnv brawl_game("YOUGAME_GAME", "open-brawl");
+  const ScopedEnv brawl_game("SUBSPACE_GAME", "open-brawl");
   const Signer signer(1), stranger(2);
   const PublicKey key = signer.Key();
   Orca::Mod::TrustKeysForTests(std::span(&key, 1));
@@ -1540,7 +1540,7 @@ TEST(OrcaBundle, ResolvesOrRefuses)
   EXPECT_EQ(Orca::Mod::ResolvedKind(), BundleKind::Refused);
   EXPECT_TRUE(Orca::Mod::Requested());
   EXPECT_EQ(Orca::Mod::ResolvedFlat(), nullptr);
-  EXPECT_TRUE(Orca::Mod::ResolvedError().starts_with("YG Dolphin refused this game's pack: "))
+  EXPECT_TRUE(Orca::Mod::ResolvedError().starts_with("Subspace refused this game's pack: "))
       << Orca::Mod::ResolvedError();
   EXPECT_EQ(Orca::Mod::ResolvedError().find(root), std::string::npos)
       << Orca::Mod::ResolvedError();
@@ -1555,7 +1555,7 @@ TEST(OrcaBundle, ResolvesOrRefuses)
   resolve(nullptr);
   EXPECT_EQ(Orca::Mod::ResolvedKind(), BundleKind::Refused);
   EXPECT_NE(Orca::Mod::ResolvedError().find("trusts no bundle key"), std::string::npos);
-  // Unless it is the app's bundle without mod.sig (YOUGAME_GAME set): that plays, keyed or not.
+  // Unless it is the app's bundle without mod.sig (SUBSPACE_GAME set): that plays, keyed or not.
   ASSERT_TRUE(File::Delete(b.dir + "mod.sig"));
   Orca::Mod::ResetResolvedBundle();
   resolve(nullptr);
@@ -1577,7 +1577,7 @@ TEST(OrcaBundle, ResolvesOrRefuses)
   Orca::Mod::TrustKeysForTests(std::span(&key, 1));
   // Without a mod.json in the folder that build is legacy, exactly as before bundles.
   {
-    const ScopedEnv game("YOUGAME_GAME", "no-pack-here");
+    const ScopedEnv game("SUBSPACE_GAME", "no-pack-here");
     Orca::Mod::TrustKeysForTests({});
     Orca::Mod::ResetResolvedBundle();
     resolve(nullptr);
@@ -1587,7 +1587,7 @@ TEST(OrcaBundle, ResolvesOrRefuses)
   }
 
   // Project+: the launcher's own folder; the boot must run the bundle's launcher, for its listing.
-  const ScopedEnv pplus_game("YOUGAME_GAME", "project-rollback");
+  const ScopedEnv pplus_game("SUBSPACE_GAME", "project-rollback");
   Flat p = MakePPlus(root + "run/project-rollback/", signer);
   const std::string launcher = p.dir + "Project+ Netplay Launcher.dol";
   const std::string& dol = p.files["Project+ Netplay Launcher.dol"];
@@ -1604,7 +1604,7 @@ TEST(OrcaBundle, ResolvesOrRefuses)
   EXPECT_EQ(Orca::Mod::ResolvedKind(), BundleKind::Refused);
   // Under another listing: refused.
   {
-    const ScopedEnv game("YOUGAME_GAME", "open-brawl");
+    const ScopedEnv game("SUBSPACE_GAME", "open-brawl");
     Orca::Mod::ResetResolvedBundle();
     resolve(&launcher, dol_bytes);
     EXPECT_EQ(Orca::Mod::ResolvedKind(), BundleKind::Refused);
@@ -1650,7 +1650,7 @@ TEST(OrcaBundle, ResolvesOrRefuses)
     EXPECT_NE(Orca::Mod::ResolvedError().find("this boot is a disc's"), std::string::npos)
         << Orca::Mod::ResolvedError();
     // The player reads it (orca error): the new name, and never the folder's path.
-    EXPECT_TRUE(Orca::Mod::ResolvedError().starts_with("YG Dolphin refused this game's pack: "))
+    EXPECT_TRUE(Orca::Mod::ResolvedError().starts_with("Subspace refused this game's pack: "))
         << Orca::Mod::ResolvedError();
     EXPECT_EQ(Orca::Mod::ResolvedError().find(root), std::string::npos)
         << Orca::Mod::ResolvedError();
@@ -1660,7 +1660,7 @@ TEST(OrcaBundle, ResolvesOrRefuses)
     resolve(&launcher, dol_bytes);
     EXPECT_EQ(Orca::Mod::ResolvedKind(), BundleKind::Refused);
     EXPECT_NE(Orca::Mod::ResolvedError().find("trusts no bundle key"), std::string::npos);
-    // Without mod.sig: plays under the app (YOUGAME_GAME set), keyed or not.
+    // Without mod.sig: plays under the app (SUBSPACE_GAME set), keyed or not.
     ASSERT_TRUE(File::Delete(p.dir + "mod.sig"));
     Orca::Mod::ResetResolvedBundle();
     resolve(&launcher, dol_bytes);
@@ -1669,9 +1669,9 @@ TEST(OrcaBundle, ResolvesOrRefuses)
     Orca::Mod::ResetResolvedBundle();
     resolve(&launcher, dol_bytes);
     EXPECT_EQ(Orca::Mod::ResolvedKind(), BundleKind::Flat) << Orca::Mod::ResolvedError();
-    // A dev run (no YOUGAME_GAME) still needs mod.sig, and a key.
+    // A dev run (no SUBSPACE_GAME) still needs mod.sig, and a key.
     {
-      const ScopedEnv no_game("YOUGAME_GAME", "");
+      const ScopedEnv no_game("SUBSPACE_GAME", "");
       Orca::Mod::ResetResolvedBundle();
       resolve(&launcher, dol_bytes);
       EXPECT_EQ(Orca::Mod::ResolvedKind(), BundleKind::Refused);
@@ -1725,7 +1725,7 @@ TEST(OrcaBundle, FlatRunsRequireAJailAndLegacyRunsKeepTheirBehavior)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
   const ScopedEnv no_dir("ORCA_MOD_DIR", "");
-  const ScopedEnv game("YOUGAME_GAME", "open-brawl");
+  const ScopedEnv game("SUBSPACE_GAME", "open-brawl");
   const std::string root = TempDir();
   ASSERT_FALSE(root.empty());
   const std::string old_user = File::GetUserPath(D_USER_IDX);
@@ -1745,8 +1745,8 @@ TEST(OrcaBundle, FlatRunsRequireAJailAndLegacyRunsKeepTheirBehavior)
   const auto refused = [&] {
     EXPECT_EQ(Orca::Mod::ResolvedKind(), Orca::Mod::BundleKind::Refused);
     EXPECT_EQ(Orca::Mod::ResolvedError(),
-              "YG Dolphin refused this game's pack: this pack requires the YouGame app's sandbox; "
-              "open it through YouGame");
+              "Subspace refused this game's pack: this pack requires the desktop app's sandbox; "
+              "open it through the desktop app");
     EXPECT_EQ(Orca::Mod::ResolvedFlat(), nullptr);
     EXPECT_TRUE(Orca::Mod::Requested());
   };
@@ -1808,7 +1808,7 @@ TEST(OrcaBundle, FlatRunsRequireAJailAndLegacyRunsKeepTheirBehavior)
   Orca::Mod::TrustKeysForTests(std::span(&key, 1));
   // No mod.json remains legacy, including a launcher's own folder, without a jail.
   {
-    const ScopedEnv legacy_game("YOUGAME_GAME", "legacy");
+    const ScopedEnv legacy_game("SUBSPACE_GAME", "legacy");
     Orca::Mod::ResetResolvedBundle();
     Orca::Mod::ResolveBundleForTests(nullptr, {}, false);
     EXPECT_EQ(Orca::Mod::ResolvedKind(), Orca::Mod::BundleKind::None);

@@ -20,7 +20,7 @@ class CPUThreadGuard;
 // session owns the data; readers get copies and callbacks.
 namespace Orca::Events
 {
-// A controller port in play: its player's YouGame username and controls. These are the host's
+// A controller port in play: its player's player username and controls. These are the host's
 // values for the port at that frame, so they are identical on every machine.
 struct PortInfo
 {

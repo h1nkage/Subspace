@@ -39,10 +39,10 @@ census = a.census or ",".join(str(f) for f in (1, 3, a.frames // 2, a.frames - 1
 def run(name, extra):
     user = tempfile.mkdtemp(prefix=f"orca-jit-{name}-")
     # The shell's own harness knobs would make "as-is" another history: none pass through.
-    env = {k: v for k, v in os.environ.items() if not k.startswith("YG_")}
-    env.update(ORCA_SESSION="1", YG_SCENES="1", YG_INPUT=os.path.abspath(script),
-               YG_EXIT_AFTER=str(a.frames), YG_HASHLOG=os.path.join(out, name + ".hashlog"),
-               YG_JITCODE_LOG=os.path.join(out, name + ".jit"), YG_JITCODE_CENSUS=census, **extra)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("ORCA_")}
+    env.update(ORCA_SESSION="1", ORCA_SCENES="1", ORCA_INPUT=os.path.abspath(script),
+               ORCA_EXIT_AFTER=str(a.frames), ORCA_HASHLOG=os.path.join(out, name + ".hashlog"),
+               ORCA_JITCODE_LOG=os.path.join(out, name + ".jit"), ORCA_JITCODE_CENSUS=census, **extra)
     if a.pplus:
         env["ORCA_PROFILE"] = a.profile
     if a.x86:
@@ -85,7 +85,7 @@ def report_census(name):
             words = []
 
 
-codes = [run("as-is", {}), run("cleared", {"YG_CLEARJIT_AT": a.clear})]
+codes = [run("as-is", {}), run("cleared", {"ORCA_CLEARJIT_AT": a.clear})]
 report_census("as-is")
 base, other = hashlog("as-is"), hashlog("cleared")
 common = sorted(set(base) & set(other))

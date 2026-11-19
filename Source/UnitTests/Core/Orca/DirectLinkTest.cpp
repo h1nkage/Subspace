@@ -28,7 +28,7 @@
 
 #include "Common/Timer.h"
 #include "Core/Orca/Session/DirectLink.h"
-#include "Core/Orca/Session/YouGameRoom.h"
+#include "Core/Orca/Session/RelayRoom.h"
 
 using namespace Orca::Net;
 using namespace std::chrono_literals;
@@ -156,7 +156,7 @@ int Count(const std::vector<DirectLink::Received>& received, const std::string& 
 
 TEST(OrcaDirectLink, ParsesTheTicketsIceServers)
 {
-  // As YouGame's ticket route hands out Cloudflare's (web/src/lib/turn.ts).
+  // As the service's ticket route hands out Cloudflare's (web/src/lib/turn.ts).
   IceConfig c;
   ASSERT_TRUE(ParseIce(Json(R"([{"urls":["stun:stun.cloudflare.com:3478",
       "turn:turn.cloudflare.com:3478?transport=udp","turn:turn.cloudflare.com:3478?transport=tcp",

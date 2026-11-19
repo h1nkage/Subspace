@@ -126,7 +126,7 @@ bool SameName(std::u16string_view a, std::u16string_view b)
                     [](char16_t x, char16_t y) { return Folded(x) == Folded(y); });
 }
 
-// The tag that reads as `name` (a YouGame username as BrawlTag makes it): one the player typed in
+// The tag that reads as `name` (a player username as BrawlTag makes it): one the player typed in
 // the game's name list (the same letters in the game's characters, any case) before the one Orca
 // made, so a player who made their tag in Options > Controls plays with it and never gets a second
 // tag of the same name. -1 when none does.
@@ -545,8 +545,8 @@ std::vector<u8> ReadOwnControls(const GuestMemory& m, int port, std::string_view
   // the name it has: whatever its name, those are the controls they just chose).
   if (slot < 0 && last_edited && !last_edited->empty())
     slot = FindTag(m, tags, *last_edited);
-  // Then the tag they last wore, else their YouGame tag. A last-worn tag that reads as their
-  // YouGame name is looked up as that name, so a tag of that name they type in Options > Controls
+  // Then the tag they last wore, else their player tag. A last-worn tag that reads as their
+  // player name is looked up as that name, so a tag of that name they type in Options > Controls
   // after wearing Orca's is the one read (and the one the next character select gives them).
   const std::u16string own = BrawlTag(own_name);
   if (slot < 0 && !last_worn->empty() && (own.empty() || !SameName(*last_worn, own)))
@@ -738,7 +738,7 @@ std::optional<std::vector<u8>> OwnControlsReader::Read(const GuestMemory& m,
     m_watch.Rebase();
   // A tag the player just set up on the game's Controls page is the one read from now on, whatever
   // its name, until they wear one on a character select (through 0.3.40 only the worn, last-worn or
-  // YouGame-name tag was read, so buttons set on any other tag were never kept or carried).
+  // account-name tag was read, so buttons set on any other tag were never kept or carried).
   std::optional<std::u16string> edited = m_edits.Next(m);
   const bool set_up = edited.has_value();
   if (edited)

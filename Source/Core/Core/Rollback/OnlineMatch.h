@@ -1,7 +1,7 @@
 // Copyright 2026 YouGame
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Online drop-in play: friends join this game through a YouGame room. The host plays solo from
+// Online drop-in play: friends join this game through an online room. The host plays solo from
 // boot; a friend who joins goes back to its own origin, replays the host's inputs since that
 // origin, and takes the next free port. From there a rollback session over the room's transport
 // runs both games. Before a queue match, and before a friend joins a host that has played on its
@@ -21,7 +21,7 @@
 
 #include "Core/Orca/Session/Events.h"
 #include "Core/Orca/Session/Session.h"
-#include "Core/Orca/Session/YouGameRoom.h"
+#include "Core/Orca/Session/RelayRoom.h"
 
 namespace Core
 {
@@ -147,11 +147,11 @@ struct HostRecoveryResult
   std::array<int, Orca::Net::MAX_SEATS> groups{};
   std::string error;
 };
-HostRecoveryResult PumpRecoveryHostForTest(Core::System& system, Orca::Net::YouGameRoom& room,
+HostRecoveryResult PumpRecoveryHostForTest(Core::System& system, Orca::Net::RelayRoom& room,
                                           Orca::Net::Game& game, Orca::Net::ReplayArchive replay,
                                           int current_frame, bool session_alive,
                                           std::unique_ptr<Orca::Net::KeyframeStore> store);
-HostRecoveryResult PumpFriendsHostForTest(Core::System& system, Orca::Net::YouGameRoom& room,
+HostRecoveryResult PumpFriendsHostForTest(Core::System& system, Orca::Net::RelayRoom& room,
                                          Orca::Net::Game& game, Orca::Net::ReplayArchive replay,
                                          int current_frame, const std::vector<int>& seated,
                                          bool on_menus,
@@ -161,7 +161,7 @@ HostRecoveryResult PumpFriendsHostForTest(Core::System& system, Orca::Net::YouGa
                                              after_admit = {});
 
 // Runs room events while friends admission is held off the menus.
-bool PumpHeldFriendsEventsForTest(Orca::Net::YouGameRoom& room,
+bool PumpHeldFriendsEventsForTest(Orca::Net::RelayRoom& room,
     std::unique_ptr<Orca::Net::Session>& session, const std::vector<int>& seated);
 
 // Runs Boundary's session loop with a supplied session and short silence window.
@@ -622,7 +622,7 @@ std::vector<Orca::Net::Pads> PumpSoloSeatsForTest(Core::System& system,
     const std::vector<int>& co_seats, int frames, bool fresh_tail,
     const std::function<Orca::Net::Pad(int)>& sample,
     std::vector<Orca::Events::PortInfo>* ports);
-Orca::Net::Pads PumpSoloRoomForTest(Core::System& system, Orca::Net::YouGameRoom& room);
+Orca::Net::Pads PumpSoloRoomForTest(Core::System& system, Orca::Net::RelayRoom& room);
 std::optional<Orca::Net::Pad> PumpSeenLocalPadForTest(int lead,
     const std::vector<int>& co_seats, const std::function<Orca::Net::Pad(int)>& sample);
 int PumpLeadSeatForTest(std::unique_ptr<Orca::Net::Session> session, int solo_seat);

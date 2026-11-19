@@ -191,6 +191,8 @@ enum class MessageID : u8
   ClientCapabilities = 0xA5,
   HostInputAuthority = 0xA6,
   PowerButton = 0xA7,
+  // A rollback room for Subspace engines, carried over this connection (Orca/Local).
+  OrcaRoom = 0xA8,
 
   TimeBase = 0xB0,
   DesyncDetected = 0xB1,

@@ -205,14 +205,14 @@ TEST(OrcaCrashNote, FaultNamesOnlyTheFatalCodes)
 TEST(OrcaCrashNote, FaultStackFormatsModuleOffsetsAndStripsPaths)
 {
   using namespace Orca::CrashNote;
-  const StackFrame frames[] = {{"C:\\build\\yg-dolphin.exe", 0x1234},
+  const StackFrame frames[] = {{"C:\\build\\subspace.exe", 0x1234},
                                {"/system/ntdll.dll", 0x118095},
                                {{}, 0x7FFA12345678},
                                {"bad\nname\t.dll", 0}};
   char out[512];
   const size_t length = FormatFaultStack(out, sizeof(out), frames);
   EXPECT_EQ(std::string(out, length),
-            "Orca: exception stack yg-dolphin.exe+0x1234 ntdll.dll+0x118095 "
+            "Orca: exception stack subspace.exe+0x1234 ntdll.dll+0x118095 "
             "?+0x7FFA12345678 bad?name?.dll+0x0");
   EXPECT_EQ(length, std::strlen(out));
   FormatFaultStack(out, sizeof(out), {});
@@ -231,10 +231,10 @@ TEST(OrcaCrashNote, FaultStackLimitsFramesAndKeepsCompleteTokensWithinAppLimit)
                                         " a+0x1 a+0x1 a+0x1 a+0x1 a+0x1 a+0x1" +
                                         " a+0x1 a+0x1 a+0x1 a+0x1 a+0x1 a+0x1" +
                                         " a+0x1 a+0x1 a+0x1 a+0x1 a+0x1 a+0x1 ...");
-  frames.fill({"yg-dolphin.exe", 0x123456789ABCDEF0});
+  frames.fill({"subspace.exe", 0x123456789ABCDEF0});
   const size_t capped = FormatFaultStack(out, sizeof(out), frames);
   EXPECT_LE(capped + 1, MAX_FAULT_STACK_LINE);
-  EXPECT_TRUE(std::string_view(out).ends_with("yg-dolphin.exe+0x123456789ABCDEF0 ..."));
+  EXPECT_TRUE(std::string_view(out).ends_with("subspace.exe+0x123456789ABCDEF0 ..."));
   // Don't print half a module/offset when the caller's buffer is smaller.
   char small[32];
   FormatFaultStack(small, sizeof(small), frames);

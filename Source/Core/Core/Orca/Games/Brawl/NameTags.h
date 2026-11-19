@@ -17,7 +17,7 @@ namespace Core
 class CPUThreadGuard;
 }
 
-// Puts each player's YouGame username into Brawl's own name tags, so the game shows it over the
+// Puts each player's player username into Brawl's own name tags, so the game shows it over the
 // fighter and on the results. Each tag also carries that player's own controls, so they keep their
 // layout in someone else's game.
 //
@@ -64,7 +64,7 @@ namespace Orca::UX
 constexpr int TAG_CHARS = 5;
 constexpr int TAG_SLOTS = 120;
 
-// A YouGame username as a Brawl tag: letters uppercased, digits and '-', '.', '!', '?' kept, '_'
+// A player username as a Brawl tag: letters uppercased, digits and '-', '.', '!', '?' kept, '_'
 // and spaces become '-', anything else dropped, at most 5 characters. Locale-independent, so
 // identical on every machine. Empty when nothing usable is left.
 std::u16string BrawlTag(std::string_view username, bool view_names = false);

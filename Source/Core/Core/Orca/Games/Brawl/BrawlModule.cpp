@@ -188,7 +188,11 @@ void BrawlModule::OnBoundary(const Core::CPUThreadGuard& guard, int frame, bool 
   // changes) this player's own controls, so the session can carry them into a game it joins or
   // hosts. The read comes after the writes so it never mistakes a tag Orca is about to give
   // their controls for a change back to the game's defaults.
-  NameTagsFrameHook(guard, late ? early : ports, ports, alone && !resimulating);
+  // Rooms from Dolphin's NetPlay window (ORCA_LOCAL_ROOM) get no name tags: ports wear none unless
+  // the player picks one from the save, as in an offline game. Every player in such a room runs
+  // this build, so all machines skip the same writes.
+  if (!Orca::Online::LocalRoom())
+    NameTagsFrameHook(guard, late ? early : ports, ports, alone && !resimulating);
   // The online rules: rule, stage and ready-timer locks for queue rooms.
   u8 plugged = 0;
   for (const Orca::Events::PortInfo& p : ports)

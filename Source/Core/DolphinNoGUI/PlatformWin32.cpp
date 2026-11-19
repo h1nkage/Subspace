@@ -10,7 +10,7 @@
 #include "Core/Orca/Sandbox.h"
 #include "Core/Orca/Status.h"
 #include "Core/Orca/UX/OverlayKey.h"
-#include "Core/Orca/UX/YgOrb.h"
+#include "Core/Orca/UX/AppOrb.h"
 #include "Core/System.h"
 
 #include <windows.h>
@@ -133,7 +133,7 @@ bool PlatformWin32::RegisterRenderWindowClass(bool embedded)
 }
 
 // --embed-adopted (the sandbox): a sandboxed process may not create a window under the app's, so
-// the window starts top-level and hidden, and yougame-sandbox.exe (outside the sandbox) makes it a
+// the window starts top-level and hidden, and subspace-sandbox.exe (outside the sandbox) makes it a
 // child of the app's window, finding it by its class and caption, both "Orca", which never change.
 // Messages are answered while waiting; after ADOPTION_TIMEOUT, Orca gives up (sandbox_embed).
 bool PlatformWin32::CreateAdoptedWindow()
@@ -235,7 +235,7 @@ bool PlatformWin32::CreateRenderWindow()
   }
 
   // Standalone: the caption is the name players see (the embedded windows above keep "Orca").
-  m_hwnd = CreateWindowEx(WS_EX_CLIENTEDGE, WINDOW_CLASS_NAME, _T("YG Dolphin"),
+  m_hwnd = CreateWindowEx(WS_EX_CLIENTEDGE, WINDOW_CLASS_NAME, _T("Subspace"),
                           WS_OVERLAPPEDWINDOW, m_window_x < 0 ? CW_USEDEFAULT : m_window_x,
                           m_window_y < 0 ? CW_USEDEFAULT : m_window_y, m_window_width,
                           m_window_height, nullptr, nullptr, GetModuleHandle(nullptr), this);
@@ -415,10 +415,10 @@ void PlatformWin32::ProcessEvents()
   POINT point;
   const bool down = (GetKeyState(VK_LBUTTON) & 0x8000) != 0;
   if (GetCursorPos(&point) && WindowFromPoint(point) == m_hwnd && ScreenToClient(m_hwnd, &point))
-    Orca::UX::YgOrb::UpdateControlsPointer(static_cast<float>(point.x), static_cast<float>(point.y),
+    Orca::UX::AppOrb::UpdateControlsPointer(static_cast<float>(point.x), static_cast<float>(point.y),
                                            down);
   else
-    Orca::UX::YgOrb::UpdateControlsPointer(-1, -1, down);
+    Orca::UX::AppOrb::UpdateControlsPointer(-1, -1, down);
   MSG msg;
   while (PeekMessage(&msg, m_hwnd, 0, 0, PM_REMOVE))
   {
@@ -514,13 +514,13 @@ LRESULT PlatformWin32::WndProc(const HWND hwnd, const UINT msg, const WPARAM wPa
     // The embedded app owns keyboard focus and relays feedback / host-menu on stdin.
     if (!platform->IsEmbedded() && !(lParam & (1 << 30)))
     {
-      namespace Orb = Orca::UX::YgOrb;
+      namespace Orb = Orca::UX::AppOrb;
       if (wParam == VK_F8 && Orb::HandleHostKey(Orb::HostKey::Feedback))
         return 0;
     }
     // Keep the same press/release semantics for the page, with or without a native window.
     if (!InputCommon::Shortcuts::Get().Configured() &&
-        (platform->IsEmbedded() || Orca::UX::YgOrb::HostEnabled()) && !(lParam & (1 << 30)) &&
+        (platform->IsEmbedded() || Orca::UX::AppOrb::HostEnabled()) && !(lParam & (1 << 30)) &&
         wParam == VK_TAB && platform->m_shift_down && !platform->m_control_down &&
         !platform->m_alt_down)
     {
@@ -535,7 +535,7 @@ LRESULT PlatformWin32::WndProc(const HWND hwnd, const UINT msg, const WPARAM wPa
       if (lParam & (1 << 30))
         break;
       // Forward the keys the page cares about, since it can't see them here. Shift+Tab is
-      // YouGame's overlay key: "orca orb" opens the overlay, the same as clicking the YouGame
+      // the app's overlay key: "orca orb" opens the overlay, the same as clicking the app
       // button; with the app's "talk" cap its press and release go instead, and holding it talks
       // (Orca/UX/OverlayKey.h).
       if (wParam == VK_ESCAPE)
@@ -617,11 +617,11 @@ LRESULT PlatformWin32::WndProc(const HWND hwnd, const UINT msg, const WPARAM wPa
     return DefWindowProc(hwnd, msg, wParam, lParam);
 
   // When embedded, clicks on the game land here, not in the app's page. Report them; the app
-  // decides whether to give the game focus. A left click on the YouGame button Orca draws
-  // (UX/YgOrb.h) is reported as "orca orb". No CS_DBLCLKS, so a double click arrives as two
+  // decides whether to give the game focus. A left click on the app button Orca draws
+  // (UX/AppOrb.h) is reported as "orca orb". No CS_DBLCLKS, so a double click arrives as two
   // presses.
   case WM_LBUTTONUP:
-    Orca::UX::YgOrb::UpdateControlsPointer(static_cast<float>(GET_X_LPARAM(lParam)),
+    Orca::UX::AppOrb::UpdateControlsPointer(static_cast<float>(GET_X_LPARAM(lParam)),
                                            static_cast<float>(GET_Y_LPARAM(lParam)), false);
     return DefWindowProc(hwnd, msg, wParam, lParam);
 
@@ -629,17 +629,17 @@ LRESULT PlatformWin32::WndProc(const HWND hwnd, const UINT msg, const WPARAM wPa
   case WM_RBUTTONDOWN:
   case WM_MBUTTONDOWN:
     if (msg == WM_LBUTTONDOWN)
-      Orca::UX::YgOrb::UpdateControlsPointer(static_cast<float>(GET_X_LPARAM(lParam)),
+      Orca::UX::AppOrb::UpdateControlsPointer(static_cast<float>(GET_X_LPARAM(lParam)),
                                              static_cast<float>(GET_Y_LPARAM(lParam)), true);
     if (msg == WM_LBUTTONDOWN &&
-        Orca::UX::YgOrb::ClickControls(static_cast<float>(GET_X_LPARAM(lParam)),
+        Orca::UX::AppOrb::ClickControls(static_cast<float>(GET_X_LPARAM(lParam)),
                                        static_cast<float>(GET_Y_LPARAM(lParam)),
                                        platform && platform->IsEmbedded() ? OutKey : nullptr))
       return 0;
     if (platform && platform->IsEmbedded())
     {
       const bool orb = msg == WM_LBUTTONDOWN &&
-                       Orca::UX::YgOrb::Current().Hit(static_cast<float>(GET_X_LPARAM(lParam)),
+                       Orca::UX::AppOrb::Current().Hit(static_cast<float>(GET_X_LPARAM(lParam)),
                                                       static_cast<float>(GET_Y_LPARAM(lParam)));
       Embed::Out(orb ? "orca orb" : "orca click");
     }

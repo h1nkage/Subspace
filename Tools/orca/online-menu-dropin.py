@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # online-menu-dropin.py: a friend drops into a host who sits on the game's own ONLINE page
-# (ORCA.md "Online menu", "Drop-in"), over a real YouGame dev room, headless and muted.
+# (ORCA.md "Online menu", "Drop-in"), over a real service dev room, headless and muted.
 #
 #   Tools/orca/online-menu-dropin.py <dolphin-emu-nogui> <disc> [--pplus <launcher.dol>] [--invite]
 #                                    [--hold] [--disc2 <disc>]
@@ -102,15 +102,15 @@ class Orca:
         env = {
             "HOME": os.environ["HOME"],
             "TMPDIR": os.environ.get("TMPDIR", WORK),
-            "YG_THROTTLE": "1",
+            "ORCA_THROTTLE": "1",
             "PATH": os.environ["PATH"],
             "ORCA_SESSION": "1",
             "ORCA_TEST_COMMANDS": "1",
             "ORCA_TEST_DEV_GAME": "orca-dropin-test",
             "ORCA_TEST_KEYFRAME_DIR": os.path.join(WORK, "kf"),
             "ORCA_NAME": name,
-            "YG_INPUT": input_path,
-            "YG_SCENES": "1",
+            "ORCA_INPUT": input_path,
+            "ORCA_SCENES": "1",
         }
         if PPLUS:
             env["ORCA_PROFILE"] = os.environ.get("ORCA_PROFILE", "PPLUS32")

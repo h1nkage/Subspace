@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# dropin-commands.py: two Orcas over a real YouGame room, steered with the app's stdin commands
+# dropin-commands.py: two Orcas over a real online room, steered with the app's stdin commands
 # (ORCA.md "Embedding": caps, join, leave) the way the desktop app would, headless and muted.
 #
 #   Tools/orca/dropin-commands.py <dolphin-emu-nogui> <disc> [--pplus <launcher.dol>]
@@ -58,15 +58,15 @@ class Orca:
         env = {
             "HOME": os.environ["HOME"],
             "TMPDIR": os.environ.get("TMPDIR", WORK),
-            "YG_THROTTLE": "1",
+            "ORCA_THROTTLE": "1",
             "PATH": os.environ["PATH"],
             "ORCA_SESSION": "1",
             "ORCA_TEST_COMMANDS": "1",
             "ORCA_TEST_DEV_GAME": "orca-dropin-test",
             "ORCA_TEST_KEYFRAME_DIR": os.path.join(WORK, "kf"),
             "ORCA_NAME": name,
-            "YG_INPUT": INPUT,
-            "YG_SCENES": "1",
+            "ORCA_INPUT": INPUT,
+            "ORCA_SCENES": "1",
         }
         if PPLUS:
             env["ORCA_PROFILE"] = os.environ.get("ORCA_PROFILE", "PPLUS32")

@@ -1,6 +1,6 @@
 # Core Animation transaction audit, 0367
 
-Base: `ff1e554932 YG Dolphin 0.3.66`; ancestry check: `BASE-OK`.
+Base: `ff1e554932 Subspace 0.3.66`; ancestry check: `BASE-OK`.
 No version change. All line references below refer to the resulting source.
 
 `Core::Init` calls `PrepareWindow` on the host/main thread before starting

@@ -1,11 +1,11 @@
 #!/bin/bash
-# Builds YG Dolphin (YG Baiji in 0.3.40 and 0.3.41, Orca before) for Linux (x86-64) and zips it
-# the way the YouGame app's linux-x64 build unpacks it:
-#   yg-dolphin/yg-dolphin  the NoGUI program ("yg-baiji/yg-baiji" in 0.3.40 and 0.3.41;
+# Builds Subspace (Subspace in 0.3.40 and 0.3.41, Orca before) for Linux (x86-64) and zips it
+# the way the desktop app's linux-x64 build unpacks it:
+#   subspace/subspace  the NoGUI program ("subspace/subspace" in 0.3.40 and 0.3.41;
 #                         "Orca/orca" before)
-#   yg-dolphin/Sys/      Dolphin's and Orca's data, read from beside the program (Sys/Orca/ keeps its
+#   subspace/Sys/      Dolphin's and Orca's data, read from beside the program (Sys/Orca/ keeps its
 #                      name: installed apps check Sys/Orca/<profile>.ini)
-#   yg-dolphin/COPYING, LICENSES/, THIRD_PARTY/, SOURCE.txt, VERSION.txt
+#   subspace/COPYING, LICENSES/, THIRD_PARTY/, SOURCE.txt, VERSION.txt
 #
 #   Tools/orca-package-linux.sh [build-dir] [out-dir]
 #     build-dir  default <repo>/build-orca-linux (configured for a release on every run)
@@ -18,8 +18,8 @@
 # players fetch the source from: GPL) and builds the private repository at the release commit, like
 # the Windows build: that commit is in the compatibility key (scmrev.h), so a build of the public
 # snapshot would never meet a Mac or a PC. The tree must be clean before and after the build.
-# VERSION.txt and SOURCE.txt link <ORCA_SOURCE_URL>/tree/<tag>, the tag being yg-dolphin-<version>
-# from 0.3.42, yg-baiji-<version> in 0.3.40 and 0.3.41, and orca-<version> before. The script
+# VERSION.txt and SOURCE.txt link <ORCA_SOURCE_URL>/tree/<tag>, the tag being subspace-<version>
+# from 0.3.42, subspace-<version> in 0.3.40 and 0.3.41, and orca-<version> before. The script
 # warns while that tag is not public yet. Without ORCA_VERSION the zip is a *-dev.zip.
 #
 # Build it on the oldest distribution it must run on (ORCA_GLIBC_MAX, default 2.35: Ubuntu 22.04,
@@ -76,7 +76,7 @@ fi
 # lowercase hex digits) is the key they must be signed with; unset, the build trusts none and refuses
 # every bundle. The TEST key is never trusted in a package: the build turns it off, CMake's cache is
 # checked for it, and the program is checked for the key's text. ORCA_STAGING_BUILD=1 marks a
-# staging build (YouGame's staging scripts set it): only such a build may pin the STAGING key; any
+# staging build (The service's staging scripts set it): only such a build may pin the STAGING key; any
 # other build refuses that key, as ORCA_BUNDLE_PUBLIC_KEY and in the program, as it refuses the TEST key.
 # The bundle-flat TEST key (Source/Core/Core/Orca/Bundle.cpp).
 TEST_BUNDLE_KEY=afb9463d5c16f0f617432d76f75f37a8c649e36d7c626088ba00b19dea115a43
@@ -105,11 +105,11 @@ if [ -n "$VERSION" ]; then
   PUBLIC="${PUBLIC%/}"
   [ -n "$PUBLIC" ] || fail "a release needs ORCA_SOURCE_URL, the public repository players get the source from"
   RELEASE=1
-  # The public tag: yg-dolphin-<version> from 0.3.42; the older tags keep their names.
+  # The public tag: subspace-<version> from 0.3.42; the older tags keep their names.
   if [ "$(printf '%s\n%s\n' 0.3.42 "$VERSION" | sort -V | head -n 1)" = 0.3.42 ]; then
-    TAG="yg-dolphin-$VERSION"
+    TAG="subspace-$VERSION"
   elif [ "$(printf '%s\n%s\n' 0.3.40 "$VERSION" | sort -V | head -n 1)" = 0.3.40 ]; then
-    TAG="yg-baiji-$VERSION"
+    TAG="subspace-$VERSION"
   else
     TAG="orca-$VERSION"
   fi
@@ -201,14 +201,14 @@ GLIBC="$(objdump -T "$BIN" | grep -o 'GLIBC_[0-9][0-9.]*' | sed 's/GLIBC_//' | s
   fail "Orca needs glibc $GLIBC, newer than $GLIBC_MAX: build it on an older distribution"
 
 STAGE="$OUT_DIR/stage"
-PKG="$STAGE/yg-dolphin"
-PROGRAM="$PKG/yg-dolphin"
+PKG="$STAGE/subspace"
+PROGRAM="$PKG/subspace"
 rm -rf "$STAGE"
 mkdir -p "$PKG"
 install -m 755 "$BIN" "$PROGRAM"
 install -m 755 "$BUILD_DIR/Binaries/orca-disc-tool" "$PKG/orca-disc-tool"
 # Symbols stay beside the zip (for a crash's addresses), not in it.
-DEBUG="$OUT_DIR/yg-dolphin-$VERSION-linux-x64.debug"
+DEBUG="$OUT_DIR/subspace-$VERSION-linux-x64.debug"
 objcopy --only-keep-debug "$PROGRAM" "$DEBUG"
 strip --strip-unneeded "$PROGRAM"
 objcopy --add-gnu-debuglink="$DEBUG" "$PROGRAM"
@@ -251,9 +251,9 @@ for dir in "$ROOT"/Externals/*/; do
     done
 done
 cat >"$PKG/SOURCE.txt" <<EOF
-YG Dolphin $VERSION (formerly Orca) is free software under the GNU GPL v2 or later. Source for this exact version: $SOURCE (also linked from yougame.co).
+Subspace $VERSION (formerly Orca) is free software under the GNU GPL v2 or later. Source for this exact version: $SOURCE.
 
-Built for Linux (x86-64) from commit $COMMIT$DIRTY. YG Dolphin is based on the Dolphin emulator
+Built for Linux (x86-64) from commit $COMMIT$DIRTY. Subspace is based on the Dolphin emulator
 (https://github.com/dolphin-emu/dolphin). Needs glibc $GLIBC or newer, X11 (or XWayland), EGL and
 OpenGL.
 
@@ -261,19 +261,19 @@ CMake settings:
 $(grep -E '^(CMAKE_BUILD_TYPE|CMAKE_EXE_LINKER_FLAGS|ENABLE_[A-Z_]+|USE_[A-Z_]+|ENCODE_FRAMEDUMPS|ORCA_[A-Z_]+):' \
   "$BUILD_DIR/CMakeCache.txt" | sed 's/^/  /')
 EOF
-printf '%s\n' "YG Dolphin $VERSION (YouGame fork of Dolphin), Linux x64" "commit $COMMIT" "source $SOURCE" \
+printf '%s\n' "Subspace $VERSION (The service fork of Dolphin), Linux x64" "commit $COMMIT" "source $SOURCE" \
   'License: GPL-2.0-or-later (COPYING, LICENSES/GPL-2.0-or-later.txt).' >"$PKG/VERSION.txt"
 
 if [ "$RELEASE" = 1 ]; then
-  ZIP="$OUT_DIR/yg-dolphin-$VERSION-linux-x64.zip"
+  ZIP="$OUT_DIR/subspace-$VERSION-linux-x64.zip"
 else
-  ZIP="$OUT_DIR/yg-dolphin-$VERSION-linux-x64-dev.zip"
+  ZIP="$OUT_DIR/subspace-$VERSION-linux-x64-dev.zip"
 fi
 rm -f "$ZIP"
-# Info-ZIP keeps each file's Unix mode, so yg-dolphin/yg-dolphin unpacks executable (unzip and bsdtar
+# Info-ZIP keeps each file's Unix mode, so subspace/subspace unpacks executable (unzip and bsdtar
 # both restore it, and the app sets it again before a run). -X: no owner ids or extra timestamps.
-(cd "$STAGE" && zip -q -r -X "$ZIP" yg-dolphin)
+(cd "$STAGE" && zip -q -r -X "$ZIP" subspace)
 rm -rf "$STAGE"
-echo "orca-package: $ZIP (entry yg-dolphin/yg-dolphin, commit $COMMIT, glibc $GLIBC)"
+echo "orca-package: $ZIP (entry subspace/subspace, commit $COMMIT, glibc $GLIBC)"
 sha256sum "$ZIP"
 stat -c '%s bytes' "$ZIP"

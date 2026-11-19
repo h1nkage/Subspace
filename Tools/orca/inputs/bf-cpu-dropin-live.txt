@@ -4,7 +4,7 @@
 # ORCA_UX_TEST_PADS_FOLLOW_PLUGS=1 the friend plugs in at 1866 (the select's frame 260): both CPUs
 # go, and port 2's panel becomes the friend's at 1871 with no input, its token on Random. Its hand
 # goes up and A does nothing (the token is on Random); port 1 presses Start, then the stage select,
-# and the fight has two players (ports 3 and 4 3E 03). YG_EXIT_AFTER=2450.
+# and the fight has two players (ports 3 and 4 3E 03). ORCA_EXIT_AFTER=2450.
 @scStrap mash 30 99999 1 40 A
 @scBoot mash 30 99999 1 40 A
 @scTitle mash 30 99999 1 40 A

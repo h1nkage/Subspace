@@ -41,7 +41,7 @@
 #include "Core/Orca/Session/Keyframe.h"
 #include "Core/Orca/Session/Online.h"
 #include "Core/Orca/Session/RoomResilience.h"
-#include "Core/Orca/Session/YouGameRoom.h"
+#include "Core/Orca/Session/RelayRoom.h"
 #include "Core/Orca/Status.h"
 #include "Core/Orca/UX/QueueApp.h"
 #include "Core/Orca/UX/SetEnd.h"
@@ -2382,7 +2382,7 @@ TEST(OrcaRoom, CoalescingKeepsEarlierInputsAndChecksum)
   EXPECT_EQ(pending->pads.front()[0], 70 - MAX_PADS_IN_PACKET);
 }
 
-// YouGame's remote switch for direct links: the ticket reply's top-level `direct`, off only when
+// The service's remote switch for direct links: the ticket reply's top-level `direct`, off only when
 // it is false; a site that sends none (or something else) leaves them on.
 TEST(OrcaRoom, TicketSwitchesDirectLinks)
 {
@@ -2391,7 +2391,7 @@ TEST(OrcaRoom, TicketSwitchesDirectLinks)
     EXPECT_TRUE(picojson::parse(value, text).empty()) << text;
     return value.get<picojson::object>();
   };
-  EXPECT_TRUE(TicketAllowsDirect(reply(R"({"url":"wss://rooms.yougame.co","ticket":"t"})")));
+  EXPECT_TRUE(TicketAllowsDirect(reply(R"({"url":"wss://rooms.example.invalid","ticket":"t"})")));
   EXPECT_TRUE(TicketAllowsDirect(reply(R"({"ticket":"t","direct":true})")));
   EXPECT_FALSE(TicketAllowsDirect(reply(R"({"ticket":"t","direct":false})")));
   EXPECT_TRUE(TicketAllowsDirect(reply(R"({"ticket":"t","direct":0})")));
@@ -2402,9 +2402,9 @@ TEST(OrcaRoom, TicketSwitchesDirectLinks)
 TEST(OrcaRoom, RefusesToStartOutsideTheApp)
 {
   // No bridge and no dev game: the room ends at once with a reason, without touching the network.
-  if (std::getenv("YOUGAME_BRIDGE") || std::getenv("ORCA_TEST_DEV_GAME"))
+  if (std::getenv("SUBSPACE_BRIDGE") || std::getenv("ORCA_TEST_DEV_GAME"))
     GTEST_SKIP() << "a bridge or dev game is configured";
-  YouGameRoom room({});
+  RelayRoom room({});
   for (int i = 0; i < 100 && room.GetState() != RoomState::Ended; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   EXPECT_EQ(room.GetState(), RoomState::Ended);
@@ -2413,7 +2413,7 @@ TEST(OrcaRoom, RefusesToStartOutsideTheApp)
 }
 
 // Waits until `room` reports another player arrived; returns its event.
-std::optional<PeerEvent> WaitArrived(YouGameRoom& room)
+std::optional<PeerEvent> WaitArrived(RelayRoom& room)
 {
   for (int i = 0; i < 1500 && room.GetState() != RoomState::Ended; ++i)
   {
@@ -2442,7 +2442,7 @@ TEST(OrcaLive, TwoRoomsPlayEachOther)
   options.room_code = code;
   options.compatibility = "orca-live-test";
   options.player_name = "Orca A";
-  YouGameRoom a(options);
+  RelayRoom a(options);
   // The first in is the host; give it a head start so the seats are predictable.
   for (int i = 0; i < 500 && a.GetState() == RoomState::Connecting; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -2450,7 +2450,7 @@ TEST(OrcaLive, TwoRoomsPlayEachOther)
   EXPECT_EQ(a.Joining(), false);
   options.player_name = "Orca B";
   options.joining = true;
-  YouGameRoom b(options);
+  RelayRoom b(options);
   const auto b_seen = WaitArrived(a);
   const auto a_seen = WaitArrived(b);
   SetEnv("ORCA_TEST_DEV_GAME", nullptr);
@@ -2548,11 +2548,11 @@ TEST(OrcaLive, DirectLinkBetweenTwoRooms)
   options.room_code = code;
   options.compatibility = "orca-live-test";
   options.player_name = "Orca A";
-  YouGameRoom a(options);
+  RelayRoom a(options);
   ASSERT_TRUE(wait_for([&] { return a.GetState() != RoomState::Connecting; }, 5000));
   options.player_name = "Orca B";
   options.joining = true;
-  YouGameRoom b(options);
+  RelayRoom b(options);
   ASSERT_TRUE(WaitArrived(a));
   ASSERT_TRUE(WaitArrived(b));
   ASSERT_TRUE(wait_for([&] { return a.Direct().transport == 1 && b.Direct().transport == 1; },
@@ -2622,7 +2622,7 @@ TEST(OrcaLive, DirectLinkBetweenTwoRooms)
   {
     const ScopedEnv off("ORCA_DIRECT", "0");
     options.player_name = "Orca C";
-    YouGameRoom c(options);
+    RelayRoom c(options);
     ASSERT_TRUE(WaitArrived(c));
     EXPECT_TRUE(wait_for([&] { return a.Direct().transport == 0; }, 5000)) << a.Direct().line;
     EXPECT_TRUE(wait_for([&] { return b.Direct().transport == 0; }, 5000)) << b.Direct().line;
@@ -2646,13 +2646,13 @@ TEST(OrcaLive, ArrivalIsPendingUntilTaken)
   options.room_code =
       "orcap" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count() % 10000000);
   options.compatibility = "orca-live-test";
-  YouGameRoom a(options);
+  RelayRoom a(options);
   for (int i = 0; i < 500 && a.GetState() == RoomState::Connecting; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   ASSERT_EQ(a.GetState(), RoomState::Waiting) << a.Status();
   EXPECT_FALSE(a.ArrivalPending());
   options.joining = true;
-  YouGameRoom b(options);
+  RelayRoom b(options);
   for (int i = 0; i < 1500 && !a.ArrivalPending() && a.GetState() != RoomState::Ended; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   ASSERT_TRUE(a.ArrivalPending()) << a.Status();
@@ -2676,12 +2676,12 @@ TEST(OrcaLive, HostLeavingIsPendingUntilTaken)
       "orcah" +
       std::to_string(std::chrono::steady_clock::now().time_since_epoch().count() % 10000000);
   options.compatibility = "orca-live-test";
-  auto a = std::make_unique<YouGameRoom>(options);
+  auto a = std::make_unique<RelayRoom>(options);
   for (int i = 0; i < 500 && a->GetState() == RoomState::Connecting; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   ASSERT_EQ(a->GetState(), RoomState::Waiting) << a->Status();
   options.joining = true;
-  YouGameRoom b(options);
+  RelayRoom b(options);
   ASSERT_TRUE(WaitArrived(*a)) << a->Status();
   const auto host = WaitArrived(b);
   ASSERT_TRUE(host) << b.Status();
@@ -2714,12 +2714,12 @@ TEST(OrcaLive, TestNetworkDelayHoldsMessages)
   options.room_code = code;
   options.compatibility = "orca-live-test";
   SetEnv("ORCA_TEST_NET_DELAY_MS", "100");
-  YouGameRoom a(options);
+  RelayRoom a(options);
   for (int i = 0; i < 500 && a.GetState() == RoomState::Connecting; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   SetEnv("ORCA_TEST_NET_DELAY_MS", "0");
   options.joining = true;
-  YouGameRoom b(options);
+  RelayRoom b(options);
   WaitArrived(a);
   WaitArrived(b);
   SetEnv("ORCA_TEST_NET_DELAY_MS", nullptr);
@@ -2749,21 +2749,21 @@ TEST(OrcaLive, TestNetworkDelayHoldsMessages)
   EXPECT_LT(b.RoundTripMs(), 200);
 }
 
-// Under the desktop app: one room goes through the app's bridge (YOUGAME_BRIDGE, YOUGAME_TOKEN,
-// YOUGAME_GAME, pointed at Tools/orca/fake_bridge.py), the other uses a dev ticket. The bridged
+// Under the desktop app: one room goes through the app's bridge (SUBSPACE_BRIDGE, SUBSPACE_TOKEN,
+// SUBSPACE_GAME, pointed at Tools/orca/fake_bridge.py), the other uses a dev ticket. The bridged
 // side mirrors the room to the page, and the page's Leave ends it. ORCA_LIVE_TEST=1 and
 // ORCA_TEST_BRIDGE_ROOM=<the fake bridge's room code>.
 TEST(OrcaLive, BridgeMirrorsTheRoomAndTakesLeave)
 {
   const char* live = std::getenv("ORCA_LIVE_TEST");
   const char* room = std::getenv("ORCA_TEST_BRIDGE_ROOM");
-  if (!live || std::string(live) != "1" || !room || !std::getenv("YOUGAME_BRIDGE"))
+  if (!live || std::string(live) != "1" || !room || !std::getenv("SUBSPACE_BRIDGE"))
     GTEST_SKIP() << "set ORCA_LIVE_TEST=1, ORCA_TEST_BRIDGE_ROOM and a bridge";
   RoomOptions options;
   options.compatibility = "orca-live-test";
   options.mode = "orca-test";
   // The app's invite names the room (hello.room).
-  YouGameRoom a(options);
+  RelayRoom a(options);
   for (int i = 0; i < 1000 && a.GetState() == RoomState::Connecting; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   ASSERT_EQ(a.GetState(), RoomState::Waiting) << a.Status();
@@ -2771,17 +2771,17 @@ TEST(OrcaLive, BridgeMirrorsTheRoomAndTakesLeave)
 
   // The friend joins without the app. (Not as a host: a hosting Orca that finds someone else
   // hosting its room gives it up.)
-  const std::string bridge = std::getenv("YOUGAME_BRIDGE");
-  SetEnv("YOUGAME_BRIDGE", nullptr);
+  const std::string bridge = std::getenv("SUBSPACE_BRIDGE");
+  SetEnv("SUBSPACE_BRIDGE", nullptr);
   SetEnv("ORCA_TEST_DEV_GAME", "orca-bridge-test");
   options.room_code = room;
   options.joining = true;
-  YouGameRoom b(options);
+  RelayRoom b(options);
   // The room reads its environment on its own thread: restore it once b has its ticket.
   for (int i = 0; i < 1000 && b.Code().empty() && b.GetState() != RoomState::Ended; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   SetEnv("ORCA_TEST_DEV_GAME", nullptr);
-  SetEnv("YOUGAME_BRIDGE", bridge.c_str());
+  SetEnv("SUBSPACE_BRIDGE", bridge.c_str());
   for (int i = 0; i < 1500 && !(a.Connected() && b.Connected()); ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   ASSERT_TRUE(a.Connected()) << a.Status();
@@ -2827,7 +2827,7 @@ TEST(OrcaRoom, RefusalsSayWhy)
   EXPECT_NE(RefusalReason("WebSocket connect failed: ... (HTTP 401)").find("expired"),
             std::string::npos);
   EXPECT_EQ(RefusalReason("WebSocket connect failed: Couldn't connect to server (HTTP 0)"),
-            "Could not reach YouGame's rooms");
+            "Could not reach the room service");
 }
 
 // Two Orcas whose compatibility keys differ never share a room: the second is told why.
@@ -2841,12 +2841,12 @@ TEST(OrcaLive, DifferentKeysAreRefusedWithAReason)
   options.room_code =
       "orcak" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count() % 10000000);
   options.compatibility = "orca-key-a";
-  YouGameRoom a(options);
+  RelayRoom a(options);
   for (int i = 0; i < 500 && a.GetState() == RoomState::Connecting; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   ASSERT_EQ(a.GetState(), RoomState::Waiting) << a.Status();
   options.compatibility = "orca-key-b";
-  YouGameRoom b(options);
+  RelayRoom b(options);
   for (int i = 0; i < 1000 && b.GetState() != RoomState::Ended; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   SetEnv("ORCA_TEST_DEV_GAME", nullptr);
@@ -2886,7 +2886,7 @@ TEST(OrcaLive, DesyncIsReportedOnBothSides)
   options.room_code =
       "orcab" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count() % 10000000);
   options.compatibility = "orca-live-test";
-  YouGameRoom host(options);
+  RelayRoom host(options);
   for (int i = 0; i < 500 && host.GetState() == RoomState::Connecting; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   ASSERT_EQ(host.GetState(), RoomState::Waiting) << host.Status();
@@ -2906,7 +2906,7 @@ TEST(OrcaLive, DesyncIsReportedOnBothSides)
 
   // 1. The joiner leaves on a desync.
   {
-    YouGameRoom joiner(options);
+    RelayRoom joiner(options);
     ASSERT_TRUE(WaitArrived(host));
     ASSERT_TRUE(WaitArrived(joiner));
     joiner.SetLeaveReason("desync");
@@ -2916,7 +2916,7 @@ TEST(OrcaLive, DesyncIsReportedOnBothSides)
   }
   // A plain leave carries no reason.
   {
-    YouGameRoom joiner(options);
+    RelayRoom joiner(options);
     ASSERT_TRUE(WaitArrived(host));
     ASSERT_TRUE(WaitArrived(joiner));
     joiner.Leave();
@@ -2924,7 +2924,7 @@ TEST(OrcaLive, DesyncIsReportedOnBothSides)
   }
   // 2. The host unplugs the joiner for a desync.
   {
-    YouGameRoom joiner(options);
+    RelayRoom joiner(options);
     ASSERT_TRUE(WaitArrived(host));
     ASSERT_TRUE(WaitArrived(joiner));
     host.DropPeer(joiner.Seat(), "desync");
@@ -2937,7 +2937,7 @@ TEST(OrcaLive, DesyncIsReportedOnBothSides)
   }
   // 3. The host leaves on a desync: the joiner hears the reason with the host's departure.
   {
-    YouGameRoom joiner(options);
+    RelayRoom joiner(options);
     ASSERT_TRUE(WaitArrived(host));
     ASSERT_TRUE(WaitArrived(joiner));
     host.SetLeaveReason("desync");
@@ -2973,7 +2973,7 @@ TEST(OrcaLive, AHostsMismatchReachesItsJoiner)
   options.room_code =
       "orcam" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count() % 10000000);
   options.compatibility = "orca-live-test";
-  YouGameRoom host(options);
+  RelayRoom host(options);
   for (int i = 0; i < 500 && host.GetState() == RoomState::Connecting; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   ASSERT_EQ(host.GetState(), RoomState::Waiting) << host.Status();
@@ -2981,7 +2981,7 @@ TEST(OrcaLive, AHostsMismatchReachesItsJoiner)
 
   // 1. The joiner leaves on a mismatch: the host hears a plain leave.
   {
-    YouGameRoom joiner(options);
+    RelayRoom joiner(options);
     ASSERT_TRUE(WaitArrived(host));
     ASSERT_TRUE(WaitArrived(joiner));
     joiner.SetLeaveReason("mismatch");
@@ -3000,7 +3000,7 @@ TEST(OrcaLive, AHostsMismatchReachesItsJoiner)
   }
   // 2. The host leaves on a mismatch: the joiner hears the reason with the host's departure.
   {
-    YouGameRoom joiner(options);
+    RelayRoom joiner(options);
     ASSERT_TRUE(WaitArrived(host));
     ASSERT_TRUE(WaitArrived(joiner));
     host.SetLeaveReason("mismatch");
@@ -3037,20 +3037,20 @@ TEST(OrcaLive, ReturningPlayerIsGreetedAgain)
   RoomOptions options;
   options.room_code = "orcab" + stamp;
   options.compatibility = "orca-live-test";
-  YouGameRoom host(options);
+  RelayRoom host(options);
   for (int i = 0; i < 500 && host.GetState() == RoomState::Connecting; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   ASSERT_EQ(host.GetState(), RoomState::Waiting) << host.Status();
   options.joining = true;
   const std::string player = "orca-back-" + stamp;
   SetEnv("ORCA_TEST_PLAYER", player.c_str());
-  auto first = std::make_unique<YouGameRoom>(options);
+  auto first = std::make_unique<RelayRoom>(options);
   const auto arrived = WaitArrived(host);
   ASSERT_TRUE(arrived) << host.Status();
   EXPECT_EQ(arrived->seat, 1);
 
   // The same player from a new socket: the room replaces the old one and says "back".
-  YouGameRoom second(options);
+  RelayRoom second(options);
   for (int i = 0; i < 1000 && second.Code().empty() && second.GetState() != RoomState::Ended; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   SetEnv("ORCA_TEST_PLAYER", nullptr);
@@ -3090,13 +3090,13 @@ TEST(OrcaLive, HostSecondInItsRoomGivesItUp)
       std::to_string(std::chrono::steady_clock::now().time_since_epoch().count() % 10000000);
   options.compatibility = "orca-live-test";
   options.joining = true;
-  YouGameRoom joiner(options);
+  RelayRoom joiner(options);
   for (int i = 0; i < 500 && joiner.GetState() == RoomState::Connecting; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   ASSERT_EQ(joiner.GetState(), RoomState::Waiting) << joiner.Status();
   const auto welcomed = std::chrono::steady_clock::now();
   options.joining = false;
-  YouGameRoom host(options);
+  RelayRoom host(options);
   for (int i = 0; i < 1000 && host.GetState() != RoomState::Ended; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   SetEnv("ORCA_TEST_DEV_GAME", nullptr);
@@ -3125,14 +3125,14 @@ TEST(OrcaLive, HostComesBackToItsRoom)
   RoomOptions options;
   options.room_code = "orcah" + stamp;
   options.compatibility = "orca-live-test";
-  auto first = std::make_unique<YouGameRoom>(options);
+  auto first = std::make_unique<RelayRoom>(options);
   for (int i = 0; i < 500 && first->GetState() == RoomState::Connecting; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   ASSERT_EQ(first->GetState(), RoomState::Waiting) << first->Status();
   // A friend was in the game, and leaves once its host is gone.
   SetEnv("ORCA_TEST_PLAYER", nullptr);
   options.joining = true;
-  auto friend_room = std::make_unique<YouGameRoom>(options);
+  auto friend_room = std::make_unique<RelayRoom>(options);
   ASSERT_TRUE(WaitArrived(*first)) << first->Status();
   options.joining = false;
   SetEnv("ORCA_TEST_PLAYER", player.c_str());
@@ -3161,7 +3161,7 @@ TEST(OrcaLive, WaitingRoomStaysOpen)
   options.room_code =
       "orcaw" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count() % 10000000);
   options.compatibility = "orca-live-test";
-  YouGameRoom a(options);
+  RelayRoom a(options);
   for (int i = 0; i < 500 && a.GetState() == RoomState::Connecting; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   SetEnv("ORCA_TEST_DEV_GAME", nullptr);
@@ -3547,7 +3547,7 @@ protected:
       EXPECT_TRUE(picojson::parse(value, std::string(reply->begin(), reply->end())).empty());
     return value;
   }
-  std::unique_ptr<YouGameRoom> Open(const std::string& code, const std::string& config = "{}",
+  std::unique_ptr<RelayRoom> Open(const std::string& code, const std::string& config = "{}",
                                     bool joining = true, bool friends = true,
                                     bool recovery_enabled = true)
   {
@@ -3556,7 +3556,7 @@ protected:
     options.room_code = code;
     options.friends_room = friends;
     options.recovery_enabled = recovery_enabled;
-    return std::make_unique<YouGameRoom>(options);
+    return std::make_unique<RelayRoom>(options);
   }
   bool Wait(const std::function<bool()>& predicate, std::chrono::milliseconds limit = 6s)
   {
@@ -3584,7 +3584,7 @@ protected:
     return false;
   }
   void Action(const std::string& code, const std::string& body) { Request("/action/" + code, body); }
-  std::string JoinFailureStatus(const YouGameRoom& room)
+  std::string JoinFailureStatus(const RelayRoom& room)
   {
     const ScopedEnv session("ORCA_SESSION", "1");
     auto* output = std::tmpfile();
@@ -3658,7 +3658,7 @@ TEST_F(OrcaRoomRuntime, NetworkEndedRoomsReopenWithFreshQueueCodesAndRetainFrien
     auto options = TraceOptions(false);
     options.room_code = reopen;
     options.ask_app_for_room = false;
-    room = std::make_unique<YouGameRoom>(options);
+    room = std::make_unique<RelayRoom>(options);
     ASSERT_TRUE(Wait([&] { return room->Seat() == 0 && room->RoundTripMs() >= 0; }));
     EXPECT_TRUE(room->ErrorCode().empty());
     EXPECT_EQ(room->Code(), queue == "private" ? old_code : fresh_code);
@@ -3977,14 +3977,14 @@ TEST_F(OrcaRoomRuntime, RealExpiredTicketBodyKeepsTheKnownNetworkCode)
 TEST_F(OrcaRoomRuntime, RefusalBodiesKeepTheSiteCodeAndDistinguishVersionsFromGameOrMode)
 {
   const std::string mismatch = RefusalReason("WebSocket connect failed: ... (HTTP 403)");
-  const std::string older = "Your friend is on an older YG Dolphin. Ask them to press Play to update it and send you a new invite.";
-  const std::string newer = "Your friend is on a newer YG Dolphin. Press Play to update, then join again.";
+  const std::string older = "Your friend is on an older Subspace. Ask them to press Play to update it and send you a new invite.";
+  const std::string newer = "Your friend is on a newer Subspace. Press Play to update, then join again.";
   const std::vector<std::pair<std::string, std::string>> cases{
-      {R"({"error":"Your friend is on an older YG Dolphin. Ask them to press Play to update it and send you a new invite.","code":"host_older","host_version":"0.3.47","your_version":"0.3.48"})",
-       "Your friend is on an older YG Dolphin (0.3.47). Ask them to press Play to update it and send you a new invite."},
-      {R"({"error":"Your friend is on an older YG Dolphin. Ask them to press Play to update it and send you a new invite.","code":"host_older","your_version":"0.3.48"})", older},
-      {R"({"error":"Your friend is on a newer YG Dolphin. Press Play to update yours.","code":"host_newer","host_version":"0.3.49","your_version":"0.3.48"})", newer},
-      {R"({"error":"Your friend is on a newer YG Dolphin. Press Play to update yours.","code":"host_newer"})", newer},
+      {R"({"error":"Your friend is on an older Subspace. Ask them to press Play to update it and send you a new invite.","code":"host_older","host_version":"0.3.47","your_version":"0.3.48"})",
+       "Your friend is on an older Subspace (0.3.47). Ask them to press Play to update it and send you a new invite."},
+      {R"({"error":"Your friend is on an older Subspace. Ask them to press Play to update it and send you a new invite.","code":"host_older","your_version":"0.3.48"})", older},
+      {R"({"error":"Your friend is on a newer Subspace. Press Play to update yours.","code":"host_newer","host_version":"0.3.49","your_version":"0.3.48"})", newer},
+      {R"({"error":"Your friend is on a newer Subspace. Press Play to update yours.","code":"host_newer"})", newer},
       {R"({"error":"This room uses a different lobby protocol or configuration","code":"lobby_mismatch"})",
        "That room is set up for a different game or mode, so your game opened its own room."},
       {R"({"error":"This room uses a different lobby protocol or configuration"})", mismatch},
@@ -4478,7 +4478,7 @@ protected:
   std::string room_code;
   int room_players = 0;
   int local_seat = 1, completed = -1, next_input = 0, hold_calls = 0;
-  std::unique_ptr<YouGameRoom> room;
+  std::unique_ptr<RelayRoom> room;
   DirectLink direct;
   RoomHashGame game;
   std::unique_ptr<Session> session;
@@ -4525,7 +4525,7 @@ TEST_F(OrcaRoomRuntime, HealthyRealSessionHashesMatchWithRecoveryDisabled)
     EXPECT_TRUE(Wait([&] { return room->Seat() == 1 && room->RoundTripMs() >= 0; }));
     struct BufferedRoom : Transport
     {
-      explicit BufferedRoom(YouGameRoom& r) : room(r) {}
+      explicit BufferedRoom(RelayRoom& r) : room(r) {}
       void Send(const Packet& p) override { room.Send(p); }
       std::vector<Packet> Receive() override
       {
@@ -4534,7 +4534,7 @@ TEST_F(OrcaRoomRuntime, HealthyRealSessionHashesMatchWithRecoveryDisabled)
         return std::exchange(pending, {});
       }
       bool Connected() const override { return room.Connected(); }
-      YouGameRoom& room;
+      RelayRoom& room;
       std::vector<Packet> pending;
     } transport(*room);
     RoomHashGame game;
@@ -4712,7 +4712,7 @@ TEST_F(OrcaRoomRuntime, PrivateWelcomeOverridesAnInitialQueueHint)
   auto options = TraceOptions();
   options.room_code = code;
   options.friends_room = false;
-  YouGameRoom room(options);
+  RelayRoom room(options);
   ASSERT_TRUE(Wait([&] { return room.Seat() == 1 && room.RoundTripMs() >= 0; }));
   u32 before;
   room.RoundTripMs(&before);
@@ -5369,7 +5369,7 @@ TEST_F(OrcaRoomRuntime, FriendsReopenJoinsTheFriendWhoReturnedFirst)
                       Orca::Online::CompatibilityKey()));
   Orca::Online::StartRoom(code, false, true, true);
   ASSERT_TRUE(Wait([] { return Orca::Online::InRoom() || Orca::Online::RoomEnded(); }));
-  auto* room = static_cast<YouGameRoom*>(Orca::Online::Transport());
+  auto* room = static_cast<RelayRoom*>(Orca::Online::Transport());
   ASSERT_NE(room, nullptr);
   ASSERT_TRUE(room->ErrorCode().empty()) << room->Status();
   const u64 generation = room->Generation();
@@ -5415,7 +5415,7 @@ TEST_F(OrcaRoomRuntime, FriendsAutomaticReopenWithoutAHostFallsBackWithEitherCap
     Request("/configure/" + fresh, R"({"joining":false})");
     Orca::Online::StartRoom(code, false, true, true);
     ASSERT_TRUE(Wait([] { return Orca::Online::InRoom(); }));
-    auto* room = static_cast<YouGameRoom*>(Orca::Online::Transport());
+    auto* room = static_cast<RelayRoom*>(Orca::Online::Transport());
     ASSERT_NE(room, nullptr);
     const u64 generation = room->Generation();
     EXPECT_EQ(Rollback::OnlineMatch::PumpRoomReopenFailureForTest([&] {
@@ -5425,7 +5425,7 @@ TEST_F(OrcaRoomRuntime, FriendsAutomaticReopenWithoutAHostFallsBackWithEitherCap
     ASSERT_TRUE(Wait([] { return Orca::Online::InRoom(); }));
     EXPECT_EQ(Orca::Online::Code(), fresh);
     EXPECT_EQ(Orca::Online::Joining(), false);
-    auto* reopened = static_cast<YouGameRoom*>(Orca::Online::Transport());
+    auto* reopened = static_cast<RelayRoom*>(Orca::Online::Transport());
     ASSERT_NE(reopened, nullptr);
     EXPECT_NE(reopened->Generation(), generation);
     EXPECT_TRUE(reopened->ErrorCode().empty());
@@ -5712,7 +5712,7 @@ TEST_F(OrcaRoomRuntime, KeepRoomOpenReplacesUnstableCodesAndPreservesItsGiveUpBu
     Orca::Online::StartRoom(room_code(0), false, true);
     const auto end_unstable = [&] {
       ASSERT_TRUE(Wait([] { return Orca::Online::InRoom(); }));
-      auto* room = static_cast<YouGameRoom*>(Orca::Online::Transport());
+      auto* room = static_cast<RelayRoom*>(Orca::Online::Transport());
       ASSERT_NE(room, nullptr);
       for (int i = 0; i < 5; ++i)
       {
@@ -5972,7 +5972,7 @@ TEST_F(OrcaRoomRuntime, CompletedRecoveryEndsEitherSessionAwayFromItsNextFrame)
                         joining, Orca::Online::CompatibilityKey()));
     Orca::Online::StartRoom(code, joining, false);
     ASSERT_TRUE(Wait([] { return Orca::Online::InRoom(); }));
-    auto* room = static_cast<YouGameRoom*>(Orca::Online::Transport());
+    auto* room = static_cast<RelayRoom*>(Orca::Online::Transport());
     ASSERT_NE(room, nullptr);
     Action(code, fmt::format(R"({{"message":{}}})",
                             QueueRoster("start", "casual", "true", joining)));
@@ -6777,7 +6777,7 @@ TEST_F(OrcaRoomRuntime, FullRankedDoublesRoomRetriesRefusedBeginWithoutRosterCha
   options.room_code = code;
   options.mode = "orca-rsbe01-2v2-ranked";
   options.friends_room = false;
-  auto room = std::make_unique<YouGameRoom>(options);
+  auto room = std::make_unique<RelayRoom>(options);
   ASSERT_TRUE(Wait([&] { return room->Seat() == 0 && room->RoundTripMs() >= 0; }))
       << room->Status() << " seat=" << room->Seat() << " rtt=" << room->RoundTripMs();
   room->SetOpponentPlugged(true);
@@ -6848,7 +6848,7 @@ TEST(OrcaRoom, ScriptedInputMarksReportsAndNormalPlayPreservesBytes)
        {std::tuple{"", "", false}, std::tuple{"", "0", false},
         std::tuple{"fixture-pads.txt", "", true}, std::tuple{"", "1", true}})
   {
-    ScopedEnv input("YG_INPUT", script);
+    ScopedEnv input("ORCA_INPUT", script);
     ScopedEnv test_commands("ORCA_TEST_COMMANDS", commands);
     EXPECT_EQ(Orca::HarnessInputActive(), harness);
     for (const char* kind : {"lobby_result", "begin", "set", "game-start", "game-report",
@@ -6873,7 +6873,7 @@ TEST(OrcaRoom, HarnessHelloIsOptionalOnTheActualRoomPath)
 {
   for (int mode = 0; mode < 3; ++mode)
   {
-    ScopedEnv input("YG_INPUT", mode == 1 ? "fixture-pads.txt" : "");
+    ScopedEnv input("ORCA_INPUT", mode == 1 ? "fixture-pads.txt" : "");
     ScopedEnv commands("ORCA_TEST_COMMANDS", mode == 2 ? "1" : "");
     const auto trace = TraceRoomForTest(TraceOptions(), {
         {RK::Message, 0, RosterMessage("welcome")}, {RK::Tick, 1100}});
@@ -6900,7 +6900,7 @@ TEST_F(OrcaRoomRuntime, HarnessMarkerFollowsActualBeginGameStartReportAndFinish)
 {
   for (int mode = 0; mode < 3; ++mode)
   {
-    ScopedEnv input("YG_INPUT", mode == 1 ? "fixture-pads.txt" : "");
+    ScopedEnv input("ORCA_INPUT", mode == 1 ? "fixture-pads.txt" : "");
     ScopedEnv commands("ORCA_TEST_COMMANDS", mode == 2 ? "1" : "");
     const std::string code = "harness" + std::to_string(mode);
     auto room = Open(code, R"({"joining":false,"queue":"ranked"})", false, false);
@@ -7239,7 +7239,7 @@ std::vector<RoomTestSnapshot> TraceEstablishedCoRoomForTest(
   if (!removed)
     return TraceRoomForTest(options, steps);
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv game("YOUGAME_GAME", "co-page");
+  const ScopedEnv game("SUBSPACE_GAME", "co-page");
   const ScopedEnv enabled("ORCA_COSEATS", "1");
   const bool had_cap = Orca::Status::Cap("coseats");
   Orca::Status::SetAppCaps("coseats");
@@ -7816,7 +7816,7 @@ TEST_F(OrcaRoomRuntime, LocalOrdinalUsesPositionAfterRemoveAndReadd)
     if (participant.get("slot").get<double>() == 2)
       participant.get<picojson::object>()["localIndex"] = picojson::value(2.0);
   Action(code, fmt::format(R"({{"message":{}}})", roster.serialize()));
-  auto* room = static_cast<YouGameRoom*>(Orca::Online::Transport());
+  auto* room = static_cast<RelayRoom*>(Orca::Online::Transport());
   ASSERT_TRUE(Wait([&] { return room->LocalIndex(2) == 2; }));
   EXPECT_EQ(Orca::Online::LocalIndex(0), 0);
   EXPECT_EQ(Orca::Online::LocalIndex(2), 1);
@@ -7938,7 +7938,7 @@ TEST(OrcaRoom, FirstWelcomeRemovesInheritedLocalsWithoutCountingThem)
 TEST(OrcaRoom, FirstWelcomeKeepsAnExplicitPendingLocalAdd)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv game("YOUGAME_GAME", "co-page");
+  const ScopedEnv game("SUBSPACE_GAME", "co-page");
   Orca::Status::SetAppCaps("coseats");
   const Common::ScopeGuard cleanup([] { Orca::Status::SetAppCaps(""); });
   const auto trace = TraceRoomForTest(TraceOptions(true), {
@@ -7957,7 +7957,7 @@ TEST(OrcaRoom, FirstWelcomeKeepsAnExplicitPendingLocalAdd)
 TEST(OrcaRoom, CoPageCommandsPinEveryGateAndStatus)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv game("YOUGAME_GAME", "co-page");
+  const ScopedEnv game("SUBSPACE_GAME", "co-page");
   const ScopedEnv enabled("ORCA_COSEATS", "1");
   const Common::ScopeGuard cleanup([] { Orca::Status::SetAppCaps(""); });
   struct Gate { const char* queue; bool doubles; bool cap; bool active; bool tournament; const char* reason; };
@@ -8022,7 +8022,7 @@ TEST(OrcaRoom, CoPageCommandsPinEveryGateAndStatus)
 TEST(OrcaRoom, OwnCoSeatCanLeaveDuringAHostOrJoinerSession)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv game("YOUGAME_GAME", "co-page");
+  const ScopedEnv game("SUBSPACE_GAME", "co-page");
   Orca::Status::SetAppCaps("coseats");
   const Common::ScopeGuard cleanup([] { Orca::Status::SetAppCaps(""); });
   for (const bool joining : {false, true})
@@ -8055,7 +8055,7 @@ TEST(OrcaRoom, OwnCoSeatCanLeaveDuringAHostOrJoinerSession)
 TEST(OrcaRoom, CoJoinerAddsBeforeHelloAndWaitsForItsRoster)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv game("YOUGAME_GAME", "co-page");
+  const ScopedEnv game("SUBSPACE_GAME", "co-page");
   const ScopedEnv enabled("ORCA_COSEATS", "1");
   Orca::Status::SetAppCaps("coseats");
   const Common::ScopeGuard cleanup([] { Orca::Status::SetAppCaps(""); });
@@ -8109,7 +8109,7 @@ const std::string CO_PAGE_ADD = R"({"slug":"co-page","cmd":"local-add"})";
 TEST(OrcaRoom, CoJoinerLateAcceptKeepsHelloHeldUntilTheRoster)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv game("YOUGAME_GAME", "co-page");
+  const ScopedEnv game("SUBSPACE_GAME", "co-page");
   Orca::Status::SetAppCaps("coseats");
   const Common::ScopeGuard cleanup([] { Orca::Status::SetAppCaps(""); });
   const auto trace = TraceRoomForTest(TraceOptions(true), {
@@ -8127,7 +8127,7 @@ TEST(OrcaRoom, CoJoinerLateAcceptKeepsHelloHeldUntilTheRoster)
 TEST(OrcaRoom, CoJoinerAddErrorResolvesTheHeldHello)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv game("YOUGAME_GAME", "co-page");
+  const ScopedEnv game("SUBSPACE_GAME", "co-page");
   Orca::Status::SetAppCaps("coseats");
   const Common::ScopeGuard cleanup([] { Orca::Status::SetAppCaps(""); });
   const auto trace = TraceRoomForTest(TraceOptions(true), {
@@ -8142,7 +8142,7 @@ TEST(OrcaRoom, CoJoinerAddErrorResolvesTheHeldHello)
 TEST(OrcaRoom, CoJoinerTimeoutCancelsBeforeSendingHelloOrLeaves)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv game("YOUGAME_GAME", "co-page");
+  const ScopedEnv game("SUBSPACE_GAME", "co-page");
   Orca::Status::SetAppCaps("coseats");
   const Common::ScopeGuard cleanup([] { Orca::Status::SetAppCaps(""); });
   for (const bool removed : {false, true})
@@ -8232,7 +8232,7 @@ TEST_F(OrcaRoomRuntime, QueueTicketRequestAndReconnectKeepOneLocalPlayer)
 TEST(OrcaRoom, PendingLocalAddReservesTheSoloHostUntilItsRosterArrives)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv game("YOUGAME_GAME", "co-page");
+  const ScopedEnv game("SUBSPACE_GAME", "co-page");
   const ScopedEnv enabled("ORCA_COSEATS", "1");
   Orca::Status::SetAppCaps("coseats");
   const Common::ScopeGuard cleanup([] { Orca::Status::SetAppCaps(""); });
@@ -8270,7 +8270,7 @@ TEST_F(OrcaRoomRuntime, TournamentReconnectKeepsOneWithoutReturnedLobby)
 TEST(OrcaRoom, CoStartupNeverAddsWithoutAPageCommand)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv stdio("YOUGAME_STDIO", "1");
+  const ScopedEnv stdio("SUBSPACE_STDIO", "1");
   const ScopedEnv enabled("ORCA_COSEATS", "1");
   Orca::Status::SetAppCaps("coseats");
   Orca::UX::StartControllerStreamFromStdio();
@@ -8300,7 +8300,7 @@ TEST(OrcaRoom, CoStartupNeverAddsWithoutAPageCommand)
         {"pads", picojson::value(pads)}};
     const auto event = picojson::value(picojson::object{{"push", picojson::value(picojson::object{
         {"type", picojson::value("controllers")}, {"snapshot", picojson::value(snapshot)}})}});
-    EXPECT_TRUE(Orca::Bridge::Route({"yg " + event.serialize()}).empty());
+    EXPECT_TRUE(Orca::Bridge::Route({"br " + event.serialize()}).empty());
     // Adapter ports always carry seats, even when the page never requested Player 2.
     snapshot["owned"] = picojson::value(true);
     picojson::array ports;
@@ -8316,7 +8316,7 @@ TEST(OrcaRoom, CoStartupNeverAddsWithoutAPageCommand)
     snapshot["ports"] = picojson::value(ports);
     const auto adapters = picojson::value(picojson::object{{"push", picojson::value(picojson::object{
         {"type", picojson::value("controllers")}, {"snapshot", picojson::value(snapshot)}})}});
-    EXPECT_TRUE(Orca::Bridge::Route({"yg " + adapters.serialize()}).empty());
+    EXPECT_TRUE(Orca::Bridge::Route({"br " + adapters.serialize()}).empty());
     for (const bool joining : {false, true})
     {
       const auto trace = TraceRoomForTest(TraceOptions(joining), {
@@ -8351,7 +8351,7 @@ TEST_F(OrcaRoomRuntime, QueuedFriendJoinRequestsTheHostsPrivateLobby)
 TEST(OrcaRoom, PrivateRoomKindEnablesCoSeatsAfterAQueuedFriendJoin)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv game("YOUGAME_GAME", "co-page");
+  const ScopedEnv game("SUBSPACE_GAME", "co-page");
   Orca::Status::SetAppCaps("coseats");
   const Common::ScopeGuard cleanup([] { Orca::Status::SetAppCaps(""); });
   auto options = TraceOptions(true);
@@ -8366,7 +8366,7 @@ TEST(OrcaRoom, PrivateRoomKindEnablesCoSeatsAfterAQueuedFriendJoin)
 TEST(OrcaRoom, CoRemoveErrorDoesNotResolveAPendingAdd)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv game("YOUGAME_GAME", "co-page");
+  const ScopedEnv game("SUBSPACE_GAME", "co-page");
   Orca::Status::SetAppCaps("coseats");
   const Common::ScopeGuard cleanup([] { Orca::Status::SetAppCaps(""); });
   const auto trace = TraceRoomForTest(TraceOptions(true), {
@@ -8405,7 +8405,7 @@ TEST(OrcaRoom, CoCommandErrorsUseTheRoomsRefusalSentences)
 TEST(OrcaRoom, CoPendingHostAddKeepsExistingFriendsOffersOnTheirLegacySchedule)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv game("YOUGAME_GAME", "co-page");
+  const ScopedEnv game("SUBSPACE_GAME", "co-page");
   Orca::Status::SetAppCaps("coseats");
   const Common::ScopeGuard cleanup([] { Orca::Status::SetAppCaps(""); });
   KeyframeInfo info{120, "replay-120-00112233", 1234, "00112233aabbccdd", std::string(64, '0')};
@@ -8422,7 +8422,7 @@ TEST(OrcaRoom, CoPendingHostAddKeepsExistingFriendsOffersOnTheirLegacySchedule)
 TEST(OrcaRoom, CoJoinerAcceptsKeyframeOffersOnlyAfterItsPendingAddResolves)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv game("YOUGAME_GAME", "co-page");
+  const ScopedEnv game("SUBSPACE_GAME", "co-page");
   Orca::Status::SetAppCaps("coseats");
   const Common::ScopeGuard cleanup([] { Orca::Status::SetAppCaps(""); });
   KeyframeInfo info{120, "replay-120-00112233", 1234, "00112233aabbccdd", std::string(64, '0')};
@@ -8453,10 +8453,10 @@ TEST(OrcaRoom, SingleSeatSessionStartKeepsLegacyNoRoomAndEndedRoomBehavior)
 TEST_F(OrcaRoomRuntime, LocalRosterCountSurvivesMissingDevicesAndIgnoresStraySeatTags)
 {
   FriendsHeadlessCore core;
-  const ScopedEnv stdio("YOUGAME_STDIO", "1");
+  const ScopedEnv stdio("SUBSPACE_STDIO", "1");
   const ScopedEnv virtual_only("ORCA_VIRTUAL_PAD_ONLY", "1");
   // Open() uses the loopback dev ticket, so start the controller stream separately.
-  const ScopedEnv ticket_stdio("YOUGAME_STDIO", "0");
+  const ScopedEnv ticket_stdio("SUBSPACE_STDIO", "0");
   Orca::UX::StartControllerStreamFromStdio();
   const Common::ScopeGuard cleanup([] {
     Orca::Status::SetOutput(nullptr);
@@ -8488,8 +8488,8 @@ TEST_F(OrcaRoomRuntime, LocalRosterCountSurvivesMissingDevicesAndIgnoresStraySea
           {"sentAt", picojson::value(1000.0)}, {"receivedAt", picojson::value(1000.0)},
           {"owned", picojson::value(false)}, {"suspended", picojson::value(false)},
           {"ports", picojson::value(picojson::array{})}, {"pads", picojson::value(pads)}};
-      const ScopedEnv controllers_stdio("YOUGAME_STDIO", "1");
-      EXPECT_TRUE(Orca::Bridge::Route({"yg " + picojson::value(picojson::object{
+      const ScopedEnv controllers_stdio("SUBSPACE_STDIO", "1");
+      EXPECT_TRUE(Orca::Bridge::Route({"br " + picojson::value(picojson::object{
           {"push", picojson::value(picojson::object{{"type", picojson::value("controllers")},
               {"snapshot", picojson::value(value)}})}}).serialize()}).empty());
     };
@@ -8548,7 +8548,7 @@ TEST(OrcaRoom, SoloHostDoesNotPlugALocalSeatDuringAddCleanup)
 {
   FriendsHeadlessCore core;
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv game("YOUGAME_GAME", "co-page");
+  const ScopedEnv game("SUBSPACE_GAME", "co-page");
   Orca::Status::SetAppCaps("coseats");
   const Common::ScopeGuard cleanup([] { Orca::Status::SetAppCaps(""); });
   std::vector<Pads> frames;
@@ -8558,7 +8558,7 @@ TEST(OrcaRoom, SoloHostDoesNotPlugALocalSeatDuringAddCleanup)
       {RK::Tick, 11001}, {RK::Message, 12000, CoPageWelcome(false, "private", true)},
       {RK::PageEvent, 12001, CO_PAGE_ADD},
       {RK::Message, 12002, CoRoster("lobby", false, true, false)}},
-      [&](YouGameRoom& room) {
+      [&](RelayRoom& room) {
         frames.push_back(Rollback::OnlineMatch::PumpSoloRoomForTest(core.system, room));
       });
   ASSERT_EQ(trace[3].co_seats, (std::vector<int>{2}));  // Raw roster, still being cancelled.
@@ -8571,7 +8571,7 @@ TEST(OrcaRoom, SoloHostDoesNotPlugALocalSeatDuringAddCleanup)
 TEST(OrcaRoom, CoPageStatusDistinguishesFullFromNotReady)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv game("YOUGAME_GAME", "co-page");
+  const ScopedEnv game("SUBSPACE_GAME", "co-page");
   Orca::Status::SetAppCaps("coseats");
   const Common::ScopeGuard cleanup([] { Orca::Status::SetAppCaps(""); });
   const auto trace = TraceRoomForTest(TraceOptions(false), {
@@ -8589,7 +8589,7 @@ TEST(OrcaRoom, CoPageStatusDistinguishesFullFromNotReady)
 TEST(OrcaRoom, JoinerPageAddAfterTheWelcomeTickIsAMidSessionAdd)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv game("YOUGAME_GAME", "co-page");
+  const ScopedEnv game("SUBSPACE_GAME", "co-page");
   Orca::Status::SetAppCaps("coseats");
   const Common::ScopeGuard cleanup([] { Orca::Status::SetAppCaps(""); });
   const auto trace = TraceRoomForTest(TraceOptions(true), {
@@ -8612,7 +8612,7 @@ TEST(OrcaRoom, QueueDoublesWelcomeAndRankedRefusal)
     const auto welcome = CoPageWelcome(false, queue, true);
     const auto trace = TraceRoomForTest(TraceOptions(false), {
         {RK::Message, 0, welcome}, {RK::Message, 1, welcome}, {RK::Tick, 1001}},
-        [&](YouGameRoom& room) { doubles = room.Doubles(); });
+        [&](RelayRoom& room) { doubles = room.Doubles(); });
     if (std::string_view(queue) == "ranked")
     {
       EXPECT_FALSE(doubles);
@@ -8705,7 +8705,7 @@ TEST(OrcaRoom, InvalidOrPartialTeamsAreIgnoredForTheRoomOnce)
 TEST(OrcaRoom, QueueDoublesTicketSeatsIncludeAnAddBeforeWelcome)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv game("YOUGAME_GAME", "co-page");
+  const ScopedEnv game("SUBSPACE_GAME", "co-page");
   const ScopedEnv enabled("ORCA_COSEATS", "1");
   Orca::Status::SetAppCaps("coseats");
   const Common::ScopeGuard cleanup([] { Orca::Status::SetAppCaps(""); });
@@ -8727,7 +8727,7 @@ TEST(OrcaRoom, QueueDoublesTicketSeatsIncludeAnAddBeforeWelcome)
 TEST_F(OrcaRoomRuntime, TicketRequestsPublishActualLocalSeatCount)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv game("YOUGAME_GAME", "co-page");
+  const ScopedEnv game("SUBSPACE_GAME", "co-page");
   Orca::Status::SetAppCaps("coseats");
   const Common::ScopeGuard cleanup([] { Orca::Status::SetAppCaps(""); });
   const std::string code = "dblticketls";
@@ -8778,7 +8778,7 @@ TEST(OrcaRoom, CasualDoublesDoesNotSendSinglesResults)
 TEST(OrcaRoom, SentLocalAddCountsInTicketsUntilTheRoomAnswers)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv game("YOUGAME_GAME", "co-page");
+  const ScopedEnv game("SUBSPACE_GAME", "co-page");
   const ScopedEnv enabled("ORCA_COSEATS", "1");
   Orca::Status::SetAppCaps("coseats");
   const Common::ScopeGuard cleanup([] { Orca::Status::SetAppCaps(""); });
@@ -8836,7 +8836,7 @@ TEST(OrcaRoomRankedDoubles, FourSingleSeatAccountsAreAdmittedAndInvalidMapsRefus
     bool doubles = false;
     const auto trace = TraceRoomForTest(TraceOptions(false), {
         {RK::Message, 0, value.serialize()}, {RK::Message, 1, value.serialize()}},
-        [&](YouGameRoom& room) { doubles = room.Doubles(); });
+        [&](RelayRoom& room) { doubles = room.Doubles(); });
     SCOPED_TRACE(bad);
     if (bad < 0)
     {
@@ -8866,7 +8866,7 @@ TEST(OrcaRoomRankedDoubles, EachSeatReportsGamesBeforeTheTeamFinalAndSeesItsTeam
         {RK::Tick, 4},
         {RK::Message, 5, R"({"t":"game-result","matchId":"doubles-set","id":"g360","ranking":["p1","p3","p0","p2"],"detail":{"tw":1}})"},
         {RK::Message, 6, R"({"t":"result","matchId":"doubles-set","ranking":["p1","p3","p0","p2"],"detail":{"tw":1},"ratings":{"p0":{"before":1000,"after":980},"p1":{"before":1001,"after":1021},"p2":{"before":1002,"after":982},"p3":{"before":1003,"after":1023}}})"}},
-        [&](YouGameRoom& room) {
+        [&](RelayRoom& room) {
           if (step == 1 || step == 3)
           {
             GameReport report;
@@ -8913,7 +8913,7 @@ TEST(OrcaRoomRankedDoubles, HostBeginsOnlyAfterTheFourSeatGameIsPlugged)
   int step = 0;
   const auto trace = TraceRoomForTest(TraceOptions(false), {
       {RK::Message, 0, welcome.serialize()}, {RK::Tick, 1}, {RK::Tick, 2}},
-      [&](YouGameRoom& room) { if (step++ == 1) room.SetOpponentPlugged(true); });
+      [&](RelayRoom& room) { if (step++ == 1) room.SetOpponentPlugged(true); });
   for (const auto& wire : trace[1].sent)
     EXPECT_EQ(wire.find("\"t\":\"begin\""), std::string::npos);
   bool began = false;
@@ -8938,7 +8938,7 @@ TEST(OrcaRoomRankedDoubles, RefusedBeginRetriesOnDeadlineOrRosterAndStopsAtFive)
       {RK::Message, 20007, refusal}, {RK::Tick, 30007},
       {RK::Message, 30008, refusal}, {RK::Tick, 40008},
       {RK::Message, 40009, roster.serialize()}, {RK::Tick, 40010}},
-      [](YouGameRoom& room) { room.SetOpponentPlugged(true); });
+      [](RelayRoom& room) { room.SetOpponentPlugged(true); });
   for (size_t i = 0; i < trace.size(); ++i)
   {
     SCOPED_TRACE(i);
@@ -9078,7 +9078,7 @@ TEST(OrcaRoomRankedDoubles, ADesyncFinalIsVoidAndKeepsItsReasonOnTheVerdict)
       {RK::Message, 0, RankedDoublesRoster("welcome")},
       {RK::Message, 1, RankedDoublesRoster("start")}, {RK::Tick, 2},
       {RK::Message, 3, R"({"t":"result","matchId":"doubles-set","void":true})"}},
-      [&](YouGameRoom& room) { if (step++ == 1) room.ReportDesync(); });
+      [&](RelayRoom& room) { if (step++ == 1) room.ReportDesync(); });
   bool finished = false;
   for (const auto& wire : trace[2].sent)
   {
@@ -9133,7 +9133,7 @@ TEST(OrcaRoomRankedDoubles, ArrivalsAreAdmittedUntilFourCanBegin)
         {RK::Message, 4, RankedArrival("join", 3, nested)}, {RK::Tick, 5},
         {RK::Message, 6, RankedArrival("join", 4, nested)}, {RK::Tick, 7},
         {RK::Message, 8, RankedArrival("start", 4, nested)}},
-        [&](YouGameRoom& room) { if (step++ == 0) room.SetOpponentPlugged(true); });
+        [&](RelayRoom& room) { if (step++ == 0) room.SetOpponentPlugged(true); });
     for (size_t i = 0; i < trace.size(); ++i)
     {
       EXPECT_NE(trace[i].state, RoomState::Ended) << i;
@@ -9191,7 +9191,7 @@ TEST(OrcaRoomRankedDoubles, PartialStartCannotFreezeAMatch)
 TEST(OrcaRoomRankedDoubles, LocalAddIsRefusedWithRankedReasonBeforeSending)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv game("YOUGAME_GAME", "co-page");
+  const ScopedEnv game("SUBSPACE_GAME", "co-page");
   Orca::Status::SetAppCaps("coseats");
   const Common::ScopeGuard cleanup([] { Orca::Status::SetAppCaps(""); });
   for (const bool early : {false, true})
@@ -9230,7 +9230,7 @@ TEST_F(OrcaRoomRuntime, RankedDoublesTicketsOmitLocalSeatsAtMintAndRefresh)
     auto options = TraceOptions(false);
     options.room_code = code;
     options.mode = explicit_mode ? "orca-rsbe01-2v2-ranked" : "orca-rsbe01";
-    auto room = std::make_unique<YouGameRoom>(options);
+    auto room = std::make_unique<RelayRoom>(options);
     ASSERT_TRUE(Wait([&] { return room->Doubles(); }));
     std::string ticket, store, error;
     ASSERT_TRUE(room->FreshTicket(true, &ticket, &store, &error)) << error;
@@ -9253,7 +9253,7 @@ TEST_F(OrcaRoomRuntime, RankedDoublesTicketsOmitLocalSeatsAtMintAndRefresh)
 TEST(OrcaRoomRankedDoubles, TicketSeatsAreAbsentForRankedRequestsAndKnownRooms)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
-  const ScopedEnv game("YOUGAME_GAME", "co-page");
+  const ScopedEnv game("SUBSPACE_GAME", "co-page");
   Orca::Status::SetAppCaps("coseats");
   const Common::ScopeGuard cleanup([] { Orca::Status::SetAppCaps(""); });
   for (const bool explicit_mode : {false, true})

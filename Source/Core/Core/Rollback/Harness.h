@@ -3,10 +3,10 @@
 
 // Test harness for the rollback core, driven by environment variables. Does nothing when none is
 // set. Needs an Orca session (ORCA_SESSION=1) for the frame-boundary hook. Runs unthrottled unless
-// YG_THROTTLE=1. "Frame" means the harness counter, one per pass through the frame boundary; it
+// ORCA_THROTTLE=1. "Frame" means the harness counter, one per pass through the frame boundary; it
 // rewinds on a rollback, so re-run frames read the same scripted input.
 //
-//   YG_INPUT=<file>       scripted GameCube pads, one rule per line (# starts a comment):
+//   ORCA_INPUT=<file>       scripted GameCube pads, one rule per line (# starts a comment):
 //                           <from> <to> <port 1-4> <buttons/axes...>            hold
 //                           mash <from> <to> <port> <period> <buttons/axes...>  3 of every period
 //                           fuzz <from> <to> <port> <seed>      pseudo-random, new every 8 frames
@@ -14,27 +14,27 @@
 //                         @<scene>:<n> applies only on the n-th entry (1 is the first).
 //                         Buttons A B X Y Z L R START UP DOWN LEFT RIGHT; axes SX= SY= CX= CY=
 //                         (0-255, 128 is centre).
-//   YG_SCENES=1           log scene changes (needs a profile scene reader; Brawl only for now)
-//   YG_EXIT_AFTER=<n>     stop emulation at the end of first-pass frame n
-//   YG_HASHLOG=<file>     per-frame RAM hash; ignored under YG_SYNCTEST
-//   YG_SHOT_EVERY=<n>     screenshot every n first-pass frames, starting at YG_SHOT_FROM
-//   YG_SHOT_AT=<f>[,<f>...]  also screenshot at these first-pass frames
-//   YG_SYNCTEST=<k>       save every frame, rewind k, re-run, compare RAM and device-state hashes
-//   YG_SYNCTEST_FROM=<n>  first frame of the sync test (default 300)
-//   YG_SYNCTEST_DIAG=1    for the first mismatches: byte-level RAM diffs, DoState section diffs and
+//   ORCA_SCENES=1           log scene changes (needs a profile scene reader; Brawl only for now)
+//   ORCA_EXIT_AFTER=<n>     stop emulation at the end of first-pass frame n
+//   ORCA_HASHLOG=<file>     per-frame RAM hash; ignored under ORCA_SYNCTEST
+//   ORCA_SHOT_EVERY=<n>     screenshot every n first-pass frames, starting at ORCA_SHOT_FROM
+//   ORCA_SHOT_AT=<f>[,<f>...]  also screenshot at these first-pass frames
+//   ORCA_SYNCTEST=<k>       save every frame, rewind k, re-run, compare RAM and device-state hashes
+//   ORCA_SYNCTEST_FROM=<n>  first frame of the sync test (default 300)
+//   ORCA_SYNCTEST_DIAG=1    for the first mismatches: byte-level RAM diffs, DoState section diffs and
 //                         a CoreTiming event trace; also a one-time snapshot size breakdown
-//   YG_SYNCTEST_SECTIONS=1  count, per DoState section, the re-run frames where it differs. The
+//   ORCA_SYNCTEST_SECTIONS=1  count, per DoState section, the re-run frames where it differs. The
 //                         whole device-state hash differs on almost every re-run (host counters,
 //                         icache, GPU dirty flags), so real changes only show per section.
-//   YG_SYNCTEST_RENDER=1  also render re-run frames (skipped by default, as in a match)
-//   YG_SYNCTEST_CLEARJIT=1  clear the JIT after each load, so re-runs compile different blocks
-//   YG_BENCH=<k>          save every frame and load k back every 60th; logs frame, save and load
+//   ORCA_SYNCTEST_RENDER=1  also render re-run frames (skipped by default, as in a match)
+//   ORCA_SYNCTEST_CLEARJIT=1  clear the JIT after each load, so re-runs compile different blocks
+//   ORCA_BENCH=<k>          save every frame and load k back every 60th; logs frame, save and load
 //                         timings
-//   YG_DUMP_FRAMES_FROM=<n> / _TO=<m>  Dolphin frame dump for first-pass frames n..m (add
+//   ORCA_DUMP_FRAMES_FROM=<n> / _TO=<m>  Dolphin frame dump for first-pass frames n..m (add
 //                         -C Graphics.Settings.DumpFramesAsImages=True; note Graphics, not GFX).
 //                         Re-runs present nothing, so dumps pair 1:1 with a plain run's.
-//   YG_PADREC=<file>      record every port's pad and the RAM checksum per frame
-//   YG_LOOPBACK=<file>    replay a YG_PADREC recording through a real Orca session (Loopback.h).
+//   ORCA_PADREC=<file>      record every port's pad and the RAM checksum per frame
+//   ORCA_LOOPBACK=<file>    replay a ORCA_PADREC recording through a real Orca session (Loopback.h).
 //                         Seat 1 is local; the others are virtual remotes whose inputs arrive late
 //                         and who send the recorded checksums, so any divergence is a desync.
 //                         Tuning: _LAG (6) + _JITTER (3) frames late, _DELAY input delay (2),
@@ -45,7 +45,7 @@
 //                         after _GIVE_UP_MS (10000; 0 is never). Any stall that long ends the run.
 //                         _SPIKE=<period ms>,<length ms>[,<from frame>]: hold remote packets for
 //                         length ms of every period, then deliver them at once. Use with
-//                         YG_THROTTLE=1 to see stalls and the catch-up after them.
+//                         ORCA_THROTTLE=1 to see stalls and the catch-up after them.
 // In a session, the harness also logs a hash of the game's session-NAND save at exit.
 
 #pragma once

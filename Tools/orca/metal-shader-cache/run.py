@@ -47,7 +47,7 @@ for arm, source in [('BASE', args.base_app), ('NEW', args.new_app)]:
     subprocess.run(['ditto', str(source.resolve()), str(app)], check=True)
     plist = app / 'Contents/Info.plist'
     data = plistlib.loads(plist.read_bytes())
-    bundle = f'co.yougame.orca.shaderbench.{namespace}.{arm.lower()}'
+    bundle = f'org.subspace.orca.shaderbench.{namespace}.{arm.lower()}'
     data.update(CFBundleIdentifier=bundle, CFBundleDisplayName='AGENT TEST Orca', CFBundleName='AGENT TEST Orca')
     plist.write_bytes(plistlib.dumps(data))
     profile = app / 'Contents/Resources/Sys/Orca/RSBE01.ini'

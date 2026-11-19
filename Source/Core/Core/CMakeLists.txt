@@ -582,6 +582,12 @@ add_library(core
   Orca/Status.cpp
   Orca/Status.h
   Orca/ThreadPriority.cpp
+  Orca/Local/Gateway.cpp
+  Orca/Local/Gateway.h
+  Orca/Local/LocalProto.cpp
+  Orca/Local/LocalProto.h
+  Orca/Local/RoomServer.cpp
+  Orca/Local/RoomServer.h
   Orca/Session/DirectLink.cpp
   Orca/Session/DirectLink.h
   Orca/Session/Events.cpp
@@ -593,8 +599,8 @@ add_library(core
   Orca/Session/PadCodec.h
   Orca/Session/Session.cpp
   Orca/Session/Session.h
-  Orca/Session/YouGameRoom.cpp
-  Orca/Session/YouGameRoom.h
+  Orca/Session/RelayRoom.cpp
+  Orca/Session/RelayRoom.h
   Orca/Games/Brawl/BrawlStages.cpp
   Orca/Games/Brawl/BrawlGame.cpp
   Orca/Games/Brawl/BrawlGame.h
@@ -670,16 +676,16 @@ add_library(core
   Orca/UX/UX.h
   Orca/UX/Widgets.cpp
   Orca/UX/Widgets.h
-  Orca/UX/YgCard.cpp
-  Orca/UX/YgCard.h
+  Orca/UX/AppCard.cpp
+  Orca/UX/AppCard.h
   Orca/UX/OrbCombo.cpp
   Orca/UX/OrbCombo.h
   Orca/UX/OverlayKey.cpp
   Orca/UX/OverlayKey.h
-  Orca/UX/YgOrb.cpp
-  Orca/UX/YgOrb.h
-  Orca/UX/YgOrbDraw.cpp
-  Orca/UX/YgOrbDraw.h
+  Orca/UX/AppOrb.cpp
+  Orca/UX/AppOrb.h
+  Orca/UX/AppOrbDraw.cpp
+  Orca/UX/AppOrbDraw.h
   NetworkCaptureLogger.cpp
   NetworkCaptureLogger.h
   PatchEngine.cpp

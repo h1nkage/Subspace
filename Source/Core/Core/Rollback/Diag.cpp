@@ -44,11 +44,11 @@ int EnvInt(const char* name, int fallback)
   return value && *value ? std::atoi(value) : fallback;
 }
 
-const int s_frametime_from = EnvInt("YG_FRAMETIME", -1);
-const bool s_keep_throttle = EnvInt("YG_THROTTLE", 0) != 0;
-const bool s_snaptime = EnvInt("YG_SNAPTIME", 0) != 0;
-const bool s_ntcopy = EnvInt("YG_NTCOPY", 0) != 0;
-const int s_pagediff_from = EnvInt("YG_PAGEDIFF", -1);
+const int s_frametime_from = EnvInt("ORCA_FRAMETIME", -1);
+const bool s_keep_throttle = EnvInt("ORCA_THROTTLE", 0) != 0;
+const bool s_snaptime = EnvInt("ORCA_SNAPTIME", 0) != 0;
+const bool s_ntcopy = EnvInt("ORCA_NTCOPY", 0) != 0;
+const int s_pagediff_from = EnvInt("ORCA_PAGEDIFF", -1);
 
 constexpr std::size_t PAGE = 4096;
 constexpr std::size_t BUCKET = 1024 * 1024;
@@ -350,7 +350,7 @@ struct JitCodeWord
   bool forced = false;  // invalidated by a rollback restore since
 };
 FILE* const s_jit_code_file = [] {
-  const char* path = std::getenv("YG_JITCODE_LOG");
+  const char* path = std::getenv("ORCA_JITCODE_LOG");
   return path && *path ? std::fopen(path, "w") : nullptr;
 }();
 std::unordered_map<u32, JitCodeWord> s_jit_words;

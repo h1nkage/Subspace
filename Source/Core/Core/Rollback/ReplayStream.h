@@ -49,7 +49,7 @@ class IOFile;
 // (PackedSender), so neither the frame nor the result report waits on it. The room keeps the
 // latest complete copy for the site when the stream ends (the last game covers the set).
 // Test knobs (UX/Probe.h TestKnobsAllowed):
-//  - ORCA_TEST_REPLAY_OUT=<base>: write this machine's history to <base>-<n>.ygr (a fresh start or
+//  - ORCA_TEST_REPLAY_OUT=<base>: write this machine's history to <base>-<n>.ssr (a fresh start or
 //    a join begins another history, so another file). ORCA_TEST_REPLAY_ROOM=1 also streams it to
 //    the room, with saved copies, whatever the room or the app's caps; <base> may then be empty.
 //    ORCA_TEST_REPLAY_TIMING=1 logs Pump's cost in microseconds every 3600 frames and at shutdown.

@@ -16,7 +16,7 @@ linker warnings remain.
 Mac M4 Pro, headless `-p headless -v Null`, no audio output, local input disabled and all six SDL
 controller overrides from the brief. All builds and boots used heavy-slot, build.lock and nice 10.
 The disc was read directly from the authorized WBFS. P+ used the official read-only launcher and
-SD card in `/Volumes/YGWorktrees/OSCOO/pplus-3.2/run` (no copy).
+SD card in `/Volumes/Worktrees/OSCOO/pplus-3.2/run` (no copy).
 
 Spawn to first game frame boundary, milliseconds, three warm runs:
 
@@ -26,8 +26,8 @@ Spawn to first game frame boundary, milliseconds, three warm runs:
 | PPLUS32 | 2659.595, 2675.645, 2654.428 | 560.728, 566.741, 568.691 |
 
 The runner timestamps the first `Scene frame 0` / `Watch frame 0` diagnostic on the console;
-this measures the first emulated boundary, not a GPU presentation. Runs use `YG_EXIT_AFTER=600`,
-`YG_HASHLOG`, `YG_SCENES=1`, `YG_WATCH=80000000`. The harness takes over pacing from frame 0
+this measures the first emulated boundary, not a GPU presentation. Runs use `ORCA_EXIT_AFTER=600`,
+`ORCA_HASHLOG`, `ORCA_SCENES=1`, `ORCA_WATCH=80000000`. The harness takes over pacing from frame 0
 in both binaries. Baseline boot is throttled, candidate boot is unthrottled.
 
 Each candidate warm run's hashlog frames **0 through 600 inclusive** was compared byte for byte

@@ -8,7 +8,7 @@
 #include "Common/MathUtil.h"
 
 // Layout for an embedded window whose picture box (`view`) differs from the window (`rect`).
-// When the YouGame page opens a side panel, it shrinks Orca's window to make room but keeps the
+// When the app page opens a side panel, it shrinks Orca's window to make room but keeps the
 // picture laid out in the full box, so the game doesn't shrink or move; the panel just covers
 // part of it. See ORCA.md, "Embedding". Pure functions, so tests can drive them.
 namespace VideoCommon

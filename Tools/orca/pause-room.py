@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# pause-room.py: a host's room drops while its player has the game paused, over a real YouGame
+# pause-room.py: a host's room drops while its player has the game paused, over a real service
 # room, headless and muted.
 #
 #   Tools/orca/pause-room.py <dolphin-emu-nogui> <disc>
@@ -47,8 +47,8 @@ class Orca:
             "ORCA_TEST_ROOM_DROP": "1",
             "ORCA_TEST_DEV_GAME": "orca-dropin-test",
             "ORCA_NAME": name,
-            "YG_INPUT": INPUT,
-            "YG_SCENES": "1",
+            "ORCA_INPUT": INPUT,
+            "ORCA_SCENES": "1",
         }
         env.update(env_extra)
         args = [BIN, "-p", "headless", "-u", user, "-v", "Null",

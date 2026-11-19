@@ -34,7 +34,7 @@
 #include "Core/Orca/Session/PadCodec.h"
 #include "Core/Orca/Session/RoomResilience.h"
 #include "Core/Orca/Session/Session.h"
-#include "Core/Orca/Session/YouGameRoom.h"
+#include "Core/Orca/Session/RelayRoom.h"
 #include "Core/Rollback/OnlineMatch.h"
 #include "Core/Rollback/Loopback.h"
 
@@ -498,9 +498,9 @@ void ExpectClean(const Match& match)
     EXPECT_TRUE(p->session.Error().empty()) << p->session.Error();
 }
 
-// A match through YouGame's relay in simulated wall-clock time (microseconds), modelling two Orca
+// A match through the service's relay in simulated wall-clock time (microseconds), modelling two Orca
 // processes: each side paces frames like Dolphin's throttle, polls stalls like StepSession, and
-// coalesces and sends packets like YouGameRoom's room thread. Packets travel as their JSON.
+// coalesces and sends packets like RelayRoom's room thread. Packets travel as their JSON.
 //
 // With a DropIn, side 1 joins side 0's running game like OnlineMatch: the host stores a keyframe
 // and starts its session; the joiner loads it, replays the host's log unthrottled until it is
@@ -532,7 +532,7 @@ public:
     Micros rerun_us = 0;
     // The player changes its input about once every this many frames.
     int input_every = 7;
-    // The room thread's least time between two sends (YouGameRoom's SEND_GAP).
+    // The room thread's least time between two sends (RelayRoom's SEND_GAP).
     int send_gap_ms = 10;
     // Host hitches (disc read, shader compile): 5-20 frame stops about every hitch_every_s seconds
     // (0: never), plus hitch_burst more in the first ten seconds.
@@ -1371,14 +1371,16 @@ TEST(OrcaSession, RejectsHostilePackets)
   EXPECT_TRUE(run(fine).empty());
 }
 
-// Live check against YouGame's rooms worker, only with ORCA_LIVE_TEST=1 (writes nothing: an
+// Live check against the room service worker, only with ORCA_LIVE_TEST=1 (writes nothing: an
 // anonymous dev game whose results are never recorded).
 TEST(OrcaLive, WebSocketReachesARoom)
 {
   const char* live = std::getenv("ORCA_LIVE_TEST");
   if (!live || std::string(live) != "1")
     GTEST_SKIP() << "set ORCA_LIVE_TEST=1";
-  const std::string site = std::getenv("ORCA_SITE") ? std::getenv("ORCA_SITE") : "https://yougame.co";
+  if (!std::getenv("ORCA_SITE"))
+    GTEST_SKIP() << "set ORCA_SITE to the room service to test against";
+  const std::string site = std::getenv("ORCA_SITE");
 
   Common::HttpRequest http(std::chrono::seconds(15));
   const std::string body = R"({"dev":"orca-live-test","player_id":"orca-live-0000000001","name":"Orca","players":2,"mode":"orca-v1","room":"orcalive1",)"
@@ -4275,7 +4277,7 @@ TEST(OrcaDropIn, HistoryAheadOfTheJoinerIsBounded)
   EXPECT_GT(joiner.session.LogEnd(), KEYFRAME + 4096 - MAX_HISTORY_IN_PACKET);
 }
 
-// ---- Direct links (YouGameRoom's DirectLink beside the relay) ----
+// ---- Direct links (RelayRoom's DirectLink beside the relay) ----
 
 // Packets arrive twice and out of order (direct copy and coalesced relay copy). Any copy adds
 // inputs, acks and uncompared checksums, but only the newest moves the roster or the frame.

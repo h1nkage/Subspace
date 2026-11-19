@@ -442,7 +442,7 @@ TEST(OrcaRankedSet, NoRulesetKeepsTheOldDefaults)
 
 // A ranked game begins once its fighters are in (FIGHT_SEEN), not at the fight scene's first frame:
 // the stage's loading image comes first (Brawl to frame ~169, Project+ to 27), and a crash or a
-// stall there leaves the set void (YouGame docs/ORCA_ONLINE_UX.md "3B leaving mid-game").
+// stall there leaves the set void (service docs/ORCA_ONLINE_UX.md "3B leaving mid-game").
 TEST(OrcaRankedSet, AGameBeginsWhenItsFightersAreIn)
 {
   for (const Ruleset ruleset : {Ruleset::Brawl, Ruleset::PPlus})

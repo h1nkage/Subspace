@@ -64,7 +64,7 @@ int EnvInt(const char* name, int fallback)
   return v.empty() ? fallback : std::atoi(v.c_str());
 }
 
-const int s_scenes = EnvInt("YG_SCENES", 0);
+const int s_scenes = EnvInt("ORCA_SCENES", 0);
 // ORCA_UX_TEST_RESEAT_AT=<frame> (harness runs, not online): the player plays port 2 until that
 // frame and port 1 from it, the other port reporting no controller, as a former joiner does when it
 // comes home (OnlineMatch.cpp ComeHome). Port 1's script rules drive whichever port the player is
@@ -76,14 +76,14 @@ int ReseatLocalPort(int frame)
     return -1;
   return frame < s_at ? 1 : 0;
 }
-const int s_synctest_k = EnvInt("YG_SYNCTEST", 0);
-const int s_synctest_from = EnvInt("YG_SYNCTEST_FROM", 300);
-const int s_exit_after = EnvInt("YG_EXIT_AFTER", 0);
-const int s_shot_every = EnvInt("YG_SHOT_EVERY", 0);
-const int s_shot_from = EnvInt("YG_SHOT_FROM", 0);
+const int s_synctest_k = EnvInt("ORCA_SYNCTEST", 0);
+const int s_synctest_from = EnvInt("ORCA_SYNCTEST_FROM", 300);
+const int s_exit_after = EnvInt("ORCA_EXIT_AFTER", 0);
+const int s_shot_every = EnvInt("ORCA_SHOT_EVERY", 0);
+const int s_shot_from = EnvInt("ORCA_SHOT_FROM", 0);
 const std::vector<int> s_shot_at = [] {
   std::vector<int> frames;
-  std::istringstream list(Orca::GetEnv("YG_SHOT_AT"));
+  std::istringstream list(Orca::GetEnv("ORCA_SHOT_AT"));
   for (std::string word; std::getline(list, word, ',');)
   {
     if (!word.empty())
@@ -91,26 +91,26 @@ const std::vector<int> s_shot_at = [] {
   }
   return frames;
 }();
-const int s_diag = EnvInt("YG_SYNCTEST_DIAG", 0);
-const int s_sections = EnvInt("YG_SYNCTEST_SECTIONS", 0);
-const int s_bench_k = EnvInt("YG_BENCH", 0);
-const int s_render_reruns = EnvInt("YG_SYNCTEST_RENDER", 0);
+const int s_diag = EnvInt("ORCA_SYNCTEST_DIAG", 0);
+const int s_sections = EnvInt("ORCA_SYNCTEST_SECTIONS", 0);
+const int s_bench_k = EnvInt("ORCA_BENCH", 0);
+const int s_render_reruns = EnvInt("ORCA_SYNCTEST_RENDER", 0);
 // Clearing the JIT after each load makes re-runs compile blocks with different boundaries, as a
 // peer with another rollback history would.
-const int s_clear_jit = EnvInt("YG_SYNCTEST_CLEARJIT", 0);
-const std::string s_loopback_path = Orca::GetEnv("YG_LOOPBACK");
+const int s_clear_jit = EnvInt("ORCA_SYNCTEST_CLEARJIT", 0);
+const std::string s_loopback_path = Orca::GetEnv("ORCA_LOOPBACK");
 const char* const s_loopback = s_loopback_path.empty() ? nullptr : s_loopback_path.c_str();
-const int s_lb_lag = std::max(0, EnvInt("YG_LOOPBACK_LAG", 6));
-const int s_lb_jitter = std::max(0, EnvInt("YG_LOOPBACK_JITTER", 3));
-const int s_lb_delay = std::max(0, EnvInt("YG_LOOPBACK_DELAY", 2));
-const int s_lb_max_rollback = std::max(1, EnvInt("YG_LOOPBACK_MAX_ROLLBACK", 7));
-const int s_lb_checksum_every = std::max(1, EnvInt("YG_LOOPBACK_CHECKSUM_EVERY", 10));
+const int s_lb_lag = std::max(0, EnvInt("ORCA_LOOPBACK_LAG", 6));
+const int s_lb_jitter = std::max(0, EnvInt("ORCA_LOOPBACK_JITTER", 3));
+const int s_lb_delay = std::max(0, EnvInt("ORCA_LOOPBACK_DELAY", 2));
+const int s_lb_max_rollback = std::max(1, EnvInt("ORCA_LOOPBACK_MAX_ROLLBACK", 7));
+const int s_lb_checksum_every = std::max(1, EnvInt("ORCA_LOOPBACK_CHECKSUM_EVERY", 10));
 // 2 or 4 seats; seat 1 is local (4 needs ORCA_TEST_PADS=4).
-const int s_lb_seats = EnvInt("YG_LOOPBACK_SEATS", 2) == 4 ? 4 : 2;
+const int s_lb_seats = EnvInt("ORCA_LOOPBACK_SEATS", 2) == 4 ? 4 : 2;
 // Remotes go silent from this frame; the session must give up after _GIVE_UP_MS of stalling
 // (default 10 s, as online; 0 is never).
-const int s_lb_silent_from = EnvInt("YG_LOOPBACK_SILENT_FROM", -1);
-const int s_lb_give_up_ms = std::max(0, EnvInt("YG_LOOPBACK_GIVE_UP_MS", 10'000));
+const int s_lb_silent_from = EnvInt("ORCA_LOOPBACK_SILENT_FROM", -1);
+const int s_lb_give_up_ms = std::max(0, EnvInt("ORCA_LOOPBACK_GIVE_UP_MS", 10'000));
 // Link spikes: "<period ms>,<length ms>[,<from frame>]" (see VirtualRemote::StartSpikes).
 struct LoopbackSpikes
 {
@@ -120,7 +120,7 @@ struct LoopbackSpikes
 };
 const LoopbackSpikes s_lb_spikes = [] {
   LoopbackSpikes spikes;
-  const std::string value = Orca::GetEnv("YG_LOOPBACK_SPIKE");
+  const std::string value = Orca::GetEnv("ORCA_LOOPBACK_SPIKE");
   if (value.empty() ||
       std::sscanf(value.c_str(), "%d,%d,%d", &spikes.period_ms, &spikes.length_ms, &spikes.from) <
           2 ||
@@ -132,9 +132,9 @@ const LoopbackSpikes s_lb_spikes = [] {
 }();
 // Diagnosis: save a snapshot every frame from here on but never load, to check that saving alone
 // does not change the run.
-const int s_save_only_from = EnvInt("YG_SAVE_ONLY_FROM", -1);
+const int s_save_only_from = EnvInt("ORCA_SAVE_ONLY_FROM", -1);
 // Diagnosis: at this first-pass frame, write MEM1 and MEM2 to <user dir>/ram-<frame>-mem{1,2}.bin.
-const int s_dump_ram_at = EnvInt("YG_DUMP_RAM_AT", -1);
+const int s_dump_ram_at = EnvInt("ORCA_DUMP_RAM_AT", -1);
 // A comma-separated list of numbers from an environment variable.
 std::vector<u32> EnvList(const char* name, int base)
 {
@@ -148,16 +148,16 @@ std::vector<u32> EnvList(const char* name, int base)
   return values;
 }
 // Simulates another JIT history: Dolphin clears its JIT when code space fills, at different times
-// on different machines. YG_CLEARJIT_AT=<frame>[,...] clears the JIT at the end of those first-pass
-// frames; YG_CLEARJIT_EVERY=N clears every Nth frame from YG_CLEARJIT_FROM (default 0).
-const std::vector<u32> s_clear_jit_at = EnvList("YG_CLEARJIT_AT", 10);
-const int s_clear_jit_every = EnvInt("YG_CLEARJIT_EVERY", 0);
-const int s_clear_jit_from = EnvInt("YG_CLEARJIT_FROM", 0);
-// YG_JIT_INVALIDATE=<frame>:<hex address>[,...]: at the end of that first-pass frame, drop only
+// on different machines. ORCA_CLEARJIT_AT=<frame>[,...] clears the JIT at the end of those first-pass
+// frames; ORCA_CLEARJIT_EVERY=N clears every Nth frame from ORCA_CLEARJIT_FROM (default 0).
+const std::vector<u32> s_clear_jit_at = EnvList("ORCA_CLEARJIT_AT", 10);
+const int s_clear_jit_every = EnvInt("ORCA_CLEARJIT_EVERY", 0);
+const int s_clear_jit_from = EnvInt("ORCA_CLEARJIT_FROM", 0);
+// ORCA_JIT_INVALIDATE=<frame>:<hex address>[,...]: at the end of that first-pass frame, drop only
 // the JIT blocks containing that instruction.
 const std::vector<std::pair<int, u32>> s_jit_invalidate = [] {
   std::vector<std::pair<int, u32>> items;
-  std::istringstream list(Orca::GetEnv("YG_JIT_INVALIDATE"));
+  std::istringstream list(Orca::GetEnv("ORCA_JIT_INVALIDATE"));
   for (std::string word; std::getline(list, word, ',');)
   {
     const std::size_t colon = word.find(':');
@@ -169,17 +169,17 @@ const std::vector<std::pair<int, u32>> s_jit_invalidate = [] {
   }
   return items;
 }();
-// YG_JITCODE_CENSUS=<frame>[,...] (with YG_JITCODE_LOG): at the end of those first-pass frames,
+// ORCA_JITCODE_CENSUS=<frame>[,...] (with ORCA_JITCODE_LOG): at the end of those first-pass frames,
 // list every instruction a live JIT block runs that no longer matches RAM.
-const std::vector<u32> s_jit_census_at = EnvList("YG_JITCODE_CENSUS", 10);
-// YG_WATCH=<hex address>[,...]: log each word's value once, then on every first-pass frame where
+const std::vector<u32> s_jit_census_at = EnvList("ORCA_JITCODE_CENSUS", 10);
+// ORCA_WATCH=<hex address>[,...]: log each word's value once, then on every first-pass frame where
 // it changes.
-const std::vector<u32> s_watch = EnvList("YG_WATCH", 16);
+const std::vector<u32> s_watch = EnvList("ORCA_WATCH", 16);
 // Diagnosis: at these first-pass frames, log every NAND file's size and hash, to compare what
 // different inputs leave in the NAND.
 const std::vector<int> s_nand_hashes_at = [] {
   std::vector<int> frames;
-  std::istringstream list(Orca::GetEnv("YG_NAND_HASHES_AT"));
+  std::istringstream list(Orca::GetEnv("ORCA_NAND_HASHES_AT"));
   for (std::string word; std::getline(list, word, ',');)
   {
     if (!word.empty())
@@ -190,11 +190,11 @@ const std::vector<int> s_nand_hashes_at = [] {
 // Keyframe test: capture a keyframe at this frame, keep saving ring snapshots for
 // KEYFRAME_TEST_FRAMES more, then load the keyframe and re-run. RAM must match the capture, and
 // every re-run frame must hash the same as its first pass.
-const int s_keyframe_test = EnvInt("YG_KEYFRAME_TEST", -1);
+const int s_keyframe_test = EnvInt("ORCA_KEYFRAME_TEST", -1);
 constexpr int KEYFRAME_TEST_FRAMES = 30;
 // Dolphin frame dump between these first-pass frames (see Harness.h).
-const int s_dump_frames_from = EnvInt("YG_DUMP_FRAMES_FROM", -1);
-const int s_dump_frames_to = EnvInt("YG_DUMP_FRAMES_TO", -1);
+const int s_dump_frames_from = EnvInt("ORCA_DUMP_FRAMES_FROM", -1);
+const int s_dump_frames_to = EnvInt("ORCA_DUMP_FRAMES_TO", -1);
 
 // ---- Scene names (scene-relative input and logs) ----
 
@@ -216,15 +216,15 @@ File::IOFile OpenEnvFile(const char* name)
   const std::string path = Orca::GetEnv(name);
   return path.empty() ? File::IOFile() : File::IOFile(path, "w");
 }
-File::IOFile s_hashlog_file = OpenEnvFile("YG_HASHLOG");
+File::IOFile s_hashlog_file = OpenEnvFile("ORCA_HASHLOG");
 FILE* const s_hashlog = s_hashlog_file.GetHandle();
 
-// Modes that save or load snapshots or run their own session (YG_SYNCTEST, YG_BENCH, YG_LOOPBACK,
-// YG_SAVE_ONLY_FROM) are off during an online match, which owns the ring and NAND journal.
+// Modes that save or load snapshots or run their own session (ORCA_SYNCTEST, ORCA_BENCH, ORCA_LOOPBACK,
+// ORCA_SAVE_ONLY_FROM) are off during an online match, which owns the ring and NAND journal.
 // Scripted input, recording, hashing and exit still work.
 bool SnapshotModesAllowed();
 
-File::IOFile s_padrec_file = OpenEnvFile("YG_PADREC");
+File::IOFile s_padrec_file = OpenEnvFile("ORCA_PADREC");
 FILE* const s_padrec = s_padrec_file.GetHandle();
 
 // ---- Scripted input ----
@@ -312,7 +312,7 @@ std::vector<InputRule> LoadInputScript(const std::string& path, bool* loaded = n
 // Loaded on first use, after logging is up, so a bad path shows in the log.
 const std::vector<InputRule>& Input()
 {
-  static const std::vector<InputRule> s_rules = LoadInputScript(Orca::GetEnv("YG_INPUT"));
+  static const std::vector<InputRule> s_rules = LoadInputScript(Orca::GetEnv("ORCA_INPUT"));
   return s_rules;
 }
 
@@ -326,7 +326,7 @@ int s_online_stop_at = -1;  // online: the first-pass frame at which emulation s
 int s_max_frame = -1;  // highest frame reached on a first pass
 bool s_stop_queued = false;
 std::string s_scene;
-// The scene YG_SCENES last logged. Only first passes log, so this can differ from s_scene after a
+// The scene ORCA_SCENES last logged. Only first passes log, so this can differ from s_scene after a
 // re-run.
 std::string s_logged_scene;
 int s_scene_start = 0;
@@ -391,7 +391,7 @@ struct FrameRecord
   u64 ram = 0;
   u64 dev = 0;
   std::vector<u64> regions;
-  // YG_SYNCTEST_DIAG only: full copies for byte-level diffs, DoState section ends, events run.
+  // ORCA_SYNCTEST_DIAG only: full copies for byte-level diffs, DoState section ends, events run.
   std::vector<u8> mem1, mem2, dev_buf;
   std::vector<std::pair<std::string, std::size_t>> markers;
   std::vector<std::string> events;
@@ -462,7 +462,7 @@ std::string DescribeSectionDiffs()
 
 // With ORCA_TEST_SNAPSHOT_EVERY=K, the sync test loads only multiples of K, so each rewind re-runs
 // k to k + K - 1 frames, like a session rolling back from a sparse snapshot. Every frame is still
-// saved, so frames saved in one pass but not another are left to YG_LOOPBACK.
+// saved, so frames saved in one pass but not another are left to ORCA_LOOPBACK.
 int SyncTestLoadEvery()
 {
   return std::max(Orca::TestSnapshotEvery(), 1);
@@ -475,7 +475,7 @@ SnapshotRing& Ring()
   return ring;
 }
 
-// ---- Keyframe test (YG_KEYFRAME_TEST) ----
+// ---- Keyframe test (ORCA_KEYFRAME_TEST) ----
 
 struct KeyframeTestState
 {
@@ -746,7 +746,7 @@ void SyncTest(Core::System& system)
       if (s_clear_jit)
       {
         if (Diag::g_jit_code_log)
-          Diag::JitCodeNote("YG_SYNCTEST_CLEARJIT");
+          Diag::JitCodeNote("ORCA_SYNCTEST_CLEARJIT");
         system.GetJitInterface().ClearSafe();
       }
       s_frame = target;
@@ -828,7 +828,7 @@ bool SnapshotModesAllowed()
       return true;
     if (s_synctest_k > 0 || s_bench_k > 0 || s_loopback || s_save_only_from >= 0)
     {
-      ERROR_LOG_FMT(ROLLBACK, "Harness: YG_SYNCTEST, YG_BENCH, YG_LOOPBACK and YG_SAVE_ONLY_FROM are "
+      ERROR_LOG_FMT(ROLLBACK, "Harness: ORCA_SYNCTEST, ORCA_BENCH, ORCA_LOOPBACK and ORCA_SAVE_ONLY_FROM are "
                               "off in an online match (they save and load snapshots or play their "
                               "own session)");
     }
@@ -837,7 +837,7 @@ bool SnapshotModesAllowed()
   return allowed;
 }
 
-// ---- Loopback session (YG_LOOPBACK) ----
+// ---- Loopback session (ORCA_LOOPBACK) ----
 
 struct LoopbackRun
 {
@@ -916,7 +916,7 @@ void LoopbackBoundary(Core::System& system, int frame_here, bool first_pass)
     }
     if (s_lb_seats == 4 && Orca::TestPads() != 4)
     {
-      run.error = "YG_LOOPBACK_SEATS=4 needs ORCA_TEST_PADS=4";
+      run.error = "ORCA_LOOPBACK_SEATS=4 needs ORCA_TEST_PADS=4";
       ERROR_LOG_FMT(ROLLBACK, "Loopback: {}", run.error);
       run.recording.clear();
       return;
@@ -927,7 +927,7 @@ void LoopbackBoundary(Core::System& system, int frame_here, bool first_pass)
       if (s_lb_seats == 2 &&
           (recorded.pads[2] != Orca::Net::Pad{} || recorded.pads[3] != Orca::Net::Pad{}))
       {
-        run.error = "the recording has input on ports 3-4: set YG_LOOPBACK_SEATS=4";
+        run.error = "the recording has input on ports 3-4: set ORCA_LOOPBACK_SEATS=4";
         ERROR_LOG_FMT(ROLLBACK, "Loopback: {}", run.error);
         run.recording.clear();
         return;
@@ -950,7 +950,7 @@ void LoopbackBoundary(Core::System& system, int frame_here, bool first_pass)
                                                            0, s_lb_lag, s_lb_jitter, s_lb_delay,
                                                            s_lb_checksum_every);
     run.remote->SilenceFrom(s_lb_silent_from);
-    // YG_THROTTLE=1 runs the session in real time, as in a match, to show what re-runs cost.
+    // ORCA_THROTTLE=1 runs the session in real time, as in a match, to show what re-runs cost.
     run.port = std::make_unique<RingPort>(system, config.max_rollback, !Diag::KeepThrottle());
     run.session = std::make_unique<Orca::Net::Session>(config, *run.port, *run.remote);
     NOTICE_LOG_FMT(ROLLBACK,
@@ -1045,7 +1045,7 @@ int ShownFrame()
 
 namespace
 {
-// The YouGame shortcut applied to port 1's script. Each frame's result is kept so re-runs get
+// The app shortcut applied to port 1's script. Each frame's result is kept so re-runs get
 // exactly what the first run got.
 struct ComboFrame
 {
@@ -1065,7 +1065,7 @@ u16 ComboButtons(int frame, u16 buttons)
   slot = ComboFrame{frame, step.buttons};
   s_combo_last = frame;
   if (step.fired)
-    NOTICE_LOG_FMT(ROLLBACK, "Harness: the YouGame shortcut (Up + Start) at frame {}", frame);
+    NOTICE_LOG_FMT(ROLLBACK, "Harness: the app shortcut (Up + Start) at frame {}", frame);
   return step.buttons;
 }
 
@@ -1242,7 +1242,7 @@ std::optional<GCPadStatus> InputOverride(int port)
   pad.isConnected = true;
   // Round-trip through the wire form so a recording replays exactly what the ports reported.
   GCPadStatus out = Orca::Net::DecodePad(Orca::Net::EncodePad(pad));
-  // Outside an online match, port 1's script is the local pad, so filter the YouGame shortcut
+  // Outside an online match, port 1's script is the local pad, so filter the app shortcut
   // (Up + Start) here. An online match filters it in its own read.
   if (port == 0 && !Orca::Online::Enabled())
     out.button = ComboButtons(f, out.button);
@@ -1420,9 +1420,9 @@ void OnFrameBoundary(const Core::CPUThreadGuard& guard)
     // The queue's casual ready timer for port 1; it logs when it runs out.
     if (first_pass_here && !Orca::TestQueueSpec().empty())
       Orca::UX::QueueApp::ConfirmTimeout(frame_here + 1, 0);
-    // YG_RESULTS=1: log the match results reader's output (the module's Verdicts,
+    // ORCA_RESULTS=1: log the match results reader's output (the module's Verdicts,
     // Engine/Module.h). Frames are final at their first pass here.
-    static const bool s_results = Orca::GetEnv("YG_RESULTS") == "1";
+    static const bool s_results = Orca::GetEnv("ORCA_RESULTS") == "1";
     if (s_results && first_pass_here)
     {
       for (const Orca::Engine::GameResult& r :
@@ -1462,7 +1462,7 @@ void OnFrameBoundary(const Core::CPUThreadGuard& guard)
   {
     Core::SaveScreenShot(fmt::format("f{:06d}", frame_here));
   }
-  // For YG_PADREC: the RAM checksum at the start of the next frame. Its pads are written below.
+  // For ORCA_PADREC: the RAM checksum at the start of the next frame. Its pads are written below.
   u64 recorded_checksum = 0;
   bool record_here = s_padrec && first_pass_here && s_rewind_to < 0;
   if (record_here)
@@ -1502,7 +1502,7 @@ void OnFrameBoundary(const Core::CPUThreadGuard& guard)
                                   frame_here % s_clear_jit_every == 0)))
   {
     if (Diag::g_jit_code_log)
-      Diag::JitCodeNote("YG_CLEARJIT");
+      Diag::JitCodeNote("ORCA_CLEARJIT");
     system.GetJitInterface().ClearSafe();
     NOTICE_LOG_FMT(ROLLBACK, "JIT cleared at the end of frame {}", frame_here);
   }
@@ -1626,7 +1626,7 @@ void OnFrameBoundary(const Core::CPUThreadGuard& guard)
     Core::QueueHostJob([](Core::System& host_system) { Core::Stop(host_system); });
   }
 
-  // YG_EXIT_AFTER: stop at the end of this first-pass frame, in every mode.
+  // ORCA_EXIT_AFTER: stop at the end of this first-pass frame, in every mode.
   if (s_exit_after > 0 && first_pass_here && frame_here >= s_exit_after && !s_stop_queued &&
       s_online_stop_at < 0)
   {

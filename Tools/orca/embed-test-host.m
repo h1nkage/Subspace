@@ -1,4 +1,4 @@
-// embed-test-host: plays the YouGame desktop app's part for `Orca --embed` on macOS (ORCA.md
+// embed-test-host: plays the desktop app's part for `Orca --embed` on macOS (ORCA.md
 // "Embedding"). A titled window like Electron's default, with a player box drawn in it; Orca is
 // started with the window's number and the box's rectangle and steered over its stdin.
 //
@@ -11,7 +11,7 @@
 //   mini | unmini   minimize / restore the window
 //   front           bring this program to the front
 //   where           print the window frame and the box, in global display points
-//   panel N         the YouGame menu's panel over the box's left N points, as the page does it:
+//   panel N         the app menu's panel over the box's left N points, as the page does it:
 //                   `view <box>` then `rect <box less the panel>`; `panel 0`: `view <box>` and
 //                   `rect <box>`. After the first `panel` every resize sends both, as the page
 //                   does (the page's `dim` goes with `send`)
@@ -106,7 +106,7 @@ static NSRect GlobalTopLeft(NSRect cocoa)
   NSRectFill(NSInsetRect(BoxInContent(), -3, -3));  // a magenta edge around the box
   [[NSColor colorWithCalibratedRed:0.1 green:0.6 blue:0.3 alpha:1] setFill];
   NSRectFill(BoxInContent());  // green: Orca should cover all of it
-  [@"YouGame (embed test host)" drawAtPoint:NSMakePoint(20, 12)
+  [@"The service (embed test host)" drawAtPoint:NSMakePoint(20, 12)
                              withAttributes:@{NSForegroundColorAttributeName : NSColor.whiteColor}];
 }
 // A press in this window, as the page would get it. Orca's view lets clicks through to the window
@@ -182,7 +182,7 @@ static void Command(NSString* line)
   }
   else if ([cmd isEqualToString:@"panel"] && p.count == 2)
   {
-    // As YouGame's OrcaEmbed measure(): the view is always the whole box, sent before the rect.
+    // As the service's OrcaEmbed measure(): the view is always the whole box, sent before the rect.
     g_panel = MAX(p[1].doubleValue, 0);
     g_view_sent = YES;
     Send([@"view " stringByAppendingString:BoxLine(0)]);
@@ -228,7 +228,7 @@ int main(int argc, char** argv)
                                            styleMask:style
                                              backing:NSBackingStoreBuffered
                                                defer:NO];
-    [g_window setTitle:@"YouGame"];
+    [g_window setTitle:@"The service"];
     [g_window setContentView:[[BoxView alloc] init]];
     static Delegate* delegate;
     delegate = [Delegate new];

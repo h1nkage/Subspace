@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # replay-check.py: saved matches and live watching (Session/Keyframe.h "Replay streams",
-# Rollback/OnlineMatch.cpp "Replay streams"). Two players over a real YouGame room (dev tickets, a
+# Rollback/OnlineMatch.cpp "Replay streams"). Two players over a real online room (dev tickets, a
 # local keyframe folder), a third Orca watching them live, then replays of what they recorded.
 # Headless and muted.
 #
@@ -55,7 +55,7 @@ REALTIME = "--realtime" in sys.argv
 VIDEO = sys.argv[sys.argv.index("--video") + 1] if "--video" in sys.argv else "Null"
 SHOTS = int(sys.argv[sys.argv.index("--shots") + 1]) if "--shots" in sys.argv else 0
 SHOT_SECONDS = int(sys.argv[sys.argv.index("--shot-seconds") + 1]) if "--shot-seconds" in sys.argv else 20
-# --relay <site>: everything over a local rooms stack (rooms/scripts/replay-stub-site.mjs in YouGame,
+# --relay <site>: everything over a local rooms stack (rooms/scripts/replay-stub-site.mjs in the service,
 # with `wrangler dev` rooms): Host also streams to its room (ORCA_TEST_REPLAY_ROOM), and both
 # watchers watch through the rooms Worker's /watch/<code> with a watch ticket from that site,
 # instead of reading Host's file. Watcher's connection drops once, --watch-drop seconds (20; 0: never)
@@ -113,10 +113,10 @@ class Orca:
             "ORCA_TEST_DEV_GAME": DEV,
             "ORCA_TEST_KEYFRAME_DIR": os.path.join(WORK, "kf"),
             "ORCA_NAME": name,
-            "YG_SCENES": "1",
+            "ORCA_SCENES": "1",
         }
         if inputs:
-            env["YG_INPUT"] = INPUT
+            env["ORCA_INPUT"] = INPUT
         if PPLUS:
             env["ORCA_PROFILE"] = "PPLUS32"
         # ORCA_TEST_SNAPSHOT_EVERY=<n>: the session snapshots every n frames, as a slow machine's does
@@ -389,7 +389,7 @@ if late:
           f"{lw['mismatched']} differ")
 
 # 3. Saved replays.
-packed = os.path.join(WORK, "packed.ygr")
+packed = os.path.join(WORK, "packed.ssr")
 h = replay("ReplayHost", host_file, {"ORCA_TEST_REPLAY_REPACK": packed})
 check("replay of Host's file", labeled_playback(h),
       f"{h['frames']} frames, {h['checked']} checksums checked, {h['mismatched']} differ, "
@@ -429,7 +429,7 @@ if len(checked) > 30:
           f"back from frame {b} to {a}: {s['checked']} checksums checked, {s['mismatched']} differ")
 
 data = open(host_file, "rb").read()
-tampered = os.path.join(WORK, "tampered-compat.ygr")
+tampered = os.path.join(WORK, "tampered-compat.ssr")
 i = data.index(b'"compat":"') + len(b'"compat":"') + 2
 with open(tampered, "wb") as out:
     out.write(data[:i] + (b"x" if data[i:i + 1] != b"x" else b"y") + data[i + 1:])
@@ -441,7 +441,7 @@ check("a replay from another build is refused", not t["ok"] and "another" in t.g
 import struct
 header_len = 12 + struct.unpack("<I", data[8:12])[0]
 for name, j in (("middle", len(data) // 2), ("live-field", header_len + 12)):
-    damaged = os.path.join(WORK, f"damaged-{name}.ygr")
+    damaged = os.path.join(WORK, f"damaged-{name}.ssr")
     with open(damaged, "wb") as out:
         out.write(data[:j] + bytes([data[j] ^ 0x5A]) + data[j + 1:])
     d = replay(f"ReplayDamaged-{name}", damaged)

@@ -1,4 +1,4 @@
-# bf-mario-link-results.txt with the YouGame shortcut (UX/OrbCombo.h) pressed twice mid-fight: P1
+# bf-mario-link-results.txt with the app shortcut (UX/OrbCombo.h) pressed twice mid-fight: P1
 # holds the D-pad's Up and presses Start. The game gets the Up before Start (a taunt) and then
 # neither while both are held: no pause. bf-orb-combo-plain.txt plays only what the game should get,
 # so the two hashlogs match frame by frame.

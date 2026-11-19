@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# direct-link.py: two Orcas on this machine over a real YouGame dev room, checking the direct link
+# direct-link.py: two Orcas on this machine over a real service dev room, checking the direct link
 # beside the relay (ORCA.md "Direct links"), headless and muted.
 #
 #   Tools/orca/direct-link.py <dolphin-emu-nogui> <disc> [--both K=V ...] [--host K=V ...]
@@ -19,7 +19,7 @@
 #    expected path for most of the match.
 # --both/--host/--friend set environment variables (ORCA_DIRECT_FORCE=turn, ORCA_DIRECT_LOSS=20,
 # ORCA_TEST_NET_DELAY_MS=30, ORCA_DIRECT=0 ...). --ticket-direct off: both Orcas get their tickets
-# through a proxy on this machine (ORCA_SITE) that adds YouGame's `"direct": false` to each reply,
+# through a proxy on this machine (ORCA_SITE) that adds the service's `"direct": false` to each reply,
 # as the site's remote switch does: no link is ever tried (implies --expect relay; the log must
 # say why and show no link). Runs two Orca processes.
 import http.server
@@ -78,12 +78,12 @@ def log(text):
     print(f"[{time.time() - T0:6.1f}] {text}", flush=True)
 
 
-SITE = "https://yougame.co"
+SITE = "https://example.invalid"
 
 
 class TicketProxy(http.server.BaseHTTPRequestHandler):
-    """The site, as the Orcas see it with --ticket-direct: each request goes to yougame.co, and a
-    ticket reply gets YouGame's switch for direct links."""
+    """The site, as the Orcas see it with --ticket-direct: each request goes to example.invalid, and a
+    ticket reply gets the service's switch for direct links."""
 
     def log_message(self, *a):
         pass
@@ -136,8 +136,8 @@ class Orca:
             "ORCA_TEST_DEV_GAME": "orca-dropin-test",
             "ORCA_TEST_KEYFRAME_DIR": os.path.join(WORK, "kf"),
             "ORCA_NAME": name,
-            "YG_INPUT": INPUT,
-            "YG_SCENES": "1",
+            "ORCA_INPUT": INPUT,
+            "ORCA_SCENES": "1",
         }
         env.update(ENV["both"])
         env.update(env_extra)
@@ -362,9 +362,9 @@ for o in orcas:
         log(f"{o.name}: mostly on tx {main}, expected {TX}")
         ok = False
 if TICKET_DIRECT is False:
-    # YouGame's switch: each Orca says why it has no links, and never tried one.
+    # The service's switch: each Orca says why it has no links, and never tried one.
     for o in orcas:
-        why = o.log_lines("direct links off (YouGame's ticket")
+        why = o.log_lines("direct links off (The service's ticket")
         tried = o.log_lines("Orca direct link: seat")
         log(f"{o.name}: {why[0][why[0].find('Orca room'):] if why else 'no switch line'}; "
             f"{len(tried)} link lines")

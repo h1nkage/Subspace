@@ -27,8 +27,8 @@
 #include "Core/Orca/UX/Search.h"
 #include "Core/Orca/UX/SetEnd.h"
 #include "Core/Orca/UX/UX.h"
-#include "Core/Orca/UX/YgCard.h"
-#include "Core/Orca/UX/YgOrbDraw.h"
+#include "Core/Orca/UX/AppCard.h"
+#include "Core/Orca/UX/AppOrbDraw.h"
 #include "VideoCommon/AsyncRequests.h"
 #include "VideoCommon/OnScreenDisplay.h"
 #include "VideoCommon/Present.h"
@@ -1019,13 +1019,13 @@ void DrawScene()
     return;
   }
   // Load the chat font before any chat needs it.
-  Yg::Warm();
-  const YgOrb::Model::View yg = YgOrb::HostView(now);
-  // Dolphin's OSD messages are drawn top left before this. While the YouGame button shows they
+  AppCard::Warm();
+  const AppOrb::Model::View orb_view = AppOrb::HostView(now);
+  // Dolphin's OSD messages are drawn top left before this. While the app button shows they
   // move below it, from the next frame.
-  if (!yg.on)
+  if (!orb_view.on)
     OSD::SetObscuredPixelsTop(0);
-  if (s.Empty() && !yg.on && !yg.showing)
+  if (s.Empty() && !orb_view.on && !orb_view.showing)
     return;
   ImVec2 pic, pic_size;
   PictureRect(&pic, &pic_size);
@@ -1100,11 +1100,11 @@ void DrawScene()
     Kit::SetDots(dl, ImVec2(pic.x + pic_size.x / 2, pic.y + DOTS_Y * unit), unit, s.dots.games,
                  s.dots.current);
   }
-  // The YouGame button holds the top left with its pill along the top edge. Orca's corner then
+  // The app button holds the top left with its pill along the top edge. Orca's corner then
   // moves to the top right, and Project+'s queue bar ends short of it.
   const float margin = 2.5f * unit;
-  const Kit::Box orb = YgOrb::ButtonBox(yg);
-  const bool yg_top = orb.max.x > orb.min.x;
+  const Kit::Box orb = AppOrb::ButtonBox(orb_view);
+  const bool orb_top = orb.max.x > orb.min.x;
   // Grow at once but shrink only after 4 s, so changing digits don't cause jitter.
   static float s_corner_w = 0;
   static double s_corner_at = 0;
@@ -1113,7 +1113,7 @@ void DrawScene()
     s_corner_w = corner_now;
   if (corner_now >= s_corner_w)
     s_corner_at = now;
-  const bool corner_right = yg_top && s_corner_w > 0;
+  const bool corner_right = orb_top && s_corner_w > 0;
   const float corner_x =
       corner_right ? vis.x + vis_size.x - margin - s_corner_w : vis.x + margin;
   std::string guide;
@@ -1163,7 +1163,7 @@ void DrawScene()
   const float left = vis.x + margin;
   float y = DrawCorner(dl, f, ImVec2(corner_x, vis.y + margin), unit);
   // Without the button, Dolphin's messages start below the corner.
-  if (!yg_top && corner_now > 0)
+  if (!orb_top && corner_now > 0)
     OSD::SetObscuredPixelsTop(static_cast<int>(y));
   if (!f.waiting.empty())
   {
@@ -1171,28 +1171,28 @@ void DrawScene()
     Kit::Title(dl, ImVec2(vis.x + vis_size.x / 2, top), unit, f.waiting, 5.0f, Kit::Align::Centre);
   }
   // Toasts and chat go below the corner, Dolphin's messages and the top-centre banners.
-  if (yg_top)
+  if (orb_top)
   {
     // With the button, toasts and chat go in its pill. Rows are views of this frame's lines.
-    std::array<YgOrb::PillRow, 12> rows;
+    std::array<AppOrb::PillRow, 12> rows;
     std::size_t n = 0;
     for (const OverlayModel::Toast& t : f.toasts)
     {
       if (n < rows.size())
-        rows[n++] = YgOrb::PillRow{YgOrb::PillRow::Type::Toast, {}, t.text, {}, {},
-                                   YgOrb::Kind::Join, t.alpha, t.at};
+        rows[n++] = AppOrb::PillRow{AppOrb::PillRow::Type::Toast, {}, t.text, {}, {},
+                                   AppOrb::Kind::Join, t.alpha, t.at};
     }
     for (const OverlayModel::ChatToast& c : f.chats)
     {
       if (n < rows.size())
-        rows[n++] = YgOrb::PillRow{YgOrb::PillRow::Type::Chat, c.name, c.text, {}, {},
-                                   YgOrb::Kind::Join, c.alpha, c.at};
+        rows[n++] = AppOrb::PillRow{AppOrb::PillRow::Type::Chat, c.name, c.text, {}, {},
+                                   AppOrb::Kind::Join, c.alpha, c.at};
     }
     const float pill_right = centre.max.y > vis.y && centre.min.x > orb.min.x ?
                                  centre.min.x - 1.2f * unit :
                                  vis.x + vis_size.x;
     const Kit::Box pill =
-        YgOrb::DrawPill(dl, yg, std::span<const YgOrb::PillRow>(rows.data(), n), now, pill_right);
+        AppOrb::DrawPill(dl, orb_view, std::span<const AppOrb::PillRow>(rows.data(), n), now, pill_right);
     const float under = std::max(orb.max.y, pill.max.y > pill.min.y ? pill.max.y : 0.0f);
     OSD::SetObscuredPixelsTop(static_cast<int>(under + 0.8f * unit));
   }
@@ -1208,22 +1208,22 @@ void DrawScene()
     {
       if (y >= bottom)
         break;
-      y = Yg::NoticeCard(dl, ImVec2(left, y), unit, t.text, wrap, t.alpha).max.y +
+      y = AppCard::NoticeCard(dl, ImVec2(left, y), unit, t.text, wrap, t.alpha).max.y +
           0.8f * unit;
     }
     for (const OverlayModel::ChatToast& c : f.chats)
     {
       if (y >= bottom)
         break;
-      y = Yg::ChatCard(dl, ImVec2(left, y), unit, c.name, c.text, wrap, c.alpha).max.y +
+      y = AppCard::ChatCard(dl, ImVec2(left, y), unit, c.name, c.text, wrap, c.alpha).max.y +
           0.8f * unit;
     }
   }
   if (!s.set_end.Empty())
     SetEnd::Draw(dl, unit, vis.x, vis.y, vis_size.x, vis_size.y, s.set_end);
-  // The YouGame button goes on top, where the app's own button is.
-  YgOrb::DrawButton(dl, yg);
-  YgOrb::DrawHostControls(dl, yg);
+  // The app button goes on top, where the app's own button is.
+  AppOrb::DrawButton(dl, orb_view);
+  AppOrb::DrawHostControls(dl, orb_view);
 }
 
 // The dim (SetDim) over the whole display, last on the foreground list so it covers everything.

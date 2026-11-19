@@ -1,7 +1,7 @@
 // Copyright 2026 YouGame
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include "Core/Orca/UX/YgOrb.h"
+#include "Core/Orca/UX/AppOrb.h"
 
 #include <algorithm>
 #include <charconv>
@@ -19,7 +19,7 @@
 #include "Core/System.h"
 #include "VideoCommon/FrameDumper.h"
 
-namespace Orca::UX::YgOrb
+namespace Orca::UX::AppOrb
 {
 namespace
 {
@@ -552,4 +552,4 @@ void ActivateHost(HostAction action)
     FeedbackRequests().FeedbackFinished(NowMs());
 }
 
-}  // namespace Orca::UX::YgOrb
+}  // namespace Orca::UX::AppOrb

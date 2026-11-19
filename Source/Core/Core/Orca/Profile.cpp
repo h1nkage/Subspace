@@ -100,9 +100,9 @@ void ForEachUniversalSetting(F&& f)
   // host, so it is part of the lobby compatibility key.
   f(Config::SESSION_USE_FMA, cpu_info.bFMA);
   f(Config::MAIN_RAM_OVERRIDE_ENABLE, false);
-  // Switching to the YouGame app (to invite a friend) must not pause the match.
+  // Switching to the desktop app (to invite a friend) must not pause the match.
   f(Config::MAIN_PAUSE_ON_FOCUS_LOST, false);
-  // Orca talks to YouGame only: no usage reports to Dolphin's analytics server.
+  // Orca talks to the service only: no usage reports to Dolphin's analytics server.
   f(Config::MAIN_ANALYTICS_ENABLED, false);
   f(Config::MAIN_CUSTOM_RTC_ENABLE, true);
   // A pinned clock, the same for both players. Not Dolphin's default (2000-01-01, the GameCube
@@ -346,7 +346,7 @@ bool SessionActive()
 
 bool HarnessInputActive()
 {
-  return !GetEnv("YG_INPUT").empty() || EnvIs("ORCA_TEST_COMMANDS", "1");
+  return !GetEnv("ORCA_INPUT").empty() || EnvIs("ORCA_TEST_COMMANDS", "1");
 }
 
 std::string HarnessReport(std::string json)
@@ -694,7 +694,7 @@ std::optional<Profile> LoadProfileFrom(const std::string& sys_directory, const s
   File::OpenFStream(in, path, std::ios_base::in);
   if (!in)
   {
-    *error = fmt::format("YG Dolphin has no profile for {} ({})", game_id, path);
+    *error = fmt::format("Subspace has no profile for {} ({})", game_id, path);
     return std::nullopt;
   }
 
@@ -846,7 +846,7 @@ std::optional<Profile> LoadProfileFrom(const std::string& sys_directory, const s
   }
   if (revision && *profile_revision != *revision)
   {
-    *error = fmt::format("This disc is {} revision {}; YG Dolphin's profile is for revision {}",
+    *error = fmt::format("This disc is {} revision {}; Subspace's profile is for revision {}",
                          game_id, *revision, *profile_revision);
     return std::nullopt;
   }

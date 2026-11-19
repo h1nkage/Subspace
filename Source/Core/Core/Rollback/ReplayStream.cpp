@@ -34,7 +34,7 @@
 #include "Core/Orca/Profile.h"
 #include "Core/Orca/SafeJson.h"
 #include "Core/Orca/Session/Online.h"
-#include "Core/Orca/Session/YouGameRoom.h"
+#include "Core/Orca/Session/RelayRoom.h"
 #include "Core/Orca/Status.h"
 #include "Core/Orca/UX/Probe.h"
 #include "Core/Orca/UX/Chat.h"
@@ -569,7 +569,7 @@ bool Writer::Pump(const Orca::Net::ReplayArchive& replay, int end, int live,
     // Another history: a file of its own, from its first frame.
     ++m_segment;
     const std::string path =
-        m_base.empty() ? std::string() : fmt::format("{}-{}.ygr", m_base, m_segment);
+        m_base.empty() ? std::string() : fmt::format("{}-{}.ssr", m_base, m_segment);
     // Others may read it as it grows (a live watcher of the file, on Windows too).
     m_file = path.empty() ? nullptr :
                             std::make_unique<File::IOFile>(path, "wb", File::SharedAccess::Read);
@@ -693,7 +693,11 @@ static std::string WatchTarget(const std::string& source, std::string* error)
     return source;
   std::string site = Orca::GetEnv("ORCA_SITE");
   if (site.empty())
-    site = "https://yougame.co";
+  {
+    // No built-in room service: a watch ticket needs one named explicitly.
+    *error = "no online service is configured (set ORCA_SITE)";
+    return {};
+  }
   while (site.ends_with('/'))
     site.pop_back();
   picojson::object request;

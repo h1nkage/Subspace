@@ -8,8 +8,8 @@
 
 #include "Common/Logging/Log.h"
 
-// The boot logs. After a listing's boots die before their first frame, the YouGame app runs the
-// next one with Dolphin's boot logs on (YouGame desktop/src/orca-crash.ts, BOOT_DIAG_ARGS: `-C
+// The boot logs. After a listing's boots die before their first frame, the desktop app runs the
+// next one with Dolphin's boot logs on (desktop/src/orca-crash.ts, BOOT_DIAG_ARGS: `-C
 // Logger.Logs.<name>=True` at INFO): the guest's prints, IOS and its SD card, the memory map. Up to
 // a healthy first frame they are under 200 lines (Project+ 174, Brawl 65); after it they say
 // nothing about the boot, and Project+ reads its SD card all game: 0.7 MB a minute of play in the

@@ -297,7 +297,7 @@ TEST_F(OrcaSnapshot, LabeledReplaySkipsHashesWithAndWithoutViewNames)
     Rollback::ReplayStream::Writer writer(base);
     ASSERT_TRUE(writer.Pump(replay, 121, 121, &replay.checksums));
   }
-  const std::string marked = base + "-1.ygr";
+  const std::string marked = base + "-1.ssr";
   File::IOFile recorded(marked, "rb");
   std::vector<u8> data(recorded.GetSize());
   ASSERT_TRUE(recorded.ReadBytes(data.data(), data.size()));
@@ -307,7 +307,7 @@ TEST_F(OrcaSnapshot, LabeledReplaySkipsHashesWithAndWithoutViewNames)
   auto legacy_info = *reader.Info();
   legacy_info.seat_labels = false;
   const auto legacy_data = Orca::Net::PackReplayStream(legacy_info, reader.Archive(), reader.Checksums());
-  const std::string legacy = base + "-legacy.ygr";
+  const std::string legacy = base + "-legacy.ssr";
   File::IOFile legacy_file(legacy, "wb");
   ASSERT_TRUE(legacy_file.WriteBytes(legacy_data.data(), legacy_data.size()));
   legacy_file.Close();
@@ -379,7 +379,7 @@ TEST_F(OrcaSnapshot, UnlabeledReplayComparesFullRamUnlessViewNamesAreUsed)
   info.origin_hash = hash;
   info.first_frame = 0;
   const auto bytes = Orca::Net::PackReplayStream(info, replay, {{1, hash}});
-  const std::string path = m_dir + "/unlabeled.ygr";
+  const std::string path = m_dir + "/unlabeled.ssr";
   File::IOFile file(path, "wb");
   ASSERT_TRUE(file.WriteBytes(bytes.data(), bytes.size()));
   file.Close();

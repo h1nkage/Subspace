@@ -1,5 +1,5 @@
-# YG Dolphin windows-x64 build (linux-lead for orca-lead, 10-24). MANUAL ONLY: workflow_dispatch, never on push or
-# pull_request, never a required check, so it cannot block a merge (YouGame's "no CI" rule is about the YouGame repo).
+# Subspace windows-x64 build (linux-lead for orca-lead, 10-24). MANUAL ONLY: workflow_dispatch, never on push or
+# pull_request, never a required check, so it cannot block a merge (The service's "no CI" rule is about the service repo).
 #
 # What it makes: a release-only UNSIGNED program folder (engine, disc helper, five runtime DLLs, Sys, licenses), built the way the
 # PC's release agent builds it (staging-0385/pc/release-agent-0385.ps1: the visualstudio-release-x64 preset, the PC's
@@ -25,7 +25,7 @@ on:
         description: "The PRIVATE release commit it was made from (full sha): goes into the compatibility key"
         required: true
       version:
-        description: "YG Dolphin version, X.Y.Z"
+        description: "Subspace version, X.Y.Z"
         required: true
       flavor:
         description: "Bundle-key flavor: staging (STAGING key) or prod (PRODUCTION key)"
@@ -67,7 +67,7 @@ jobs:
         run: |
           # A hosted Windows update must not silently change the shader-cache ABI.
           $d3d = "$env:RUNNER_TEMP\d3dcompiler_47.dll"
-          Invoke-WebRequest "https://raw.githubusercontent.com/yougame-co/yg-dolphin/$env:WORKFLOW_SHA/.github/windows-runtime/d3dcompiler_47.dll" -OutFile $d3d
+          Invoke-WebRequest "https://raw.githubusercontent.com/${{ github.repository }}/$env:WORKFLOW_SHA/.github/windows-runtime/d3dcompiler_47.dll" -OutFile $d3d
           if ((Get-FileHash -Algorithm SHA256 $d3d).Hash.ToLower() -ne 'a05f99734f7c4822fefc12b367af21fd0976ed6608752fb1e1e80b6ece7ecbbb') { throw 'shipping D3D compiler checksum mismatch' }
           "D3D_COMPILER_PATH=$d3d" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
@@ -128,7 +128,7 @@ jobs:
           cmake --preset visualstudio-release-x64 @cmakeArgs "-DORCA_BUNDLE_TRUST_TEST_KEY=OFF" "-DORCA_BUNDLE_PUBLIC_KEY=$env:BUNDLE_KEY"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Build YG Dolphin and unit-test binaries
+      - name: Build Subspace and unit-test binaries
         env:
           ORCA_SOURCE_COMMIT: ${{ inputs.source_commit }}
         run: |
@@ -171,7 +171,7 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: |
           $out = "$env:RUNNER_TEMP\out"; New-Item -ItemType Directory -Force $out | Out-Null
-          $zip = "$out\yg-dolphin-$env:VERSION-windows-x64-unsigned-program.zip"
+          $zip = "$out\subspace-$env:VERSION-windows-x64-unsigned-program.zip"
           $program = "$env:RUNNER_TEMP\program"; New-Item -ItemType Directory $program | Out-Null
           $bin = 'build\release\x64\Binaries'
           foreach ($name in 'DolphinNoGUI.exe','orca-disc-tool.exe') { Copy-Item "$bin\$name" $program }
@@ -210,7 +210,7 @@ jobs:
       - name: Upload the program folder and its sha256 manifests
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4, pinned 2026-10-24
         with:
-          name: yg-dolphin-${{ inputs.version }}-${{ inputs.commit }}-windows-x64-${{ inputs.flavor }}-unsigned
+          name: subspace-${{ inputs.version }}-${{ inputs.commit }}-windows-x64-${{ inputs.flavor }}-unsigned
           path: ${{ runner.temp }}/out/
           retention-days: 14
           if-no-files-found: error
@@ -265,7 +265,7 @@ jobs:
             "$((Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower())  $relative"
           } | Sort-Object)
           [IO.File]::WriteAllLines("$out\TEST-BINARIES-SHA256SUMS", $manifest, (New-Object Text.UTF8Encoding($false)))
-          $zip = "$out\yg-dolphin-$env:VERSION-windows-x64-test-binaries.zip"
+          $zip = "$out\subspace-$env:VERSION-windows-x64-test-binaries.zip"
           Compress-Archive -Path "$tests\*" -DestinationPath $zip
           $h = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
           "$h  $(Split-Path -Leaf $zip)" | Set-Content "$out\SHA256SUMS" -Encoding utf8
@@ -273,7 +273,7 @@ jobs:
       - name: Upload the test binaries and their sha256 manifests
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4, pinned 2026-10-24
         with:
-          name: yg-dolphin-${{ inputs.version }}-${{ inputs.commit }}-windows-x64-${{ inputs.flavor }}-test-binaries
+          name: subspace-${{ inputs.version }}-${{ inputs.commit }}-windows-x64-${{ inputs.flavor }}-test-binaries
           path: ${{ runner.temp }}/test-out/
           retention-days: 14
           if-no-files-found: error

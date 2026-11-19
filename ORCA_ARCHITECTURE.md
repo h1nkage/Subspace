@@ -1,17 +1,12 @@
 # How Orca works
 
-> **2026-10-13: YG Baiji is now YG Dolphin.** Players see YG Dolphin from 0.3.42 on. The code,
-> files and contracts keep the codename Orca. Packages are `YG Dolphin.app`, `yg-dolphin.exe`
-> and `yg-dolphin/yg-dolphin`; the Mac program stays `Contents/MacOS/Orca`. Tags are
-> `yg-dolphin-<version>` from 0.3.42; older `yg-baiji-` and `orca-` tags keep their names.
-> Earlier notes are left as they were.
-
-> **2026-10-12:** Orca is now called YG Baiji. Players see that name from 0.3.40 on (the baiji is
-> the Yangtze river dolphin). This page keeps the name Orca, as the code does, and nothing in it was
-> reworded.
+> Players see the name Subspace. This page keeps the codename Orca, as the code does. Packages are
+> `Subspace.app`, `subspace.exe` and `subspace/subspace`; the Mac program stays
+> `Contents/MacOS/Orca`.
 
 Orca adds rollback netplay to the Dolphin emulator. It runs Super Smash Bros. Brawl and Project+
-online on [YouGame](https://yougame.co). This page explains the design. It also covers how Orca
+online through a room service: Dolphin's NetPlay window serves one on loopback, or `ORCA_SITE`
+names another ("the service" below). This page explains the design. It also covers how Orca
 differs from Slippi and Brawlback, the projects that came before it and informed it.
 
 ## The short version
@@ -104,7 +99,7 @@ games drift.
 
 - **Netcode.** Players connect directly to each other when their networks allow it, and through a
   relay server when they don't. Input delay is 2 frames, like Slippi. Orca can adapt it to the link,
-  but the YouGame app keeps it at 2 for everyone. The match is hosted in a YouGame room, which also
+  but the desktop app keeps it at 2 for everyone. The match is hosted in an online room, which also
   handles matchmaking, chat and results. Matchmade Casual and Ranked games are 1v1; a friends' room
   takes up to four players, who can drop in mid-session.
 - **Online menus.** Orca doesn't modify the Brawl disc or Project+'s files. It applies small,
@@ -211,5 +206,5 @@ on Brawlback's approach." That made it harder to see that the experiment was a f
 code, which was a mistake. The Brawlback section above gives the full account. The source of each
 released Orca is tagged in this repository as `orca-<version>`.
 
-2026-10-12: from 0.3.40 (YG Baiji) the tags are `yg-baiji-<version>`; the `orca-<version>` tags
+2026-10-12: from 0.3.40 (Subspace) the tags are `subspace-<version>`; the `orca-<version>` tags
 stay as they are.

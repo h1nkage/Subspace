@@ -10,9 +10,9 @@
 #   - port 2's B takes its token up and stays held 140 frames with the token in the hand (no back
 #     out), A puts it down where the hand is, Start locks in: the stage select at once.
 # Game 2's stage select: port 1 skips its ban (Y), port 2 picks Battlefield (A).
-# Run with ORCA_TEST_QUEUE=ranked:solo ORCA_UX_TEST_NAMES=ada,bo YG_RESULTS=1
+# Run with ORCA_TEST_QUEUE=ranked:solo ORCA_UX_TEST_NAMES=ada,bo ORCA_RESULTS=1
 # ORCA_TEST_SET_RULES=1,8 ORCA_TEST_QUEUE_PICK=<the solo character select's frame + 300>:3:2:-7.5:14.23:1532,
-# e.g. the sync test from the main menu on (YG_SYNCTEST=7 YG_SYNCTEST_FROM=1440).
+# e.g. the sync test from the main menu on (ORCA_SYNCTEST=7 ORCA_SYNCTEST_FROM=1440).
 @scStrap mash 30 99999 1 40 A
 @scBoot mash 30 99999 1 40 A
 @scTitle mash 30 99999 1 40 A

@@ -25,7 +25,7 @@ constexpr u32 BASE = FreeSpace::kMatchBlock.begin;
 // The block plus its free tail, up to the next relocated word.
 constexpr u32 SIZE = FreeSpace::kMatchBlockLimit - FreeSpace::kMatchBlock.begin;
 
-constexpr u32 MAGIC = 0x59474D31;  // "YGM1"
+constexpr u32 MAGIC = 0x53534D31;  // "SSM1"
 constexpr u8 VERSION = 1;
 
 // Header.

@@ -4,7 +4,7 @@
 # port 2 plugs in with its pick and rating, the header becomes the room's and the pick is steered in
 # -> both ready -> Orca presses Start -> game 1's strikes by X (port 1 Battlefield; port 2 Bowser's
 # Castle and the stage to its right; then port 1's pick with A, or its timer) -> the match starts.
-# Run with ORCA_TEST_QUEUE=ranked:solo ORCA_UX_TEST_NAMES=ada,bo YG_RESULTS=1
+# Run with ORCA_TEST_QUEUE=ranked:solo ORCA_UX_TEST_NAMES=ada,bo ORCA_RESULTS=1
 # ORCA_TEST_QUEUE_PICK=<the solo character select's frame + 300>:43:2:-7.4:7.7:1532.
 # Both ports send the same stage select inputs: only the turn's port acts (the input gate).
 @scBoot mash 30 99999 1 40 A

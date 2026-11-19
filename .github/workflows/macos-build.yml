@@ -1,7 +1,7 @@
-# YG Dolphin macOS (arm64) build (linux-lead for orca-lead, 10-24). MANUAL ONLY: workflow_dispatch, never on push or
-# pull_request, never a required check, so it cannot block a merge (YouGame's "no CI" rule is about the YouGame repo).
+# Subspace macOS (arm64) build (linux-lead for orca-lead, 10-24). MANUAL ONLY: workflow_dispatch, never on push or
+# pull_request, never a required check, so it cannot block a merge (The service's "no CI" rule is about the service repo).
 #
-# What it makes: YG Dolphin.app, UNSIGNED, through Tools/orca-package-macos.sh with no signing credentials (the script
+# What it makes: Subspace.app, UNSIGNED, through Tools/orca-package-macos.sh with no signing credentials (the script
 # then leaves the linker's ad-hoc signature and names the zip *-unsigned.zip). The Mac release kit runs the full
 # unit suite. Developer ID signing, notarization and stapling stay on the Mac (the certificate never comes here).
 #
@@ -23,7 +23,7 @@ on:
         description: "The PRIVATE release commit it was made from (full sha): goes into the compatibility key"
         required: true
       version:
-        description: "YG Dolphin version, X.Y.Z"
+        description: "Subspace version, X.Y.Z"
         required: true
       flavor:
         description: "Bundle-key flavor: staging (STAGING key) or prod (PRODUCTION key)"
@@ -83,7 +83,7 @@ jobs:
       - name: Build and package, unsigned (Tools/orca-package-macos.sh, ${{ inputs.flavor }} flavor)
         env:
           ORCA_VERSION: ${{ inputs.version }}
-          ORCA_SOURCE_URL: https://github.com/yougame-co/orca-netplay
+          ORCA_SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
           # staging: "1"; prod: empty, and unset below (the script then refuses the STAGING key).
           ORCA_STAGING_BUILD: ${{ inputs.flavor == 'staging' && '1' || '' }}
           ORCA_SOURCE_COMMIT: ${{ inputs.source_commit }}
@@ -96,7 +96,7 @@ jobs:
             [ -z "${!v:-}" ] || { echo "$v must not be set in CI"; exit 1; }
           done
           Tools/orca-package-macos.sh "$RUNNER_TEMP/build" "$RUNNER_TEMP/out"
-          Z="$RUNNER_TEMP/out/yg-dolphin-${ORCA_VERSION}-macos-arm64-unsigned.zip"
+          Z="$RUNNER_TEMP/out/subspace-${ORCA_VERSION}-macos-arm64-unsigned.zip"
           test -f "$Z"
           shasum -a 256 "$Z" | tee "$RUNNER_TEMP/out/SHA256SUMS"
           stat -f '%z bytes' "$Z"
@@ -124,9 +124,9 @@ jobs:
       - name: Upload the unsigned app zip and its sha256
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4, pinned 2026-10-24
         with:
-          name: yg-dolphin-${{ inputs.version }}-${{ inputs.commit }}-macos-arm64-${{ inputs.flavor }}-unsigned
+          name: subspace-${{ inputs.version }}-${{ inputs.commit }}-macos-arm64-${{ inputs.flavor }}-unsigned
           path: |
-            ${{ runner.temp }}/out/yg-dolphin-${{ inputs.version }}-macos-arm64-unsigned.zip
+            ${{ runner.temp }}/out/subspace-${{ inputs.version }}-macos-arm64-unsigned.zip
             ${{ runner.temp }}/out/SHA256SUMS
           retention-days: 14
           if-no-files-found: error

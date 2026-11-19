@@ -487,7 +487,7 @@ private:
       if (status == 401 || status == 403 || status == 404)
       {
         ERROR_LOG_FMT(CONTROLLERINTERFACE,
-                      "Orca: the YouGame app refused its controller stream (HTTP {}); using "
+                      "Orca: the desktop app refused its controller stream (HTTP {}); using "
                       "Dolphin's controller mapping",
                       status);
         return;
@@ -674,12 +674,12 @@ void StartControllerStreamFromEnvironment()
     StartControllerStreamFromStdio();
     return;
   }
-  const std::string bridge = Env("YOUGAME_BRIDGE"), token = Env("YOUGAME_TOKEN");
+  const std::string bridge = Env("SUBSPACE_BRIDGE"), token = Env("SUBSPACE_TOKEN");
   if (bridge.empty() || token.empty())
     return;
   if (!LoopbackBridge(bridge))
   {
-    ERROR_LOG_FMT(CONTROLLERINTERFACE, "Orca: YOUGAME_BRIDGE is not a loopback address");
+    ERROR_LOG_FMT(CONTROLLERINTERFACE, "Orca: SUBSPACE_BRIDGE is not a loopback address");
     return;
   }
   StartControllerStream(bridge, token);

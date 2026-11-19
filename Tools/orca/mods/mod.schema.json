@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://yougame.co/schemas/orca-mod.json",
-  "title": "YG Dolphin mod bundle: mod.json",
-  "description": "What YG Dolphin's engine reads from a mod bundle (YouGame docs/ORCA_MODS.md, section 2.1 and the Phase 1 contract): format 1, a tree bundle (ORCA_MOD_DIR with tree.json), or format 2, a flat bundle (ORCA.md \"Flat bundles\", Source/Core/Core/Orca/Bundle.h). YG Dolphin's parser (Source/Core/Core/Orca/Mod.cpp, ParseManifest) is the reference; this schema states the same rules for the site's publish check, and the unit tests OrcaMod.SchemaMatchesTheEngine and OrcaBundle.SchemaKnowsTheFlatForm keep the lists here equal to the engine's. Anything unknown or malformed refuses the session. Rules a JSON schema can't state are in x-orca-rules.",
+  "$id": "https://example.invalid/schemas/orca-mod.json",
+  "title": "Subspace mod bundle: mod.json",
+  "description": "What Subspace's engine reads from a mod bundle (service docs/ORCA_MODS.md, section 2.1 and the Phase 1 contract): format 1, a tree bundle (ORCA_MOD_DIR with tree.json), or format 2, a flat bundle (ORCA.md \"Flat bundles\", Source/Core/Core/Orca/Bundle.h). Subspace's parser (Source/Core/Core/Orca/Mod.cpp, ParseManifest) is the reference; this schema states the same rules for the site's publish check, and the unit tests OrcaMod.SchemaMatchesTheEngine and OrcaBundle.SchemaKnowsTheFlatForm keep the lists here equal to the engine's. Anything unknown or malformed refuses the session. Rules a JSON schema can't state are in x-orca-rules.",
   "type": "object",
   "additionalProperties": false,
   "required": ["format", "engine", "disc", "frameHook"],
@@ -66,12 +66,12 @@
   "properties": {
     "format": { "enum": [1, 2] },
     "listing": {
-      "description": "Format 2: the YouGame listing the bundle is for. YG Dolphin refuses it under another listing (YOUGAME_GAME).",
+      "description": "Format 2: the service listing the bundle is for. Subspace refuses it under another listing (SUBSPACE_GAME).",
       "type": "string",
       "pattern": "^[a-z0-9-]{1,80}$"
     },
     "serial": {
-      "description": "Format 2: the bundle's serial, above every bundle signed for the listing before. YG Dolphin refuses one below its MIN_FLAT_SERIAL, which a release raises to retire old bundles.",
+      "description": "Format 2: the bundle's serial, above every bundle signed for the listing before. Subspace refuses one below its MIN_FLAT_SERIAL, which a release raises to retire old bundles.",
       "type": "integer",
       "minimum": 1,
       "maximum": 9007199254740992
@@ -107,13 +107,13 @@
       "required": ["api", "minOrca"],
       "properties": {
         "api": {
-          "description": "The script API version the mod needs; YG Dolphin refuses a mod above its own (Mod::ENGINE_API).",
+          "description": "The script API version the mod needs; Subspace refuses a mod above its own (Mod::ENGINE_API).",
           "type": "integer",
           "minimum": 1,
           "maximum": 1
         },
         "minOrca": {
-          "description": "The oldest YG Dolphin release the mod runs on. An older one refuses the pack first, before any other check (X.Y.Z compared number by number): \"This pack needs YG Dolphin <minOrca> or newer. Update the YouGame app and try again.\"",
+          "description": "The oldest Subspace release the mod runs on. An older one refuses the pack first, before any other check (X.Y.Z compared number by number): \"This pack needs Subspace <minOrca> or newer. Update the desktop app and try again.\"",
           "type": "string",
           "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
           "maxLength": 20
@@ -216,7 +216,7 @@
       "enum": ["brawl-rev2", "brawl-rev2-pplus", "brawl-rev2-results"]
     },
     "pplusGuards": {
-      "description": "Format 2, owner-only, brawl-rev2-pplus only: where a Project+ fork's codeset holds the three instruction pairs YG Dolphin checks, as the address of each pair's first word; the words stay the engine's. Absent: Project+ v3.2's addresses. The pairs must not overlap.",
+      "description": "Format 2, owner-only, brawl-rev2-pplus only: where a Project+ fork's codeset holds the three instruction pairs Subspace checks, as the address of each pair's first word; the words stay the engine's. Absent: Project+ v3.2's addresses. The pairs must not overlap.",
       "type": "object",
       "additionalProperties": false,
       "required": ["rssExdata", "pageIndex", "currentPage"],
@@ -252,7 +252,7 @@
   },
   "$defs": {
     "flatName": {
-      "description": "Format 2: a file name at the bundle's root, as the YouGame app lays out runtime files: A-Z a-z 0-9 + ( ) _ - space, then also '.', never '..', not ending in a dot or a space, not a Windows device name, not mod.json, mod.sig or tree.json (any case); at most 100 bytes.",
+      "description": "Format 2: a file name at the bundle's root, as the desktop app lays out runtime files: A-Z a-z 0-9 + ( ) _ - space, then also '.', never '..', not ending in a dot or a space, not a Windows device name, not mod.json, mod.sig or tree.json (any case); at most 100 bytes.",
       "type": "string",
       "minLength": 1,
       "maxLength": 100,
@@ -327,7 +327,7 @@
     "builtin is only for disc RSBE01 revision 2.",
     "offers is empty unless builtin is set. brawl-rev2-results may offer only results, and only with rankedRules.",
     "rankedRules: builtin brawl-rev2-results only. The listing owner alone may change it, like builtin.",
-    "engine.minOrca: a pack whose minOrca is above the running YG Dolphin's version is refused before every other rule.",
+    "engine.minOrca: a pack whose minOrca is above the running Subspace's version is refused before every other rule.",
     "pplusGuards: format 2 and builtin brawl-rev2-pplus only; its three 8-byte pairs don't overlap. The listing owner alone may change it, like builtin.",
     "keepGameCode: no address twice; the game's word differs from the mod's.",
     "launcher, when set, names a file in the tree.",

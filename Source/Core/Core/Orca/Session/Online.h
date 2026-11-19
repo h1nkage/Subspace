@@ -12,15 +12,18 @@
 
 #include "Common/CommonTypes.h"
 #include "Core/Orca/Session/Session.h"
-#include "Core/Orca/Session/YouGameRoom.h"
+#include "Core/Orca/Session/RelayRoom.h"
 
-// Online play over YouGame: the room this process plays in, used by the rollback core at each frame
+// Online play over the service: the room this process plays in, used by the rollback core at each frame
 // boundary. One room per process; its I/O runs on its own thread.
 namespace Orca::Online
 {
-// Online play is on: ORCA_SESSION=1 plus the desktop app's bridge (YOUGAME_STDIO=1 with Orca's
-// stdout carrying it, or YOUGAME_BRIDGE / YOUGAME_TOKEN), or ORCA_TEST_DEV_GAME for tests.
+// Online play is on: ORCA_SESSION=1 plus the desktop app's bridge (SUBSPACE_STDIO=1 with Orca's
+// stdout carrying it, or SUBSPACE_BRIDGE / SUBSPACE_TOKEN), or ORCA_TEST_DEV_GAME for tests.
 bool Enabled();
+// Online play through a Dolphin NetPlay lobby's room (ORCA_LOCAL_ROOM=1): the lobby's Dolphin
+// launched this engine and serves its room on loopback at ORCA_SITE (Core/Orca/Local).
+bool LocalRoom();
 
 // Starts the room at the first frame boundary. It runs on its own thread, so the host keeps playing
 // while friends come and go.
@@ -34,7 +37,7 @@ void StartRoom(const std::string& code, bool joining, bool friends_room = true,
 std::string Code();
 // The roster's name for a seat; "" when unknown or with no room.
 std::string SeatName(int seat);
-// A joiner's own controls and queue identity as its hello sent them (YouGameRoom::HelloControls).
+// A joiner's own controls and queue identity as its hello sent them (RelayRoom::HelloControls).
 std::vector<u8> HelloControls();
 std::vector<u8> HelloQueue();
 
@@ -51,7 +54,7 @@ std::optional<std::string> TakeHostRequest();
 
 // ---- Matchmade rooms ----
 // Gameplay policy: "private" for friends/doubles (or no room), otherwise "casual" or "ranked".
-// YouGameRoom::Queue keeps the room service's queue for the mirror and tickets.
+// RelayRoom::Queue keeps the room service's queue for the mirror and tickets.
 std::string RoomQueue();
 bool RoomDoubles();
 // Complete room team assignment; metadata only until frame-synchronized team rules ship.
@@ -68,17 +71,17 @@ void ReportGame(const Net::GameReport& report);
 // A ranked set's game began (its fight's first frame, the id its report will carry): tells a ranked
 // queue room's match, so leaving from then on loses the set.
 void ReportGameStart(int start);
-// The games of the room's ranked match this player knows of (YouGameRoom::KnownSetGames).
+// The games of the room's ranked match this player knows of (RelayRoom::KnownSetGames).
 int KnownSetGames();
 // The games desynced: the room's match in progress is void.
 void ReportDesync();
 // The session ended for the opponent's doing (Session::ErrorFromPeer), or a ranked set's wait for
-// its verdict ran out: the room's match in progress is void (YouGameRoom::ReportFault).
+// its verdict ran out: the room's match in progress is void (RelayRoom::ReportFault).
 void ReportPeerFault();
 // Waiting in a ranked set's room for the verdict, with no session: this game still runs
-// (YouGameRoom::KeepAlive). Emulation thread.
+// (RelayRoom::KeepAlive). Emulation thread.
 void KeepAlive();
-// Sends a replay stream's next bytes to the room for its watchers (YouGameRoom::SendReplayStream).
+// Sends a replay stream's next bytes to the room for its watchers (RelayRoom::SendReplayStream).
 void SendReplayStream(const std::vector<u8>& bytes);
 // Queues a saved copy of the match (Rollback/ReplayStream.h RepackedPieces) for the room, if it is
 // still the room of `generation` (RoomGeneration()). Any thread, never blocks; nothing without it.
@@ -141,11 +144,11 @@ bool RoomRecovering(std::chrono::steady_clock::time_point now);
 bool RoomEnded();
 // This Orca is in its room: the welcome arrived and the room hasn't ended.
 bool InRoom();
-// A fresh ticket for the room and the keyframe store's URL (YouGameRoom::FreshTicket).
+// A fresh ticket for the room and the keyframe store's URL (RelayRoom::FreshTicket).
 bool FreshTicket(bool fresh, std::string* ticket, std::string* store_url, std::string* error);
 // Host: unplug a friend and tell them why ("desync", "stalled", "network").
 void DropPeer(int seat, const std::string& reason);
-// Host: whether to hold joins that are waiting for a keyframe (YouGameRoom::HoldJoins).
+// Host: whether to hold joins that are waiting for a keyframe (RelayRoom::HoldJoins).
 void HoldJoins(bool holding, bool fight = false);
 // Whether a session error means the games desynced (disagreeing inputs or checksums, or a
 // correction that arrived too late to apply).

@@ -95,7 +95,7 @@ TEST_F(ShortcutState, MenuDownUpRepeatIgnoredAndUnrelatedKeysPass)
   manager.KeyEvent("Shift", 0, false);
   EXPECT_FALSE(manager.IsSuppressed("Shift"));
   EXPECT_EQ(lines,
-            (std::vector<std::string>{"yg {\"overlay\":\"down\"}", "yg {\"overlay\":\"up\"}"}));
+            (std::vector<std::string>{"br {\"overlay\":\"down\"}", "br {\"overlay\":\"up\"}"}));
 }
 TEST_F(ShortcutState, StartAndMainStickModifierAreSuppressedAtomically)
 {
@@ -108,7 +108,7 @@ TEST_F(ShortcutState, StartAndMainStickModifierAreSuppressedAtomically)
   EXPECT_EQ(manager.GetWindowKeyState("Shift"), false);
   manager.KeyEvent("Enter", Shift, false);
   manager.KeyEvent("Shift", 0, false);
-  EXPECT_EQ(lines, (std::vector<std::string>{"yg {\"chat\":\"down\"}", "yg {\"chat\":\"up\"}"}));
+  EXPECT_EQ(lines, (std::vector<std::string>{"br {\"chat\":\"down\"}", "br {\"chat\":\"up\"}"}));
 }
 TEST_F(ShortcutState, CtrlEnterRemapSuppressesStartAndCStickModifier)
 {
@@ -122,7 +122,7 @@ TEST_F(ShortcutState, CtrlEnterRemapSuppressesStartAndCStickModifier)
   manager.KeyEvent("Enter", 0, true, true);
   manager.KeyEvent("Enter", 0, false);
   EXPECT_EQ(lines,
-            (std::vector<std::string>{"yg {\"chat\":\"down\"}", "yg {\"chat\":\"cancel\"}"}));
+            (std::vector<std::string>{"br {\"chat\":\"down\"}", "br {\"chat\":\"cancel\"}"}));
 }
 TEST_F(ShortcutState, FocusLossCancelsOnceAndDisarmsUntilFocusReturns)
 {
@@ -135,8 +135,8 @@ TEST_F(ShortcutState, FocusLossCancelsOnceAndDisarmsUntilFocusReturns)
   manager.KeyEvent("Enter", Shift, false);
   manager.KeyEvent("Enter", Shift, true);
   manager.KeyEvent("Enter", Shift, false);
-  EXPECT_EQ(lines, (std::vector<std::string>{"yg {\"chat\":\"down\"}", "yg {\"chat\":\"cancel\"}",
-                                             "yg {\"chat\":\"down\"}", "yg {\"chat\":\"up\"}"}));
+  EXPECT_EQ(lines, (std::vector<std::string>{"br {\"chat\":\"down\"}", "br {\"chat\":\"cancel\"}",
+                                             "br {\"chat\":\"down\"}", "br {\"chat\":\"up\"}"}));
 }
 TEST_F(ShortcutState, InvalidRebindPreservesAndBareClearsWithCancel)
 {
@@ -150,7 +150,7 @@ TEST_F(ShortcutState, InvalidRebindPreservesAndBareClearsWithCancel)
   EXPECT_FALSE(manager.KeyEvent("Enter", Shift, true));
   EXPECT_EQ(manager.GetWindowKeyState("Enter"), std::nullopt);
   EXPECT_EQ(lines,
-            (std::vector<std::string>{"yg {\"chat\":\"down\"}", "yg {\"chat\":\"cancel\"}"}));
+            (std::vector<std::string>{"br {\"chat\":\"down\"}", "br {\"chat\":\"cancel\"}"}));
 }
 TEST_F(ShortcutState, RebindingReplacesBothBindingsAndIdenticalConfigKeepsHold)
 {
@@ -163,8 +163,8 @@ TEST_F(ShortcutState, RebindingReplacesBothBindingsAndIdenticalConfigKeepsHold)
   manager.KeyEvent("A", 0, true);
   manager.KeyEvent("A", 0, false);
   EXPECT_EQ(lines,
-            (std::vector<std::string>{"yg {\"chat\":\"down\"}", "yg {\"chat\":\"cancel\"}",
-                                      "yg {\"overlay\":\"down\"}", "yg {\"overlay\":\"up\"}"}));
+            (std::vector<std::string>{"br {\"chat\":\"down\"}", "br {\"chat\":\"cancel\"}",
+                                      "br {\"overlay\":\"down\"}", "br {\"overlay\":\"up\"}"}));
 }
 TEST_F(ShortcutState, ExtraModifiersDoNotTriggerAndDroppingHoldDoesNotRetrigger)
 {
@@ -177,15 +177,15 @@ TEST_F(ShortcutState, ExtraModifiersDoNotTriggerAndDroppingHoldDoesNotRetrigger)
   manager.KeyEvent("Alt", Shift, false);
   manager.KeyEvent("Enter", Shift, true, true);
   EXPECT_EQ(lines,
-            (std::vector<std::string>{"yg {\"chat\":\"down\"}", "yg {\"chat\":\"cancel\"}"}));
+            (std::vector<std::string>{"br {\"chat\":\"down\"}", "br {\"chat\":\"cancel\"}"}));
 }
 TEST_F(ShortcutState, SharedBindingRelaysBothActions)
 {
   ASSERT_TRUE(manager.Configure("embed shortcuts menu=Enter chat=Enter"));
   manager.KeyEvent("Enter", 0, true);
   manager.KeyEvent("Enter", 0, false);
-  EXPECT_EQ(lines, (std::vector<std::string>{"yg {\"overlay\":\"down\"}", "yg {\"chat\":\"down\"}",
-                                             "yg {\"overlay\":\"up\"}", "yg {\"chat\":\"up\"}"}));
+  EXPECT_EQ(lines, (std::vector<std::string>{"br {\"overlay\":\"down\"}", "br {\"chat\":\"down\"}",
+                                             "br {\"overlay\":\"up\"}", "br {\"chat\":\"up\"}"}));
 }
 TEST_F(ShortcutState, RepeatsAfterFocusLossAndRebindNeverStartAHold)
 {
@@ -215,7 +215,7 @@ TEST_F(ShortcutState, RebindSwallowsAlreadyHeldNewChordWithoutSyntheticPress)
   manager.KeyEvent("A", Ctrl, false);
   EXPECT_TRUE(lines.empty());
   manager.KeyEvent("A", Ctrl, true);
-  EXPECT_EQ(lines, (std::vector<std::string>{"yg {\"chat\":\"down\"}"}));
+  EXPECT_EQ(lines, (std::vector<std::string>{"br {\"chat\":\"down\"}"}));
 }
 TEST_F(ShortcutState, ModifierAddedAfterBaseAndRepressedAfterCancelCannotLeak)
 {
@@ -235,7 +235,7 @@ TEST_F(ShortcutState, ModifierAddedAfterBaseAndRepressedAfterCancelCannotLeak)
   manager.KeyEvent("Ctrl", Ctrl, true);
   EXPECT_EQ(manager.GetWindowKeyState("Ctrl"), false);
   EXPECT_EQ(lines,
-            (std::vector<std::string>{"yg {\"chat\":\"down\"}", "yg {\"chat\":\"cancel\"}"}));
+            (std::vector<std::string>{"br {\"chat\":\"down\"}", "br {\"chat\":\"cancel\"}"}));
 }
 TEST_F(ShortcutState, UnknownKeysAlwaysProcessMetaModifierChanges)
 {
@@ -245,7 +245,7 @@ TEST_F(ShortcutState, UnknownKeysAlwaysProcessMetaModifierChanges)
   manager.KeyEvent("", Shift | 8u, true);
   manager.KeyEvent("Enter", Shift | 8u, false);
   EXPECT_EQ(lines,
-            (std::vector<std::string>{"yg {\"chat\":\"down\"}", "yg {\"chat\":\"cancel\"}"}));
+            (std::vector<std::string>{"br {\"chat\":\"down\"}", "br {\"chat\":\"cancel\"}"}));
 }
 TEST_F(ShortcutState, RepeatAndDuplicatePressUpdateModifiersWithoutNewDown)
 {
@@ -254,12 +254,12 @@ TEST_F(ShortcutState, RepeatAndDuplicatePressUpdateModifiersWithoutNewDown)
   manager.KeyEvent("Enter", Shift, true, true);
   manager.KeyEvent("Enter", Shift, true);
   EXPECT_EQ(lines,
-            (std::vector<std::string>{"yg {\"chat\":\"down\"}", "yg {\"chat\":\"cancel\"}"}));
+            (std::vector<std::string>{"br {\"chat\":\"down\"}", "br {\"chat\":\"cancel\"}"}));
   manager.KeyEvent("Enter", Shift, false);
   manager.KeyEvent("Enter", Shift, true);
   manager.KeyEvent("Enter", Shift | 8u, true);
   EXPECT_EQ(lines.size(), 4u);
-  EXPECT_EQ(lines.back(), "yg {\"chat\":\"cancel\"}");
+  EXPECT_EQ(lines.back(), "br {\"chat\":\"cancel\"}");
 }
 TEST(ShortcutsState, LegacyStateHasNoAuthoritativeOverrideBeforeConfiguration)
 {
@@ -294,7 +294,7 @@ TEST_F(ShortcutState, ModifierSnapshotBeforeFocusThenEnterSwallowsStart)
   manager.KeyEvent("Enter", Ctrl, true);
   EXPECT_EQ(manager.GetWindowKeyState("Enter"), false);
   EXPECT_EQ(manager.GetWindowKeyState("Ctrl"), false);
-  EXPECT_EQ(lines, (std::vector<std::string>{"yg {\"chat\":\"down\"}"}));
+  EXPECT_EQ(lines, (std::vector<std::string>{"br {\"chat\":\"down\"}"}));
 }
 TEST_F(ShortcutState, FocusRecoveryRepeatWithoutRepeatFlagRequiresPhysicalRelease)
 {
@@ -322,7 +322,7 @@ TEST_F(ShortcutState, EmbeddedBackendSnapshotsRelayAndSuppressWithoutWindowEvent
   manager.PollKeys({"X", "Shift"});
   EXPECT_EQ(manager.GetWindowKeyState("Shift"), std::nullopt);
   ASSERT_EQ(lines.size(), 2u);
-  EXPECT_EQ(lines.back(), "yg {\"chat\":\"up\"}");
+  EXPECT_EQ(lines.back(), "br {\"chat\":\"up\"}");
 }
 TEST_F(ShortcutState, NonUSPhysicalPositionsMatchBackendKeys)
 {
@@ -350,7 +350,7 @@ TEST_F(ShortcutState, EmbeddedSnapshotReleasingBaseAndModifierTogetherEmitsUp)
   manager.SetPolling(true);
   manager.PollKeys({"Ctrl", "Enter"});
   manager.PollKeys({});
-  EXPECT_EQ(lines, (std::vector<std::string>{"yg {\"chat\":\"down\"}", "yg {\"chat\":\"up\"}"}));
+  EXPECT_EQ(lines, (std::vector<std::string>{"br {\"chat\":\"down\"}", "br {\"chat\":\"up\"}"}));
 }
 TEST_F(ShortcutState, EmbeddedPollingStopsWithoutFocusAndRearmsWithoutSyntheticPress)
 {

@@ -32,7 +32,7 @@
 // Payload words use relaxed atomics too, making the C++ reader safe even in same-process tests.
 namespace Broadcast
 {
-constexpr u32 MAGIC = 0x31424759;  // "YGB1"
+constexpr u32 MAGIC = 0x31425353;  // "SSB1"
 constexpr u32 VERSION = 1;
 constexpr u32 WIDTH = 1280, HEIGHT = 720, FPS = 30, RATE = 48000, CHANNELS = 2;
 constexpr u32 VIDEO_SLOTS = 3, AUDIO_SLOTS = 64, VIDEO_BYTES = WIDTH * HEIGHT * 4;

@@ -68,7 +68,7 @@ int SetWords(GuestMemory& memory, const Box& box, std::string_view text);
 
 // Converts text to what the font can draw: printable ASCII, with "·"/"–" as "-" and "…" as "...".
 std::string Ascii(std::string_view text, size_t max = 96);
-// A YouGame username as a name plate: ASCII capitals, at most 10 characters.
+// A player username as a name plate: ASCII capitals, at most 10 characters.
 std::string PlateName(std::string_view username);
 // "m:ss" of `frames` (60 a second), rounded up.
 std::string Clock(int frames);

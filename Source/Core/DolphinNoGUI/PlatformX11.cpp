@@ -230,7 +230,7 @@ bool PlatformX11::Init()
   return true;
 }
 
-// Embed mode: Orca's window is a child of the app's window (the YouGame app runs as an X11 client,
+// Embed mode: Orca's window is a child of the app's window (the desktop app runs as an X11 client,
 // through XWayland on a Wayland desktop), placed at the player box in the window's pixels, so it
 // moves, clips and hides with the app and no window manager ever sees it. It takes neither the
 // keyboard nor the mouse: presses go up to the app's window and its page, as on macOS (ORCA.md,

@@ -21,7 +21,7 @@ namespace
 // How a controller snapshot push starts as the app writes it (JSON.stringify keeps key order), so
 // the older ones of one read can be skipped unparsed. Only a shortcut: a line that doesn't match is
 // parsed like any other.
-constexpr std::string_view CONTROLLERS_PREFIX = R"(yg {"push":{"type":"controllers")";
+constexpr std::string_view CONTROLLERS_PREFIX = R"(br {"push":{"type":"controllers")";
 // JSON numbers are doubles: ids stay exact up to 2^53.
 constexpr double MAX_ID = 9007199254740991.0;
 
@@ -142,7 +142,7 @@ void Deliver(Inbound in)
 
 bool Enabled()
 {
-  return GetEnv("YOUGAME_STDIO") == "1";
+  return GetEnv("SUBSPACE_STDIO") == "1";
 }
 
 bool Ready()

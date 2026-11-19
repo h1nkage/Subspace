@@ -58,7 +58,7 @@ GCPadStatus FilterLocalPad(GCPadStatus pad, bool first_run, bool live, OverlayKe
     pad.button = step.buttons;
     if (step.fired)
     {
-      INFO_LOG_FMT(CORE, "Orca: the YouGame shortcut (Up + Start)");
+      INFO_LOG_FMT(CORE, "Orca: the app shortcut (Up + Start)");
       Print(OverlayKey::Pad().Down(Status::Cap(Status::TALK_CAP), now));
     }
     else if (step.released)

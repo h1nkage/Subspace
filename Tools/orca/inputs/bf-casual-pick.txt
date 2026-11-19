@@ -1,8 +1,8 @@
 # A casual Brawl game's stage pick (ORCA.md "Casual stage pick"), Mario (P1) vs Samus (P2), two
 # games. Run with ORCA_TEST_QUEUE=casual (the header's coin 0: port 1 names first) and
 # ORCA_UX_TEST_NAMES=ada,bo, e.g. the sync test:
-#   ORCA_SESSION=1 ORCA_TEST_QUEUE=casual ORCA_UX_TEST_NAMES=ada,bo YG_INPUT=<this> \
-#   YG_SYNCTEST=7 YG_SYNCTEST_FROM=1700 YG_EXIT_AFTER=<frames> dolphin-emu-nogui -p headless \
+#   ORCA_SESSION=1 ORCA_TEST_QUEUE=casual ORCA_UX_TEST_NAMES=ada,bo ORCA_INPUT=<this> \
+#   ORCA_SYNCTEST=7 ORCA_SYNCTEST_FROM=1700 ORCA_EXIT_AFTER=<frames> dolphin-emu-nogui -p headless \
 #   -v Null -e <disc>
 # Both ports send the same menu inputs where it doesn't matter: only the turn's port acts (the
 # input gate). On the stage select A never takes a stage: the gate reads it as X, the turn's

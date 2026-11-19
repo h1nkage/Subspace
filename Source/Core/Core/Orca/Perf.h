@@ -22,7 +22,7 @@ namespace Core
 class CPUThreadGuard;
 }
 
-// This machine's own speed, reported to the YouGame page, and the one switch to the Performance
+// This machine's own speed, reported to the app page, and the one switch to the Performance
 // graphics preset a run makes when the machine can't hold 60 fps. See ORCA.md, "Graphics".
 //
 // What it measures. A forward frame is a frame boundary whose frame ran for the first time in real

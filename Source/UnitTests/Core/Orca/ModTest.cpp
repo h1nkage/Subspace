@@ -216,7 +216,7 @@ TEST(OrcaMod, TreeHashVector)
     ASSERT_TRUE(parsed) << error;
     EXPECT_EQ(parsed->files, files);
   }
-  // The desktop app's vector (YouGame desktop, orca-mods-p1).
+  // The desktop app's vector (desktop, orca-mods-p1).
   EXPECT_EQ(Orca::Mod::TreeHash(std::vector<Orca::Mod::TreeFile>{
                 {"mod.json", "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", 2},
                 {"orca/jitwarm", "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
@@ -332,7 +332,7 @@ TEST(OrcaMod, MinOrcaAboveThisBuildRefuses)
   const std::string next =
       running.substr(0, dot + 1) + std::to_string(std::stoull(running.substr(dot + 1)) + 1);
   const std::string message =
-      fmt::format("This pack needs YG Dolphin {} or newer. Update the YouGame app and try again.",
+      fmt::format("This pack needs Subspace {} or newer. Update the desktop app and try again.",
                   next);
   for (const auto& [json, api] : std::vector<std::pair<std::string, double>>{
            {BRAWL_MOD, 1}, {BRAWL_MOD, 2}, {BrawlWith("laterKey", "1"), 1},
@@ -348,7 +348,7 @@ TEST(OrcaMod, MinOrcaAboveThisBuildRefuses)
   }
   EXPECT_FALSE(Orca::Mod::ParseManifest(
       BrawlWith("engine", R"({"api": 1, "minOrca": "999999999999.0.0"})"), &error));
-  EXPECT_EQ(error, "This pack needs YG Dolphin 999999999999.0.0 or newer. Update the YouGame app "
+  EXPECT_EQ(error, "This pack needs Subspace 999999999999.0.0 or newer. Update the desktop app "
                    "and try again.");
   // A malformed one is still a form error, not an update.
   EXPECT_FALSE(
@@ -1147,7 +1147,7 @@ TEST(OrcaMod, Guards)
 // engine caps stay last.
 TEST(OrcaMod, LegacyCapsLinesArePinned)
 {
-  const std::string line = "join leave stats pause delay perf direct host chat yougame gfx music "
+  const std::string line = "join leave stats pause delay perf direct host chat orb gfx music "
                            "results locks queue2 pick-casual pick-ranked talk rumble record hostui";
   std::string error;
   const auto brawl = Orca::LoadProfileFrom(RepoPath("Data/Sys/"), "RSBE01", 2, &error);

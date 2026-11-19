@@ -6,6 +6,7 @@
 #include <SFML/Network/Packet.hpp>
 
 #include <map>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <thread>
@@ -19,8 +20,14 @@
 #include "Common/Timer.h"
 #include "Common/TraversalClient.h"
 #include "Core/NetPlayProto.h"
+#include "Core/Orca/Local/LocalProto.h"
 #include "Core/SyncIdentifier.h"
 #include "UICommon/NetPlayIndex.h"
+
+namespace Orca::Local
+{
+class RoomServer;
+}
 
 namespace NetPlay
 {
@@ -66,6 +73,14 @@ public:
   void SetHostInputAuthority(bool enable);
 
   void KickPlayer(PlayerId player);
+
+  // Rollback play (Subspace engines, Orca/Local): opens the room for the host and every player
+  // with a GameCube port, host first and then by port, four at most, and launches their engines.
+  // While the room is open, launches players who got a port since. False with *error when nobody
+  // new could be launched.
+  bool StartOrcaRoom(std::string* error);
+  bool OrcaRoomRunning() const;
+  void StopOrcaRoom();
 
   u16 GetPort() const;
 
@@ -136,6 +151,8 @@ private:
   ConnectionError OnConnect(ENetPeer* socket, sf::Packet& received_packet);
   unsigned int OnDisconnect(const Client& player);
   unsigned int OnData(sf::Packet& packet, Client& player);
+  unsigned int OnOrcaRoom(sf::Packet& packet, Client& player);
+  void OrcaSend(PlayerId pid, sf::Packet&& packet, u8 channel_id);
 
   void OnTraversalStateChanged() override;
   void OnConnectReady(ENetAddress) override {}
@@ -210,5 +227,11 @@ private:
   Common::TraversalClient* m_traversal_client = nullptr;
   NetPlayUI* m_dialog = nullptr;
   NetPlayIndex m_index;
+
+  class OrcaSink;
+  std::unique_ptr<OrcaSink> m_orca_sink;
+  std::unique_ptr<Orca::Local::RoomServer> m_orca_room;
+  // Keyframe uploads arriving in parts, by player and request (server thread only).
+  std::map<std::pair<PlayerId, u32>, Orca::Local::PartAssembly> m_orca_uploads;
 };
 }  // namespace NetPlay

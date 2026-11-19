@@ -65,7 +65,7 @@ them in `fonts/`. None is shipped with Orca: only the PNGs drawn with them are.
 - Replacing a texture changes only what is drawn: the texture cache hashes the game's texture in
   RAM and swaps the host GPU texture; nothing Orca draws reaches emulated memory (Profile.cpp
   forces EFB copies to texture only, EFB access and bounding box off). The pack is therefore not
-  in the compatibility key. `YG_HASHLOG` is identical with and without it in both games.
+  in the compatibility key. `ORCA_HASHLOG` is identical with and without it in both games.
 - In a session Orca's textures win over a player's own pack in `<user>/Load/Textures` for the
   names Orca replaces; the player's pack still supplies every other name
   (`CollectHiresTextureFiles` in `VideoCommon/HiresTextures.cpp`). Orca's pack is always

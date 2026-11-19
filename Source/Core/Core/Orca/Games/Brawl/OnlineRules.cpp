@@ -115,6 +115,7 @@ constexpr u32 HAND_X = 0x90;
 constexpr u32 HAND_Y = 0x94;
 constexpr u32 HAND_BUTTON = 0xAC;
 constexpr u32 HAND_PANEL = 0xB0;
+constexpr u32 HAND_STATE = 0xA4;
 
 constexpr const char* SCENE_CSS = "scSelctCharacter";
 constexpr const char* SCENE_SSS = "scSelStage";
@@ -866,6 +867,8 @@ CssHand ReadCssHand(const GuestMemory& m, int port)
     const u32 panel = m.Read32(p + HAND_PANEL);
     hand.panel = panel < 4 ? static_cast<int>(panel) : -1;
   }
+  if (Pointer(m, p + HAND_STATE))
+    hand.state = m.Read32(p + HAND_STATE);
   hand.x = std::bit_cast<float>(m.Read32(p + HAND_X));
   hand.y = std::bit_cast<float>(m.Read32(p + HAND_Y));
   return hand;

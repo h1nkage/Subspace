@@ -4,7 +4,7 @@
 # trap both games on the results screen. Expect the results screen to end as usual and game 2's
 # character select to come, both ready. Run with
 # ORCA_PROFILE=PPLUS32 ORCA_TEST_QUEUE=casual:solo ORCA_UX_TEST_NAMES=ada,bo
-# ORCA_TEST_QUEUE_PICK=824:43:2:-7.4:7.7, e.g. the sync test YG_SYNCTEST=7 YG_SYNCTEST_FROM=200 to
+# ORCA_TEST_QUEUE_PICK=824:43:2:-7.4:7.7, e.g. the sync test ORCA_SYNCTEST=7 ORCA_SYNCTEST_FROM=200 to
 # frame 3200.
 @scBoot mash 30 99999 1 40 A
 @muMenuMain:1 120 123 1 DOWN

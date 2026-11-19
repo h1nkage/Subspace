@@ -15,25 +15,25 @@
 
 #include "Common/CommonTypes.h"
 
-// The stdio bridge to the YouGame desktop app (ORCA.md "The stdio bridge"). With YOUGAME_STDIO=1
-// the app's bridge is Orca's own stdin and stdout instead of a loopback server (YOUGAME_BRIDGE,
-// YOUGAME_TOKEN), which a sandboxed Orca can't reach. Each bridge line starts with "yg "; every
+// The stdio bridge to the desktop app (ORCA.md "The stdio bridge"). With SUBSPACE_STDIO=1
+// the app's bridge is Orca's own stdin and stdout instead of a loopback server (SUBSPACE_BRIDGE,
+// SUBSPACE_TOKEN), which a sandboxed Orca can't reach. Each bridge line starts with "br "; every
 // other line keeps its embed meaning (DolphinNoGUI/Embed.h).
 //   Orca -> app (stdout), a request:
-//     yg {"id":<n>,"type":"hello"|"mpTicket"|"mpRoom",...}
+//     br {"id":<n>,"type":"hello"|"mpTicket"|"mpRoom",...}
 //   app -> Orca (stdin), its reply:
-//     yg {"re":<n>,"ok":true,"result":{...}}  or  yg {"re":<n>,"ok":false,"error":"..."}
+//     br {"re":<n>,"ok":true,"result":{...}}  or  br {"re":<n>,"ok":false,"error":"..."}
 //   app -> Orca (stdin), a controller snapshot:
-//     yg {"push":{"type":"controllers","snapshot":{...}}}
+//     br {"push":{"type":"controllers","snapshot":{...}}}
 //   app -> Orca (stdin), the page's lobby:
-//     yg {"push":{"slug":"...","cmd":"leave"|"kick",...}}
+//     br {"push":{"slug":"...","cmd":"leave"|"kick",...}}
 // The stdin reader routes the app's lines on its own thread (Route): replies to the request waiting
 // for them, controller snapshots straight into the controller cache (only the newest of one read:
 // the older ones are stale already), the page's lobby commands to the room. Malformed, oversized
 // and unknown messages are dropped and counted, never acted on.
 namespace Orca::Bridge
 {
-inline constexpr std::string_view PREFIX = "yg ";
+inline constexpr std::string_view PREFIX = "br ";
 // The longest bridge line taken from the app (a controller snapshot is 1-3 KB; Controllers.h takes
 // up to 64 KB of one).
 inline constexpr size_t MAX_INBOUND = 64 * 1024;
@@ -42,7 +42,7 @@ inline constexpr size_t MAX_LINE = 128 * 1024;
 // The longest request Orca writes (the app refuses a longer one).
 inline constexpr size_t MAX_OUTBOUND = 32 * 1024;
 
-// YOUGAME_STDIO=1: the app speaks the bridge on stdin and stdout.
+// SUBSPACE_STDIO=1: the app speaks the bridge on stdin and stdout.
 bool Enabled();
 // Enabled() and stdout set up to carry requests (SetWriter): what online play needs. Without
 // --embed (or ORCA_TEST_COMMANDS) nothing reads Orca's stdin, so the bridge is off.
@@ -83,7 +83,7 @@ struct Inbound
   // Reply: the whole reply ({re, ok, result|error}); Controllers and Push: the push object.
   picojson::value body;
 };
-// Parses a whole line, "yg " included. Ignored: not a bridge line, over MAX_INBOUND, not JSON, too
+// Parses a whole line, "br " included. Ignored: not a bridge line, over MAX_INBOUND, not JSON, too
 // deep, or a shape Orca doesn't know.
 Inbound Parse(std::string_view line);
 

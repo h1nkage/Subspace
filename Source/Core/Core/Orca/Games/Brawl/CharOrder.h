@@ -72,7 +72,7 @@ namespace Orca::UX::CharOrder
 // +7 locked, +8 since, +0xC elapsed, +0xE held, +0xF 0. Anything without the magic reads as Idle.
 constexpr u32 kArea = FreeSpace::kMatchBlockHead.end;
 constexpr u32 kAreaSize = 0x10;
-constexpr u32 kMagic = 0x5947434F;  // "YGCO"
+constexpr u32 kMagic = 0x5353434F;  // "SSCO"
 static_assert(kArea % 16 == 0 && kArea + kAreaSize <= FreeSpace::kMatchBlockLimit &&
               FreeSpace::Detail::Free({kArea, kArea + kAreaSize}));
 // The anchors, the match block's last 12 bytes (MatchBlock.h): +0 anchored, +1..+3 0, then at
@@ -85,8 +85,8 @@ static_assert(kAnchorArea + kAnchorAreaSize <= FreeSpace::kMatchBlockHead.end &&
 // Match block offsets ReadSet() uses (header: MatchBlock.h; set: SetBlock.h).
 namespace Block
 {
-constexpr u32 MAGIC = 0x00;  // u32 "YGM1"
-constexpr u32 MAGIC_VALUE = 0x59474D31;
+constexpr u32 MAGIC = 0x00;  // u32 "SSM1"
+constexpr u32 MAGIC_VALUE = 0x53534D31;
 constexpr u32 VERSION = 0x04;  // u8 1
 constexpr u32 MODE = 0x05;     // u8: 2 ranked
 constexpr u32 RULESET = 0x06;  // u8: 1 Brawl (Supernova), 2 Project+ (2024)

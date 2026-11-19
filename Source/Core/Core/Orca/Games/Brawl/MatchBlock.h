@@ -55,8 +55,8 @@ constexpr u32 SIZE = FreeSpace::kMatchBlockHead.Size();  // 512
 constexpr u32 FULL_SIZE = FreeSpace::kMatchBlockLimit - FreeSpace::kMatchBlock.begin;
 
 // ---- Header, +0x00 ----
-constexpr u32 MAGIC = BASE + 0x00;  // u32 'YGM1'
-constexpr u32 MAGIC_VALUE = 0x59474D31;
+constexpr u32 MAGIC = BASE + 0x00;  // u32 'SSM1'
+constexpr u32 MAGIC_VALUE = 0x53534D31;
 constexpr u32 VERSION = BASE + 0x04;  // u8
 constexpr u8 VERSION_VALUE = 1;
 constexpr u32 MODE = BASE + 0x05;     // u8 Mode
@@ -115,7 +115,7 @@ constexpr u32 SAVED_RSS_SIZE = 0xA8;
 // Used with or without a singles header. Host writes only at a header-free boundary; typed replay
 // events reproduce changes. The frame hook's native colour writes read this block alone.
 constexpr u32 ROOM_TEAMS = BASE + 0x1A8;
-constexpr u32 ROOM_TEAMS_MAGIC = 0x59475431;  // 'YGT1'
+constexpr u32 ROOM_TEAMS_MAGIC = 0x53535431;  // 'SST1'
 constexpr u32 ROOM_TEAMS_MASK = ROOM_TEAMS + 4;  // team 1's seat mask, 0 disabled
 constexpr u32 ROOM_TEAMS_LOGGED = ROOM_TEAMS + 5;  // once per character select
 // u8: bit 0 rules saved, bit 1 RSS saved, bit 2 Code Menu activation saved
@@ -166,7 +166,7 @@ static_assert(CHAR_ORDER + CHAR_ORDER_SIZE <= RANKED_SET);
 static_assert(CSS_TIMER_START + 4 <= BASE + 0xC0 + PHASE1_SIZE);
 
 // ---- Project+ stage flow state (RankedPPlus.h), +0x00..+0x8F ----
-//   header   +0x00 u32 magic "YGM1"   +0x04 u8 version   +0x05 u8 mode   +0x06 u8 ruleset
+//   header   +0x00 u32 magic "SSM1"   +0x04 u8 version   +0x05 u8 mode   +0x06 u8 ruleset
 //            +0x07 u8 coin
 //   set      +0x10 u8 games counted   +0x11 u8 port 1 wins   +0x12 u8 port 2 wins
 //            +0x13 u8 last counted game's winner (0xFF none)

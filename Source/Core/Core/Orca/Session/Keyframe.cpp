@@ -551,8 +551,8 @@ bool UnpackKeyframe(const std::vector<u8>& blob, int* frame, ReplayArchive* repl
 
 namespace
 {
-constexpr char STREAM_MAGIC[4] = {'Y', 'G', 'R', 'S'};
-constexpr char CHUNK_MAGIC[4] = {'Y', 'G', 'R', 'C'};
+constexpr char STREAM_MAGIC[4] = {'S', 'S', 'R', 'S'};
+constexpr char CHUNK_MAGIC[4] = {'S', 'S', 'R', 'C'};
 // The container's version: the preamble, the header and the chunk framing. The rooms Worker
 // (rooms/src/replay-stream.ts) and the site (api/replays/orca, tournament-replay-body.ts) refuse
 // any other, so it changes only together with them. 0.3.46 raised it with the frame layout and no
@@ -1142,7 +1142,7 @@ private:
   std::string m_dir;
 };
 
-// YouGame's keyframe endpoint: PUT, GET and DELETE on <store_url>/<id> with "Authorization: Ticket
+// The service's keyframe endpoint: PUT, GET and DELETE on <store_url>/<id> with "Authorization: Ticket
 // <room ticket>". A 401 with code "ticket", or a 403 "signed_out" (the player may have signed in
 // since), retries with a new ticket; network errors, 429 and 5xx retry with backoff; other refusals
 // are final. A 409 "exists" on PUT means an earlier attempt landed but its reply was lost.
@@ -1241,7 +1241,7 @@ private:
   {
     long status = 0;  // 0: no HTTP response
     std::string error;
-    std::string code;  // YouGame's {"code"} in a refusal
+    std::string code;  // The service's {"code"} in a refusal
     bool final = false;  // not worth retrying
   };
 
@@ -1303,7 +1303,7 @@ private:
                                            result.status >= 500);
       if (!retry)
       {
-        // Only YouGame's own refusals carry a code; a bare 4xx (an edge page) may pass next time.
+        // Only the service's own refusals carry a code; a bare 4xx (an edge page) may pass next time.
         if (result.status >= 400)
           t_last_refusal = result.code;
         return false;
@@ -1346,7 +1346,7 @@ private:
     {
       auto* t = static_cast<Transfer*>(user);
       const size_t n = size * count;
-      // A refusal's body is YouGame's {error, code}, not the keyframe.
+      // A refusal's body is the service's {error, code}, not the keyframe.
       long status = 0;
       curl_easy_getinfo(t->curl, CURLINFO_RESPONSE_CODE, &status);
       if (status < 200 || status >= 300 || !t->download)
@@ -1447,7 +1447,7 @@ private:
     }
     else if (!(result.status >= 200 && result.status < 300) && !error_body.empty())
     {
-      // YouGame's refusals are {"error": "...", "code": "..."}.
+      // The service's refusals are {"error": "...", "code": "..."}.
       picojson::value json;
       const std::string text(error_body.begin(), error_body.end());
       if (Json::ParseJson(text, &json) && json.is<picojson::object>())

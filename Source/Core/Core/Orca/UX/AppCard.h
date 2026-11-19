@@ -11,10 +11,10 @@
 
 #include "Core/Orca/UX/Kit.h"
 
-// Draws YouGame-styled cards (chat messages, room notices) over the game, matching the cards on the
-// YouGame site. Text is Roboto (Data/Sys/Orca/Fonts, Apache 2.0). Local display only: nothing here
+// Draws the service-styled cards (chat messages, room notices) over the game, matching the cards on the
+// service site. Text is Roboto (Data/Sys/Orca/Fonts, Apache 2.0). Local display only: nothing here
 // reads emulated memory. Call from the video thread inside the ImGui frame.
-namespace Orca::UX::Yg
+namespace Orca::UX::AppCard
 {
 // Loads the card font into ImGui's atlas so the file is read in the menus, not mid-match.
 // Cheap after the first call.
@@ -30,13 +30,13 @@ std::vector<std::string> Wrap(std::string_view text, float px, float width);
 // the picture's height.
 Kit::Box ChatCard(ImDrawList* dl, ImVec2 pos, float unit, std::string_view name,
                   std::string_view text, float width, float alpha = 1);
-// Draws a notice card (someone joined or left) with the YouGame logo in place of an avatar.
+// Draws a notice card (someone joined or left) with the app logo in place of an avatar.
 Kit::Box NoticeCard(ImDrawList* dl, ImVec2 pos, float unit, std::string_view text, float width,
                     float alpha = 1);
-// The YouGame logo, `size` pixels square, top-left at `pos`.
+// The app logo, `size` pixels square, top-left at `pos`.
 void Logo(ImDrawList* dl, ImVec2 pos, float size, float alpha = 1);
 
-// Helpers for the YouGame button (YgOrb.h).
+// Helpers for the app button (AppOrb.h).
 // The round logo (controller on a red disc), `size` pixels across, top-left at `pos`.
 void RoundLogo(ImDrawList* dl, ImVec2 pos, float size, float alpha = 1);
 // A line of text in the card font, top-left at `pos`, `px` pixels high.
@@ -53,4 +53,4 @@ void Avatar(ImDrawList* dl, ImVec2 centre, float r, std::string_view name, float
 std::string InitialOf(std::string_view name);
 void AvatarOf(ImDrawList* dl, ImVec2 centre, float r, ImU32 colour, std::string_view initial,
               float alpha = 1);
-}  // namespace Orca::UX::Yg
+}  // namespace Orca::UX::AppCard

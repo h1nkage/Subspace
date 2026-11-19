@@ -2,9 +2,9 @@
 # Copyright 2026 YouGame
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# stdio-app.py: plays the YouGame desktop app's half of the stdio bridge (ORCA.md "The stdio
+# stdio-app.py: plays the desktop app's half of the stdio bridge (ORCA.md "The stdio
 # bridge") against a real Orca process, the way fake_bridge.py plays the loopback bridge. It starts
-# Orca with YOUGAME_STDIO=1 and ORCA_SESSION=1 (plus ORCA_TEST_COMMANDS=1 unless the arguments embed
+# Orca with SUBSPACE_STDIO=1 and ORCA_SESSION=1 (plus ORCA_TEST_COMMANDS=1 unless the arguments embed
 # it), then on Orca's stdout answers `hello` (no invite: Orca hosts its own room), mints `mpTicket` as an anonymous dev ticket
 # from the site (dev game orca-stdio-test: no account, no real player), records `mpRoom`, and on
 # Orca's stdin streams controller snapshots (schema 1, one GameCube adapter, A tapped every 2 s) at
@@ -30,7 +30,7 @@ SECS = float(opt("--secs", "25")); PAD_HZ = float(opt("--pad-hz", "125")); LOG =
 # --invite CODE: hello names a friend's room, so Orca joins it instead of hosting.
 INVITE = opt("--invite", None)
 LEAVE = "--no-leave" not in opts
-SITE = os.environ.get("ORCA_SITE", "https://yougame.co"); SLUG = "orca-stdio-test"
+SITE = os.environ.get("ORCA_SITE", "https://example.invalid"); SLUG = "orca-stdio-test"
 TICKET_FIELDS = {"id", "type", "players", "mode", "ranked", "room", "lobby"}
 
 start = time.time()
@@ -46,9 +46,9 @@ def log(source, text):
         if logf: logf.write(line + "\n"); logf.flush()
         elif source != "orca-log": print(line, flush=True)
 
-env = dict(os.environ, ORCA_SESSION="1", YOUGAME_STDIO="1", YOUGAME_GAME=SLUG,
+env = dict(os.environ, ORCA_SESSION="1", SUBSPACE_STDIO="1", SUBSPACE_GAME=SLUG,
            SDL_JOYSTICK_HIDAPI="0", SDL_HIDAPI_LIBUSB="0")
-env.pop("YOUGAME_BRIDGE", None); env.pop("YOUGAME_TOKEN", None); env.pop("ORCA_TEST_DEV_GAME", None)
+env.pop("SUBSPACE_BRIDGE", None); env.pop("SUBSPACE_TOKEN", None); env.pop("ORCA_TEST_DEV_GAME", None)
 if "--embed" not in orca:
     env["ORCA_TEST_COMMANDS"] = "1"
 proc = subprocess.Popen(orca, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -62,7 +62,7 @@ def send(line):
             pass
 
 def answer(rid, ok, payload):
-    send("yg " + json.dumps({"re": rid, "ok": ok, ("result" if ok else "error"): payload}))
+    send("br " + json.dumps({"re": rid, "ok": ok, ("result" if ok else "error"): payload}))
 
 def ticket(msg):
     body = {"dev": SLUG, "player_id": "orcast-" + "".join(random.choice(string.ascii_lowercase) for _ in range(12)),
@@ -99,8 +99,8 @@ def request(line):
             def leave():
                 time.sleep(2)
                 log("app", "the page's Leave")
-                send("yg " + json.dumps({"push": {"slug": "another-game", "cmd": "leave"}}))
-                send("yg " + json.dumps({"push": {"slug": SLUG, "cmd": "leave"}}))
+                send("br " + json.dumps({"push": {"slug": "another-game", "cmd": "leave"}}))
+                send("br " + json.dumps({"push": {"slug": SLUG, "cmd": "leave"}}))
             threading.Thread(target=leave, daemon=True).start()
     else:
         problems.append(f"asked for {kind}")
@@ -109,7 +109,7 @@ def request(line):
 def read_stdout():
     for raw in proc.stdout:
         line = raw.decode("utf-8", "replace").rstrip("\r\n")
-        if line.startswith("yg "):
+        if line.startswith("br "):
             log("orca", line[:300]); request(line)
         elif line == "orca alive":
             alive.append(time.time())
@@ -142,7 +142,7 @@ def pads():
         snap = {"schema": 1, "session": session, "sequence": seq, "sentAt": now, "receivedAt": now,
                 "source": "native", "state": "connected", "message": "", "owned": True, "suspended": False,
                 "ports": ports, "pads": []}
-        send("yg " + json.dumps({"push": {"type": "controllers", "snapshot": snap}}, separators=(",", ":")))
+        send("br " + json.dumps({"push": {"type": "controllers", "snapshot": snap}}, separators=(",", ":")))
         due += period
         if due < time.time() - 4 * period: due = time.time()
         time.sleep(max(0, due - time.time()))

@@ -87,8 +87,8 @@ class Orca:
             "SDL_JOYSTICK_HIDAPI": "0", "SDL_JOYSTICK_HIDAPI_GAMECUBE": "0",
             "SDL_HIDAPI_LIBUSB": "0", "ORCA_SESSION": "1", "ORCA_TEST_COMMANDS": "1",
             "ORCA_TEST_DEV_GAME": "orca-dropin-test",
-            "ORCA_SITE": A.site, "ORCA_NAME": name, "YG_INPUT": os.path.join(HERE, inp),
-            "YG_SCENES": "1",
+            "ORCA_SITE": A.site, "ORCA_NAME": name, "ORCA_INPUT": os.path.join(HERE, inp),
+            "ORCA_SCENES": "1",
         }
         if game == "pp":
             env["ORCA_PROFILE"] = "PPLUS32"

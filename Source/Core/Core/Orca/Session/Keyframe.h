@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "Common/CommonTypes.h"
-#include "Core/Orca/Session/YouGameRoom.h"
+#include "Core/Orca/Session/RelayRoom.h"
 #include "Core/Orca/Session/Replay.h"
 #include "Core/Rollback/Rollback.h"
 
@@ -153,7 +153,7 @@ private:
   bool m_failed = false;
 };
 
-// AES-256-GCM over a packed keyframe, so YouGame's store only holds ciphertext. The key is random
+// AES-256-GCM over a packed keyframe, so the service's store only holds ciphertext. The key is random
 // per keyframe and reaches the joiner only in the room's `kf` message (KeyframeInfo::key, 64 hex).
 // Body: IV (12) | ciphertext | tag (16); the frame number is authenticated too.
 bool EncryptKeyframe(int frame, std::vector<u8>* blob, std::string* key_hex);
@@ -186,14 +186,14 @@ using TicketSource = std::function<bool(bool fresh, std::string* ticket, std::st
                                         std::string* error)>;
 
 // ORCA_TEST_KEYFRAME_DIR: a folder shared by two processes on one machine (tests). Otherwise
-// YouGame's keyframe endpoint, authorized with room tickets.
+// the service's keyframe endpoint, authorized with room tickets.
 std::unique_ptr<KeyframeStore> MakeKeyframeStore(TicketSource tickets);
 
 // The HTTP store alone (tests point it at a local server).
 std::unique_ptr<KeyframeStore> MakeHttpKeyframeStore(TicketSource tickets);
 
-// After a Put or Get on this thread failed: why, when YouGame's store refused for good (its code,
+// After a Put or Get on this thread failed: why, when the service's store refused for good (its code,
 // such as "signed_out"). Empty when another try could work (a network error, 429, 5xx, a 4xx
-// without YouGame's code) or the call was cancelled.
+// without the service's code) or the call was cancelled.
 std::string LastRefusal();
 }  // namespace Orca::Net

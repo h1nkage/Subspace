@@ -5,7 +5,7 @@
 # Anyone > Ranked: the third character select. There port 1 presses A on panel 4's player-type
 # button, then goes up and picks. Expect port 1's panel alone (the record cleared between the
 # scenes, panels 2-4 hidden) and A on panel 4 doing nothing. Watch with
-# pplus-cpu-record-probe.txt's watches; YG_EXIT_AFTER=1700.
+# pplus-cpu-record-probe.txt's watches; ORCA_EXIT_AFTER=1700.
 @scBoot mash 30 99999 1 40 A
 @muMenuMain:1 120 123 1 A
 @muMenuMain:1 170 173 1 A

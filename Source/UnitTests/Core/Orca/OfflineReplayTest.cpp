@@ -36,7 +36,7 @@
 #include "Core/Orca/Session/Keyframe.h"
 #include "Core/Orca/Session/PadCodec.h"
 #include "Core/Orca/Session/Online.h"
-#include "Core/Orca/Session/YouGameRoom.h"
+#include "Core/Orca/Session/RelayRoom.h"
 #include "Core/Orca/UX/ControllerSource.h"
 #include "Core/PowerPC/GDBStub.h"
 #include "Core/Rollback/ReplayStream.h"
@@ -152,9 +152,9 @@ TEST(OrcaOfflineReplay, BalanceBoardReadAndWriteNeverSendFilePlaybackDatagrams)
     board.EventLinked();
     const WiimoteReal::Report output{0xa2, 0x12, 0x00};
     const ReplaySource replay(nullptr);
-    for (const char* source : {"missing-file.ygr", "saved.ygr", static_cast<const char*>(nullptr),
+    for (const char* source : {"missing-file.ssr", "saved.ssr", static_cast<const char*>(nullptr),
                                "", "ws://127.0.0.1/watch", "wss://rooms.invalid/watch",
-                               "missing-file.ygr"})
+                               "missing-file.ssr"})
     {
       ReplaySource::Set(source);
       const bool offline = Common::OfflineReplay();
@@ -191,8 +191,8 @@ TEST(OrcaOfflineReplay, BalanceBoardReadAndWriteNeverSendFilePlaybackDatagrams)
 
 TEST(OrcaOfflineReplay, OnlyProductFileSourcesDisableNetworking)
 {
-  for (const char* source : {"match.ygr", "./saved match.ygr", "/tmp/match.ygr",
-                             "C:\\replays\\match.ygr", "missing-file.ygr", "WS://file.ygr"})
+  for (const char* source : {"match.ssr", "./saved match.ssr", "/tmp/match.ssr",
+                             "C:\\replays\\match.ssr", "missing-file.ssr", "WS://file.ssr"})
   {
     const ReplaySource replay(source);
     EXPECT_TRUE(Rollback::ReplayStream::OfflineReplay()) << source;
@@ -214,7 +214,7 @@ TEST(OrcaOfflineReplay, HttpWebSocketAndTelemetryNeverConnectEvenToLoopback)
   listener.setBlocking(false);
   const std::string origin = "127.0.0.1:" + std::to_string(listener.getLocalPort());
   Common::HttpRequest http(50ms);  // Also covers a client constructed before playback mode.
-  const ReplaySource replay("saved.ygr");
+  const ReplaySource replay("saved.ssr");
   EXPECT_FALSE(http.Get("http://" + origin));
   EXPECT_FALSE(http.Post("http://" + origin, "report"));
   const std::vector<u8> bytes{1, 2};
@@ -246,7 +246,7 @@ TEST(OrcaOfflineReplay, HttpWebSocketAndTelemetryNeverConnectEvenToLoopback)
 
 TEST(OrcaOfflineReplay, DirectLinkRefusesBeforeStartingItsWorker)
 {
-  const ReplaySource replay("saved.ygr");
+  const ReplaySource replay("saved.ssr");
   EXPECT_FALSE(Orca::Net::DirectOptionsFromEnv());
   Orca::Net::DirectOptions options;
   options.me = "offline-player";
@@ -264,8 +264,8 @@ TEST(OrcaOfflineReplay, DirectLinkRefusesBeforeStartingItsWorker)
 
 TEST(OrcaOfflineReplay, RoomsAndTicketRequestsRefuseSynchronously)
 {
-  const ReplaySource replay("saved.ygr");
-  Orca::Net::YouGameRoom room({});
+  const ReplaySource replay("saved.ssr");
+  Orca::Net::RelayRoom room({});
   EXPECT_EQ(room.GetState(), Orca::Net::RoomState::Ended);
   EXPECT_EQ(room.Status(), "network off for file replay");
   EXPECT_FALSE(room.Connected());
@@ -278,7 +278,7 @@ TEST(OrcaOfflineReplay, RoomsAndTicketRequestsRefuseSynchronously)
 
 TEST(OrcaOfflineReplay, KeyframeUploadsDownloadsAndDeletesNeverAskForATicket)
 {
-  const ReplaySource replay("saved.ygr");
+  const ReplaySource replay("saved.ssr");
   int tickets = 0;
   auto store = Orca::Net::MakeHttpKeyframeStore(
       [&](bool, std::string*, std::string*, std::string*) {
@@ -300,7 +300,7 @@ TEST(OrcaOfflineReplay, KeyframeUploadsDownloadsAndDeletesNeverAskForATicket)
 
 TEST(OrcaOfflineReplay, ClassicNetPlayAndTraversalRefuseBeforeSetup)
 {
-  const ReplaySource replay("saved.ygr");
+  const ReplaySource replay("saved.ssr");
   EXPECT_FALSE(Common::EnsureTraversalClient("127.0.0.1", 9, 9, 0));
   Common::ENet::WakeupThread(nullptr);
   EXPECT_FALSE(Common::ENet::SendPacket(nullptr, sf::Packet{}, 0));
@@ -321,14 +321,14 @@ TEST(OrcaOfflineReplay, UpdateCheckReturnsBeforeRequestOrUpdaterLaunch)
   private:
     void OnUpdateAvailable(const NewVersionInformation&) override { notified = true; }
   } checker;
-  const ReplaySource replay("saved.ygr");
+  const ReplaySource replay("saved.ssr");
   checker.CheckForUpdate("dev", "test-revision", AutoUpdateChecker::CheckType::Automatic);
   EXPECT_FALSE(checker.notified);
 }
 
 TEST(OrcaOfflineReplay, DebugListenerRefusesBeforeSocketSetup)
 {
-  const ReplaySource replay("saved.ygr");
+  const ReplaySource replay("saved.ssr");
   GDBStub::Init(0);
   EXPECT_FALSE(GDBStub::IsActive());
 }
@@ -465,7 +465,7 @@ TEST(OrcaOfflineReplay, CoSeatSessionRecordsFourPortsAndFilePlaybackKeepsEveryHa
     Rollback::ReplayStream::Writer writer(base);
     ASSERT_TRUE(writer.Pump(archive, end, end, &checksums));
   }
-  const std::string path = base + "-1.ygr";
+  const std::string path = base + "-1.ssr";
   File::IOFile file(path, "rb");
   ASSERT_TRUE(file);
   std::vector<u8> bytes(file.GetSize());
@@ -539,7 +539,7 @@ TEST(OrcaOfflineReplay, SingleSeatMachinesReplayFileMatchesPreCoSeatsBytes)
   ASSERT_FALSE(encoded.empty());
   const std::string directory = File::CreateTempDir();
   const Common::ScopeGuard cleanup([&] { File::DeleteDirRecursively(directory); });
-  const std::string path = directory + "/single-seat.ygr";
+  const std::string path = directory + "/single-seat.ssr";
   {
     File::IOFile file(path, "wb");
     ASSERT_TRUE(file.WriteBytes(encoded.data(), encoded.size()));
@@ -553,10 +553,10 @@ TEST(OrcaOfflineReplay, SingleSeatMachinesReplayFileMatchesPreCoSeatsBytes)
     actual += fmt::format("{:02x}", byte);
   // Captured as a file using the replay codec from detached 80448a9e1f.
   const std::string_view expected =
-      "5947525301000000a60000007b226275696c64223a2238303434386139653166222c22636f6d706174223a2273696e67"
+      "5353525301000000a60000007b226275696c64223a2238303434386139653166222c22636f6d706174223a2273696e67"
       "6c652d736561742d676f6c64656e222c2266697273745f6672616d65223a3130302c2267616d65223a22525342453031"
       "222c226f726967696e5f68617368223a2231323334353637383961626364656630222c22726f6f6d223a22222c227365"
-      "61745f6c6162656c73223a747275652c227365676d656e74223a312c2276223a327d59475243640000000c0000007000"
+      "61745f6c6162656c73223a747275652c227365676d656e74223a312c2276223a327d53535243640000000c0000007000"
       "000002000000ba0000004a00af969da0a01e28b52ffd6028048505000405010002000100800002503100503219000000"
       "26594131010280010200038001030104040505060206020701070801020209800309030a02030b02030c6a000000efcd"
       "ab103254769870706050403020103220608324ba06c187299c91819c00ce9c19f813ab0165118605e3ab3367769170e8"

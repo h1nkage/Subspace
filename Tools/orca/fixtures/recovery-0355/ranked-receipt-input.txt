@@ -6,12 +6,12 @@
 # Run with ORCA_TEST_QUEUE=ranked (a ranked header as a queue room's host writes it), e.g. the sync
 # test (ranked-sprint: game 1's third step is the first striker's pick, which times out here):
 #   ORCA_SESSION=1 ORCA_TEST_QUEUE=ranked ORCA_TEST_SET_RULES=1,8 ORCA_UX_TEST_NAMES=ada,bo \
-#   YG_INPUT=<this> YG_SYNCTEST=7 YG_SYNCTEST_FROM=1700 \
-#   YG_EXIT_AFTER=6700 YG_RESULTS=1 dolphin-emu-nogui -p headless -v Null -e <disc>
+#   ORCA_INPUT=<this> ORCA_SYNCTEST=7 ORCA_SYNCTEST_FROM=1700 \
+#   ORCA_EXIT_AFTER=6700 ORCA_RESULTS=1 dolphin-emu-nogui -p headless -v Null -e <disc>
 # The checked run also made the matches 1-stock with an ORCA_UX_PROBE file of two lines, written
 # before the sync test's window: `@scSelctCharacter:1 20 write 9017f362 0103` and
 # `@scSelctCharacter:1 20 write 9017f364 01`. Without it a fresh save's 2:00 timed matches run to
-# time (port 1 ahead), and the frames after game 1 move: raise YG_EXIT_AFTER.
+# time (port 1 ahead), and the frames after game 1 move: raise ORCA_EXIT_AFTER.
 @scStrap mash 30 99999 1 40 A
 @scBoot mash 30 99999 1 40 A
 @scTitle mash 30 99999 1 40 A

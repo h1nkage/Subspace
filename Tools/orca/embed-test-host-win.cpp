@@ -1,4 +1,4 @@
-// embed-test-host-win: plays the YouGame desktop app's part for `DolphinNoGUI --embed` on Windows
+// embed-test-host-win: plays the desktop app's part for `DolphinNoGUI --embed` on Windows
 // (ORCA.md "Embedding"), as Tools/orca/embed-test-host.m does on macOS. A top-level window with a
 // menu bar (Electron's default), a player box drawn in it with a red frame just outside the box;
 // Orca is started as a child of the window at the box and steered over its stdin.
@@ -12,7 +12,7 @@
 // The host adds `--embed --parent <its HWND> --rect X Y W H` in front of the orca arguments; pass
 // the rest (-u, -v D3D, -C "Dolphin.DSP.Backend=No Audio Output", -e <disc>). Set ORCA_SESSION=0 in
 // the environment for solo play. `--adopt 1` plays the sandbox's way (ORCA.md "Adopted window"):
-// Orca gets `--embed-adopted` too, and this host adopts its window as yougame-sandbox.exe does
+// Orca gets `--embed-adopted` too, and this host adopts its window as subspace-sandbox.exe does
 // with --embed-keep-style (WS_POPUP becomes WS_CHILD, then SetParent); `--adopt 0` starts it with
 // `--embed-adopted` and never adopts it (Orca must give up with sandbox_embed after 10 s).
 //
@@ -620,7 +620,7 @@ BOOL CALLBACK FindOrcaWindow(HWND h, LPARAM l)
   return TRUE;
 }
 
-// What yougame-sandbox.exe does with --embed-parent and --embed-keep-style, from outside Orca.
+// What subspace-sandbox.exe does with --embed-parent and --embed-keep-style, from outside Orca.
 void Adopt(HANDLE process, DWORD pid, HWND parent)
 {
   const long long start = Ms();

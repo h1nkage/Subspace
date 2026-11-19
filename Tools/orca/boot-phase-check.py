@@ -71,9 +71,9 @@ def main():
                    SDL_JOYSTICK_HIDAPI_GAMECUBE="0", SDL_HIDAPI_LIBUSB="0",
                    SDL_JOYSTICK_IOKIT="0", SDL_JOYSTICK_MFI="0",
                    SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT="0x0000/0x0000",
-                   ORCA_SESSION="1", YG_SCENES="1", YG_EXIT_AFTER="600",
-                   YG_HASHLOG=str(out / f"{name}.hashlog"),
-                   YG_INPUT=str(root / "Tools/orca/inputs" /
+                   ORCA_SESSION="1", ORCA_SCENES="1", ORCA_EXIT_AFTER="600",
+                   ORCA_HASHLOG=str(out / f"{name}.hashlog"),
+                   ORCA_INPUT=str(root / "Tools/orca/inputs" /
                                 ("pplus-1v1.txt" if launcher else "bf-mario-link-results.txt")))
         if launcher:
             env["ORCA_PROFILE"] = "PPLUS32"

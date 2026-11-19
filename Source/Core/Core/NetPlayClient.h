@@ -20,6 +20,7 @@
 #include "Common/SPSCQueue.h"
 #include "Common/TraversalClient.h"
 #include "Core/NetPlayProto.h"
+#include "Core/Orca/Local/LocalProto.h"
 #include "Core/SyncIdentifier.h"
 #include "InputCommon/GCPadStatus.h"
 
@@ -40,8 +41,26 @@ namespace WiimoteEmu
 struct SerializedWiimoteState;
 }
 
+namespace Orca::Local
+{
+class Gateway;
+}
+
 namespace NetPlay
 {
+// Start this player's Subspace engine in the lobby's rollback room (Orca/Local/LocalProto.h).
+struct OrcaLaunch
+{
+  std::string room;
+  // The player's room identity and ticket.
+  std::string ticket;
+  // false: the lobby host, whose engine holds the game; true: a friend joining it.
+  bool joining = false;
+  // The engine's ORCA_SITE: this Dolphin's gateway on 127.0.0.1.
+  std::string site;
+  std::string name;
+};
+
 class NetPlayUI
 {
 public:
@@ -93,6 +112,10 @@ public:
   virtual void SetChunkedProgress(int pid, u64 progress) = 0;
 
   virtual void SetHostWiiSyncData(std::vector<u64> titles, std::string redirect_folder) = 0;
+
+  // Rollback play: start this player's engine (called on the NetPlay thread). Front ends without
+  // an engine to start ignore it.
+  virtual void LaunchOrca(const OrcaLaunch& launch) {}
 };
 
 class Player
@@ -177,6 +200,9 @@ public:
                       std::string redirect_folder);
 
   static SyncIdentifier GetSDCardIdentifier();
+
+  // Rollback play: stop serving this player's engine (the lobby is closing or the game ended).
+  void StopOrcaGateway();
 
 protected:
   struct AsyncQueueEntry
@@ -311,6 +337,8 @@ private:
   void OnGameDigestResult(sf::Packet& packet);
   void OnGameDigestError(sf::Packet& packet);
   void OnGameDigestAbort();
+  void OnOrcaRoom(sf::Packet& packet);
+  int OrcaPongDelayMs();
 
   bool m_is_connected = false;
   ConnectionState m_connection_state = ConnectionState::Failure;
@@ -344,6 +372,14 @@ private:
   std::unique_ptr<IOS::HLE::FS::FileSystem> m_wii_sync_fs;
   std::vector<u64> m_wii_sync_titles;
   std::string m_wii_sync_redirect_folder;
+
+  class OrcaBackend;
+  std::unique_ptr<OrcaBackend> m_orca_backend;
+  std::mutex m_orca_mutex;
+  std::shared_ptr<Orca::Local::Gateway> m_orca_gateway;
+  std::vector<PlayerId> m_orca_room_pids;
+  // Keyframe downloads arriving in parts, by request (NetPlay thread only).
+  std::map<u32, Orca::Local::PartAssembly> m_orca_downloads;
 };
 
 void NetPlay_Enable(NetPlayClient* const np);

@@ -6,7 +6,7 @@
 # once (no clock, no ready step). Then game 2's casual stage pick.
 # Run with ORCA_TEST_QUEUE=casual:solo ORCA_UX_TEST_NAMES=ada,bo
 # ORCA_TEST_QUEUE_PICK=<the solo character select's frame + 300>:43:2:-7.4:7.7, e.g. the sync test
-# from the main menu on (YG_SYNCTEST=7 YG_SYNCTEST_FROM=200).
+# from the main menu on (ORCA_SYNCTEST=7 ORCA_SYNCTEST_FROM=200).
 @scBoot mash 30 99999 1 40 A
 # PLAY ONLINE, With Anyone, Casual.
 @muMenuMain:1 120 123 1 DOWN

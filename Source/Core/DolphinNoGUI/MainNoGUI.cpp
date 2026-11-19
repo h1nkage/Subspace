@@ -78,7 +78,7 @@
 #endif
 
 static std::unique_ptr<Platform> s_platform;
-// True in embed mode (Embed.h): drawn inside the YouGame app's window, controlled over stdin.
+// True in embed mode (Embed.h): drawn inside the desktop app's window, controlled over stdin.
 static bool s_embedded = false;
 // Arm presentation timing only when the guest game's frame hook is live (not a loader splash).
 static std::atomic<bool> s_boot_guest_ready{false};
@@ -94,7 +94,7 @@ static bool s_sandbox_probe = false;
 static void signal_handler(int)
 {
   constexpr char message[] =
-      "A signal was received. A second signal will force YG Dolphin to stop.\n";
+      "A signal was received. A second signal will force Subspace to stop.\n";
 #ifdef _WIN32
   fputs(message, stderr);
 #else
@@ -362,7 +362,7 @@ static std::optional<std::string> ChooseSessionDisc(const std::string& user_dire
       Orca::Status::Error(check.code, check.sentence);
       return std::nullopt;
     }
-    Platform::ShowErrorMacOS("YG Dolphin can't play that disc", check.sentence);
+    Platform::ShowErrorMacOS("Subspace can't play that disc", check.sentence);
     refused = std::move(check);
   }
 }
@@ -610,7 +610,7 @@ static int Run(const int argc, char* argv[], const Embed::Options& embed)
   {
     fprintf(stderr, "Could not boot the specified file\n");
     if (embed.enabled && !Orca::SessionActive())
-      Embed::Out("error YG Dolphin couldn't start the game");
+      Embed::Out("error Subspace couldn't start the game");
     Orca::Status::Finish();
     return 1;
   }
@@ -637,7 +637,7 @@ static int Run(const int argc, char* argv[], const Embed::Options& embed)
     fprintf(stderr, "No platform found, or failed to initialize.\n");
     // Unless the platform already said why (sandbox_embed: nothing adopted the window).
     if (embed.enabled && Orca::Status::ExitCode() == 0)
-      Embed::Out("error YG Dolphin couldn't open its view in the app's window");
+      Embed::Out("error Subspace couldn't open its view in the app's window");
     return 1;
   }
 
@@ -749,7 +749,7 @@ static int Run(const int argc, char* argv[], const Embed::Options& embed)
     if (embed.enabled || Orca::GetEnv("ORCA_TEST_COMMANDS") == "1")
       Orca::Bridge::SetWriter(Embed::Out);
     else
-      fmt::print(stderr, "Orca: YOUGAME_STDIO=1 without --embed: the app's bridge is off\n");
+      fmt::print(stderr, "Orca: SUBSPACE_STDIO=1 without --embed: the app's bridge is off\n");
   }
 
   // Read the existing JIT cache count only on its owning CPU thread, once per VI until the
@@ -819,7 +819,7 @@ static int Run(const int argc, char* argv[], const Embed::Options& embed)
     fprintf(stderr, "Could not boot the specified file\n");
     // In a session, the session status has already reported the error.
     if (embed.enabled && !Orca::SessionActive())
-      Embed::Out("error YG Dolphin couldn't start the game");
+      Embed::Out("error Subspace couldn't start the game");
     Orca::Status::Finish();
     return 1;
   }

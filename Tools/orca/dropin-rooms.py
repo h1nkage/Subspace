@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# dropin-rooms.py: rooms that go wrong, over real YouGame rooms, steered with the app's stdin
+# dropin-rooms.py: rooms that go wrong, over real online rooms, steered with the app's stdin
 # commands (ORCA.md "Embedding") as in dropin-commands.py, headless and muted.
 #
 #   Tools/orca/dropin-rooms.py <dolphin-emu-nogui> <disc>
@@ -101,7 +101,7 @@ class Orca:
         env = {
             "HOME": os.environ["HOME"],
             "TMPDIR": os.environ.get("TMPDIR", WORK),
-            "YG_THROTTLE": "1",
+            "ORCA_THROTTLE": "1",
             "PATH": os.environ["PATH"],
             "ORCA_SESSION": "1",
             "ORCA_TEST_COMMANDS": "1",
@@ -112,7 +112,7 @@ class Orca:
         }
         # Without the input script, the pad is the app's controller stream (the bridge's live pad).
         if script:
-            env["YG_INPUT"] = INPUT
+            env["ORCA_INPUT"] = INPUT
         # A local rooms stack (ORCA_SITE) and the fresh start's knobs (ORCA.md "Fresh starts").
         for key in ("ORCA_SITE", "ORCA_TEST_FRESH", "ORCA_TEST_FRESH_AFTER"):
             if os.environ.get(key):
@@ -445,8 +445,8 @@ def pair_on_with_friends(tag, caps=CAPS_Q2):
     host_log = os.path.join(WORK, f"bridge-{tag}-host.log")
     friend_log = os.path.join(WORK, f"bridge-{tag}-friend.log")
     host_port = start_bridge(host_log, room, FAKE_NO_LEAVE="1", FAKE_PAD_LIVE="1")
-    h = Orca(f"Host-{tag}", {"ORCA_ROOM": room, "YOUGAME_BRIDGE": f"http://127.0.0.1:{host_port}",
-                             "YOUGAME_TOKEN": "t0ken", "YOUGAME_GAME": "orca-test", "YG_SCENES": "1"},
+    h = Orca(f"Host-{tag}", {"ORCA_ROOM": room, "SUBSPACE_BRIDGE": f"http://127.0.0.1:{host_port}",
+                             "SUBSPACE_TOKEN": "t0ken", "SUBSPACE_GAME": "orca-test", "ORCA_SCENES": "1"},
              script=False)
     orcas.append(h)
     h.expect("orca caps", 30)
@@ -454,9 +454,9 @@ def pair_on_with_friends(tag, caps=CAPS_Q2):
     h.expect("orca state playing", 90)
     wait_mirror(host_log, lambda r: r["code"] == room, 20, "the host's room never mirrored")
     friend_port = start_bridge(friend_log, room, FAKE_NO_LEAVE="1", FAKE_PAD_LIVE="1")
-    f = Orca(f"Friend-{tag}", {"YOUGAME_BRIDGE": f"http://127.0.0.1:{friend_port}",
-                               "YOUGAME_TOKEN": "t0ken", "YOUGAME_GAME": "orca-test",
-                               "YG_SCENES": "1"},
+    f = Orca(f"Friend-{tag}", {"SUBSPACE_BRIDGE": f"http://127.0.0.1:{friend_port}",
+                               "SUBSPACE_TOKEN": "t0ken", "SUBSPACE_GAME": "orca-test",
+                               "ORCA_SCENES": "1"},
              script=False)
     orcas.append(f)
     f.expect("orca caps", 30)
@@ -484,8 +484,8 @@ def came_home(f, friend_log, room, since, after):
 try:
     if run_step("page"):
         port = start_bridge(bridge_log, FAKE_NO_LEAVE="1")
-        host = Orca("Host2", {"ORCA_ROOM": paged, "YOUGAME_BRIDGE": f"http://127.0.0.1:{port}",
-                              "YOUGAME_TOKEN": "t0ken", "YOUGAME_GAME": "orca-test"})
+        host = Orca("Host2", {"ORCA_ROOM": paged, "SUBSPACE_BRIDGE": f"http://127.0.0.1:{port}",
+                              "SUBSPACE_TOKEN": "t0ken", "SUBSPACE_GAME": "orca-test"})
         orcas.append(host)
         host.expect("orca caps", 30)
         host.send("caps join leave stats")
@@ -494,8 +494,8 @@ try:
         while not any(r["code"] == paged for r in mirrors(bridge_log)) and time.time() < end:
             time.sleep(0.2)
         friend_port = start_bridge(friend_bridge_log, FAKE_NO_LEAVE="1")
-        friend = Orca("Friend2", {"YOUGAME_BRIDGE": f"http://127.0.0.1:{friend_port}",
-                                  "YOUGAME_TOKEN": "t0ken", "YOUGAME_GAME": "orca-test"})
+        friend = Orca("Friend2", {"SUBSPACE_BRIDGE": f"http://127.0.0.1:{friend_port}",
+                                  "SUBSPACE_TOKEN": "t0ken", "SUBSPACE_GAME": "orca-test"})
         orcas.append(friend)
         friend.expect("orca caps", 30)
         friend.send("caps join leave stats")
@@ -718,9 +718,9 @@ try:
         # A new friend joins that room from the app's invite.
         joiner_log = os.path.join(WORK, "bridge-rej-joiner.log")
         joiner_port = start_bridge(joiner_log, own, FAKE_NO_LEAVE="1", FAKE_PAD_LIVE="1")
-        joiner = Orca("Joiner-rej", {"YOUGAME_BRIDGE": f"http://127.0.0.1:{joiner_port}",
-                                     "YOUGAME_TOKEN": "t0ken", "YOUGAME_GAME": "orca-test",
-                                     "YG_SCENES": "1"},
+        joiner = Orca("Joiner-rej", {"SUBSPACE_BRIDGE": f"http://127.0.0.1:{joiner_port}",
+                                     "SUBSPACE_TOKEN": "t0ken", "SUBSPACE_GAME": "orca-test",
+                                     "ORCA_SCENES": "1"},
                       script=False)
         orcas.append(joiner)
         joiner.expect("orca caps", 30)

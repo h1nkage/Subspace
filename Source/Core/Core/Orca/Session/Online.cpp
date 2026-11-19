@@ -37,7 +37,7 @@
 #include "Core/Orca/Status.h"
 #include "Core/HW/SI/SI_Device.h"
 #include "Core/Orca/Session/Events.h"
-#include "Core/Orca/Session/YouGameRoom.h"
+#include "Core/Orca/Session/RelayRoom.h"
 #include "Core/Orca/UX/ControllerSource.h"
 #include "Core/Orca/UX/Probe.h"
 #include "Core/Rollback/ReplayStream.h"
@@ -52,19 +52,24 @@ constexpr auto TEARDOWN_WAIT = std::chrono::seconds(2);
 std::mutex s_mutex;
 // Shared so a caller still holding the room (WaitForMatch, a status poll) keeps it alive while
 // Shutdown runs on another thread.
-std::shared_ptr<Net::YouGameRoom> s_room;
+std::shared_ptr<Net::RelayRoom> s_room;
 
 std::string Env(const char* name)
 {
   return GetEnv(name);
 }
 
-std::shared_ptr<Net::YouGameRoom> Room()
+std::shared_ptr<Net::RelayRoom> Room()
 {
   std::lock_guard lock(s_mutex);
   return s_room;
 }
 }  // namespace
+
+bool LocalRoom()
+{
+  return Env("ORCA_LOCAL_ROOM") == "1";
+}
 
 bool Enabled()
 {
@@ -76,8 +81,8 @@ bool Enabled()
   // while StartLocked refuses to create a room for them.
   if (Rollback::ReplayStream::ProductMode())
     return true;
-  return Bridge::Ready() || (!Env("YOUGAME_BRIDGE").empty() && !Env("YOUGAME_TOKEN").empty()) ||
-         !Env("ORCA_TEST_DEV_GAME").empty();
+  return Bridge::Ready() || (!Env("SUBSPACE_BRIDGE").empty() && !Env("SUBSPACE_TOKEN").empty()) ||
+         !Env("ORCA_TEST_DEV_GAME").empty() || LocalRoom();
 }
 
 namespace
@@ -109,7 +114,7 @@ std::string UniversalKeyParts()
       Config::Get(Config::MAIN_ALLOW_SD_WRITES));
 }
 
-// Mod mode (Core/Orca/Mod.h, YouGame docs/ORCA_MODS.md "The key in mod mode"): the engine's commit
+// Mod mode (Core/Orca/Mod.h, service docs/ORCA_MODS.md "The key in mod mode"): the engine's commit
 // and API version, the bundle's tree hash (mod.json, the patches, textures, launcher and SD files:
 // everything but orca/jitwarm and orca/test/), the SD image's hash, the disc, the Sys/GameSettings
 // INIs Dolphin loads for the game (as the legacy key hashes them: an install whose copy was edited
@@ -284,10 +289,10 @@ void StartLocked(Net::RoomOptions options)
     options.controls = Events::OwnControls();
     options.queue = Events::OwnQueue();
   }
-  NOTICE_LOG_FMT(NETPLAY, "Orca: joining a YouGame room ({}), compatibility {}",
+  NOTICE_LOG_FMT(NETPLAY, "Orca: joining an online room ({}), compatibility {}",
                  options.joining ? "to join a friend's game" : "as the host",
                  options.compatibility);
-  s_room = std::make_shared<Net::YouGameRoom>(std::move(options));
+  s_room = std::make_shared<Net::RelayRoom>(std::move(options));
 }
 }  // namespace
 
@@ -718,7 +723,7 @@ bool RoomsLeaving()
 
 void ShutdownInBackground()
 {
-  std::shared_ptr<Net::YouGameRoom> room;
+  std::shared_ptr<Net::RelayRoom> room;
   {
     std::lock_guard lock(s_mutex);
     room = std::move(s_room);
@@ -919,7 +924,7 @@ void TestDropRoom()
     // All recovery rooms retain the same room object; legacy silent drops keep the socket.
     if (!room->RoomRecovery() && Env("ORCA_TEST_DROP_SILENT") == "1")
     {
-      static std::vector<std::shared_ptr<Net::YouGameRoom>> s_kept;
+      static std::vector<std::shared_ptr<Net::RelayRoom>> s_kept;
       s_kept.push_back(room);
     }
     room->TestDropConnection();
@@ -934,7 +939,7 @@ void TestDirect(const std::string& command)
 
 void Shutdown()
 {
-  std::shared_ptr<Net::YouGameRoom> room;
+  std::shared_ptr<Net::RelayRoom> room;
   {
     std::lock_guard lock(s_mutex);
     room = std::move(s_room);

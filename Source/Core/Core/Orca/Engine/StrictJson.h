@@ -10,7 +10,7 @@
 #include <picojson.h>
 
 // A strict JSON reader for game data files (Orca split S5: rulesets first). It accepts exactly what
-// the site's ruleset validator reads (YouGame web/src/lib/orca-ruleset-validate.ts: parseStrictJson
+// the site's ruleset validator reads (service web/src/lib/orca-ruleset-validate.ts: parseStrictJson
 // from orca-pack-validate.ts plus its number rule), so a file the site takes is a file Orca takes:
 //   - one RFC 8259 value and nothing after it but space, tab, CR and LF;
 //   - the whole text valid UTF-8, strings without raw control characters, \u escapes with paired

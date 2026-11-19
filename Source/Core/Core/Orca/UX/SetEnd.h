@@ -166,7 +166,7 @@ public:
   void QueueRating(int rating, double now);
   // The ranked set reached its first game: one of its fights began (its fighters in) on final
   // frames, or a game of it ended. Until then a leave, a stall or a no-show voids the set and rates
-  // nobody (the room's rule, YouGame docs/ORCA_ONLINE_UX.md "3B leaving mid-game"); from then on
+  // nobody (the room's rule, service docs/ORCA_ONLINE_UX.md "3B leaving mid-game"); from then on
   // the one who goes forfeits it.
   void GameBegan(double now);
   // Mid-set, the opponent left the room. They forfeit LEAVE_FORFEIT_MS later unless they come back

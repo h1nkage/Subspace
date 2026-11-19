@@ -11,9 +11,9 @@ was run on the Mac. From a Developer PowerShell, in the existing checkout/build 
 ```powershell
 cmake --build build --config Release --target tests dolphin-nogui --parallel 2
 python Tools/orca/room-fix-tests.py build/Binaries/Tests/Release/tests.exe --gtest_filter="*Broadcast*:*Ring*:*Replay*" --gtest_brief=1
-python Tools/orca/broadcast-check.py build/Binaries/Release/DolphinNoGUI.exe 'D:/ROMs/Super Smash Bros. Brawl (USA, Canada) (Rev 2).wbfs' 'D:/fixtures/brawl-current.ygr' --backend D3D --seconds 20 --save-frame broadcast-D3D.rgba
-python Tools/orca/broadcast-check.py build/Binaries/Release/DolphinNoGUI.exe 'D:/ROMs/Super Smash Bros. Brawl (USA, Canada) (Rev 2).wbfs' 'D:/fixtures/brawl-current.ygr' --backend D3D12 --seconds 20 --save-frame broadcast-D3D12.rgba
-python Tools/orca/broadcast-check.py build/Binaries/Release/DolphinNoGUI.exe 'D:/ROMs/Super Smash Bros. Brawl (USA, Canada) (Rev 2).wbfs' 'D:/fixtures/brawl-current.ygr' --backend Vulkan --seconds 20 --save-frame broadcast-Vulkan.rgba
+python Tools/orca/broadcast-check.py build/Binaries/Release/DolphinNoGUI.exe 'D:/ROMs/Super Smash Bros. Brawl (USA, Canada) (Rev 2).wbfs' 'D:/fixtures/brawl-current.ssr' --backend D3D --seconds 20 --save-frame broadcast-D3D.rgba
+python Tools/orca/broadcast-check.py build/Binaries/Release/DolphinNoGUI.exe 'D:/ROMs/Super Smash Bros. Brawl (USA, Canada) (Rev 2).wbfs' 'D:/fixtures/brawl-current.ssr' --backend D3D12 --seconds 20 --save-frame broadcast-D3D12.rgba
+python Tools/orca/broadcast-check.py build/Binaries/Release/DolphinNoGUI.exe 'D:/ROMs/Super Smash Bros. Brawl (USA, Canada) (Rev 2).wbfs' 'D:/fixtures/brawl-current.ssr' --backend Vulkan --seconds 20 --save-frame broadcast-Vulkan.rgba
 ```
 
 Adjust only the existing build's executable paths and the authorized local disc/replay paths.
@@ -27,7 +27,7 @@ folder, with the same header as the app. It starts the engine with:
 ```text
 -p headless -v D3D (or D3D12 / Vulkan) -u <temporary-user> -e <disc>
 ORCA_SESSION=1
-ORCA_REPLAY_SOURCE=<absolute local .ygr>
+ORCA_REPLAY_SOURCE=<absolute local .ssr>
 ORCA_BROADCAST_SINK=<absolute temporary sink.bin>
 ORCA_TEST_COMMANDS=1
 ORCA_NO_LOCAL_INPUT=1

@@ -46,7 +46,7 @@ bool Wanted(LatencyThread thread)
     return false;
   if (knob == "1" || thread != LatencyThread::Cpu)
     return true;
-  // An unpaced harness run (no online match, no YG_THROTTLE) runs flat out, so it must not hold a
+  // An unpaced harness run (no online match, no ORCA_THROTTLE) runs flat out, so it must not hold a
   // core at interactive priority.
   return !Rollback::Harness::Active() || Online::Enabled() || Rollback::Diag::KeepThrottle();
 }

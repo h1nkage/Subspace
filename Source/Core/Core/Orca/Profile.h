@@ -121,7 +121,7 @@ bool SessionActive();
 enum class LatencyThread
 {
   Cpu,          // emulation, the frame hook, the session
-  Room,         // the YouGame room's network thread
+  Room,         // the online room's network thread
   Controllers,  // the app's controller stream
 };
 void PrioritizeThread(LatencyThread thread);
@@ -148,7 +148,7 @@ void PrioritizeThread(LatencyThread thread);
 //                            order kept (a slow, bursty uplink), from S1 to S2 s after the room
 //                            opened. Implies ORCA_TEST_NET_DELAY_MS.
 //   ORCA_TEST_SNAPSHOT_EVERY=K  snapshot every K-th predicted frame (1-4) instead of choosing from
-//                            the measured save time; the synctest (YG_SYNCTEST) then loads only
+//                            the measured save time; the synctest (ORCA_SYNCTEST) then loads only
 //                            multiples of K. Peers may differ in K.
 //   ORCA_TEST_FULL_SNAPSHOTS=1  snapshots copy all of RAM instead of copy-on-write
 //                            (Rollback/Cow.h), for comparison.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# dropin-refused.py: a friend joins a host whose keyframes YouGame's store refuses for good, over a
-# real YouGame room, headless and muted.
+# dropin-refused.py: a friend joins a host whose keyframes the service's store refuses for good, over a
+# real online room, headless and muted.
 #
 #   Tools/orca/dropin-refused.py <dolphin-emu-nogui> <disc>
 #
@@ -46,8 +46,8 @@ class Orca:
             "ORCA_TEST_COMMANDS": "1",
             "ORCA_TEST_DEV_GAME": "orca-dropin-test",
             "ORCA_NAME": name,
-            "YG_INPUT": INPUT,
-            "YG_SCENES": "1",
+            "ORCA_INPUT": INPUT,
+            "ORCA_SCENES": "1",
         }
         env.update(env_extra)
         args = [BIN, "-p", "headless", "-u", user, "-v", "Null",

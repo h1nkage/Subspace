@@ -69,7 +69,7 @@ protected:
     }
     // The desktop page's virtual pad arrives as a standard pad in the app's snapshot.
     const std::string line =
-        R"(yg {"push":{"type":"controllers","snapshot":{"schema":1,"session":"virtual-pad-test",)"
+        R"(br {"push":{"type":"controllers","snapshot":{"schema":1,"session":"virtual-pad-test",)"
         R"("sequence":1,"sentAt":1000,"receivedAt":1000,"owned":false,"suspended":false,)"
         R"("ports":[],"pads":[{"index":0,"mapping":"standard","axes":[1,0,0,0],"buttons":[)" +
         buttons + "]}]}}}";
@@ -108,7 +108,7 @@ TEST_F(OrcaVirtualPadOnly, ExactOneDisablesAllNativeInputBackends)
 
 TEST_F(OrcaVirtualPadOnly, PagePadSurvivesFocusLossOnlyWhenEnabled)
 {
-  const ScopedEnv stdio("YOUGAME_STDIO", "1");
+  const ScopedEnv stdio("SUBSPACE_STDIO", "1");
   SendVirtualPad();
   for (const char* value : {static_cast<const char*>(nullptr), "0", "1", "true"})
   {
@@ -153,7 +153,7 @@ TEST_F(OrcaVirtualPadOnly, ExplicitOrdinalsSurviveVirtualPadIndexShuffling)
     std::fclose(output);
   });
   const ScopedEnv mode("ORCA_VIRTUAL_PAD_ONLY", "1");
-  const ScopedEnv stdio("YOUGAME_STDIO", "1");
+  const ScopedEnv stdio("SUBSPACE_STDIO", "1");
   Orca::UX::SetLocalPadCount(2);
   const Common::ScopeGuard count([] { Orca::UX::SetLocalPadCount(1); });
   Orca::UX::StartControllerStreamFromStdio();
@@ -179,7 +179,7 @@ TEST_F(OrcaVirtualPadOnly, ExplicitOrdinalsSurviveVirtualPadIndexShuffling)
       pads += "]}";
     }
     const std::string line =
-        R"(yg {"push":{"type":"controllers","snapshot":{"schema":1,"session":"co-virtual",)"
+        R"(br {"push":{"type":"controllers","snapshot":{"schema":1,"session":"co-virtual",)"
         R"("sequence":)" + std::to_string(sequence) +
         R"(,"sentAt":1000,"receivedAt":1000,"owned":false,"suspended":false,"ports":[],"pads":[)" +
         pads + "]}}}";
@@ -213,7 +213,7 @@ TEST_F(OrcaVirtualPadOnly, CoSeatAssignmentsPrintOneCompleteLinePerChange)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
   const ScopedEnv mode("ORCA_VIRTUAL_PAD_ONLY", "1");
-  const ScopedEnv stdio("YOUGAME_STDIO", "1");
+  const ScopedEnv stdio("SUBSPACE_STDIO", "1");
   std::FILE* output = std::tmpfile();
   ASSERT_NE(output, nullptr);
   Common::ScopeGuard restore([&] {

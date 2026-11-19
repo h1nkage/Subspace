@@ -2,8 +2,8 @@
 # sync test of the move. Run with ORCA_UX_TEST_RESEAT_AT=<frame> (the player is on port 2 until
 # that frame, on port 1 from it) and ORCA_UX_TEST_NAMES=bo. Port 1's rules here drive whichever
 # port the player is on. Set the frame about 250 frames into the first character select (find it
-# with YG_SCENES=1), e.g.
-#   ORCA_UX_TEST_RESEAT_AT=1907 YG_SYNCTEST=7 YG_SYNCTEST_FROM=1400 YG_EXIT_AFTER=<menu 3 + 100>
+# with ORCA_SCENES=1), e.g.
+#   ORCA_UX_TEST_RESEAT_AT=1907 ORCA_SYNCTEST=7 ORCA_SYNCTEST_FROM=1400 ORCA_EXIT_AFTER=<menu 3 + 100>
 # The walk (ux=18: With Friends goes straight to its character select, and B out of it lands on
 # the ONLINE page): PLAY ONLINE > With Friends; on port 2, join and pick; the move; on port 1,
 # join, pick and hold B out; With Anyone > Ranked; join, pick, Start, and hold B back out.
