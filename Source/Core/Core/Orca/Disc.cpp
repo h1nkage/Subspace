@@ -127,7 +127,8 @@ DiscCheck CheckDisc(const std::string& path, std::string_view game_id)
   const std::optional<Profile> profile = LoadProfile(id, revision, &error);
   if (!profile)
   {
-    if (error.find("revision") == std::string::npos)
+    if (error.find("revision") == std::string::npos && revision != BRAWL_REV1 &&
+        !error.starts_with("Rev "))
       return DiscCheck{false, "profile", BrandWords(error)};
     if (revision == BRAWL_REV1)
     {
@@ -135,10 +136,7 @@ DiscCheck CheckDisc(const std::string& path, std::string_view game_id)
           "That Brawl disc is Rev 1 but not an unmodified copy of it. Subspace plays "
           "unmodified USA Rev 1 and Rev 2 discs, so both players have the same game.", alias_reason));
     }
-    return refuse(
-        fmt::format("That Brawl disc is revision {}; Subspace plays the USA Rev 1 and Rev 2 "
-                    "discs, so both players have the same game.",
-                    revision));
+    return refuse("Rev 0 not supported.");
   }
   return DiscCheck{true, {}, {}};
 }

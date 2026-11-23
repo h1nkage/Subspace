@@ -788,7 +788,7 @@ std::string RefusalCode(const std::string& connect_error)
 std::string RefusalReason(const std::string& connect_error)
 {
   if (RefusalCode(connect_error) == "host_gone")
-    return "Your friend left that game. Ask them for a new invite.";
+    return "Host closed game window.";
   if (RefusalCode(connect_error) == "room-unstable")
     return "The room keeps disconnecting.";
   if (connect_error.find("(HTTP 403)") != std::string::npos)
@@ -6070,7 +6070,7 @@ struct RelayRoom::Impl
         // Not a player of this game; a joiner can't play it at all.
         WARN_LOG_FMT(NETPLAY, "Orca room: {} runs a different Orca build or setup", id);
         if (joining && id == host)
-          End("Your friend is running a different Subspace build or setup", "room_mismatch");
+          End("Game window closed. Host is running a different Subspace version.", "room_mismatch");
         return;
       }
       const std::string their_run = Str(d, "run");

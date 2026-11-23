@@ -192,7 +192,10 @@ bool BootCore(Core::System& system, std::unique_ptr<BootParameters> boot,
     // name a revision too).
     const char* error_code = !orca_profile && (Orca::Mod::Requested() ?
                                                    mod_wrong_disc :
-                                                   error.find("revision") != std::string::npos) ?
+                                                   (error.find("revision") != std::string::npos ||
+                                                    error.find("Brawl disc is Rev 1") !=
+                                                        std::string::npos ||
+                                                    error.starts_with("Rev "))) ?
                                  "disc_revision" :
                                  (!orca_profile ? "profile" : "settings");
     if (orca_profile && NetPlay::IsNetPlayRunning())

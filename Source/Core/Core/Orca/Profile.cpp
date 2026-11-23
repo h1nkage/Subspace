@@ -846,8 +846,16 @@ std::optional<Profile> LoadProfileFrom(const std::string& sys_directory, const s
   }
   if (revision && *profile_revision != *revision)
   {
-    *error = fmt::format("This disc is {} revision {}; Subspace's profile is for revision {}",
-                         game_id, *revision, *profile_revision);
+    // Brawl Rev 1 reaches here only when AliasRevision refused it (not an unmodified copy);
+    // callers append its reason.
+    if (game_id == "RSBE01" && *revision == 1)
+      *error = "That Brawl disc is Rev 1 but not an unmodified copy of it. Subspace plays "
+               "unmodified USA Rev 1 and Rev 2 discs, so both players have the same game.";
+    else if (game_id == "RSBE01")
+      *error = "Rev 0 not supported.";
+    else
+      *error = fmt::format("This disc is {} revision {}; Subspace's profile is for revision {}",
+                           game_id, *revision, *profile_revision);
     return std::nullopt;
   }
   profile.revision = *profile_revision;

@@ -73,7 +73,7 @@ echo Step 2/3: configuring...
 rem Without git Dolphin can't read its own version; name it here (base commit + this branch).
 set "SCM="
 if not defined HAVEGIT set "SCM=-DDOLPHIN_WC_REVISION=73fdf1a870c8a0ccb5f6a65cce48d99419a0d030 -DDOLPHIN_WC_DESCRIBE=subspace-0.3.103-netplay -DDOLPHIN_WC_BRANCH=dolphin-netplay"
-cmake --preset visualstudio-release-x64 -DENABLE_QT=ON -DENABLE_NOGUI=ON -DUSE_SYSTEM_LIBS=OFF -DENCODE_FRAMEDUMPS=OFF -DENABLE_LLVM=OFF -DENABLE_ANALYTICS=OFF -DENABLE_AUTOUPDATE=OFF -DUSE_DISCORD_PRESENCE=OFF -DUSE_RETRO_ACHIEVEMENTS=OFF -DUSE_MGBA=OFF -DUSE_UPNP=OFF -DENABLE_VULKAN=OFF -DENABLE_CLI_TOOL=OFF %SCM% >> "%LOG%" 2>&1 || (echo STEP 2 FAILED >> "%LOG%" & goto :fail)
+cmake --preset visualstudio-release-x64 -DENABLE_QT=ON -DENABLE_NOGUI=ON -DUSE_SYSTEM_LIBS=OFF -DENCODE_FRAMEDUMPS=OFF -DENABLE_LLVM=OFF -DENABLE_ANALYTICS=OFF -DENABLE_AUTOUPDATE=OFF -DUSE_DISCORD_PRESENCE=OFF -DUSE_RETRO_ACHIEVEMENTS=OFF -DUSE_MGBA=OFF -DUSE_UPNP=OFF -DENABLE_VULKAN=OFF -DENABLE_CLI_TOOL=OFF -DSUBSPACE_NEUTRAL_PATHS=ON %SCM% >> "%LOG%" 2>&1 || (echo STEP 2 FAILED >> "%LOG%" & goto :fail)
 
 echo === STEP 3: build >> "%LOG%"
 echo Step 3/3: building Subspace.exe and SubspaceNoGUI.exe (this takes a while)...

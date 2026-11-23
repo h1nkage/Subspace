@@ -14,6 +14,7 @@
 	path = Externals/libusb/libusb
 	url = https://github.com/libusb/libusb.git
 	shallow = true
+	ignore = dirty
 [submodule "Externals/spirv_cross/SPIRV-Cross"]
 	path = Externals/spirv_cross/SPIRV-Cross
 	url = https://github.com/KhronosGroup/SPIRV-Cross.git
@@ -102,6 +103,7 @@
 	path = Externals/zstd/zstd
 	url = https://github.com/facebook/zstd.git
 	shallow = true
+	ignore = dirty
 [submodule "Externals/miniupnpc/miniupnp"]
 	path = Externals/miniupnpc/miniupnp
 	url = https://github.com/miniupnp/miniupnp.git

@@ -3294,7 +3294,7 @@ TEST(OrcaRoomResilience, HostGoneAfterServerCloseEndsWithoutRetrying)
     });
     EXPECT_EQ(trace.back().state, RoomState::Ended);
     EXPECT_EQ(trace.back().error_code, "host_gone");
-    EXPECT_EQ(trace.back().status, "Your friend left that game. Ask them for a new invite.");
+    EXPECT_EQ(trace.back().status, "Host closed game window.");
     EXPECT_EQ(trace.back().reconnect_attempts, 1u);
   }
 }
@@ -3941,7 +3941,7 @@ TEST_F(OrcaRoomRuntime, HostGoneRefusalsEndOnceWithTheExistingHostLeftState)
       auto room = Open(code, refusal, true, true, recovery);
       ASSERT_TRUE(Wait([&] { return room->GetState() == RoomState::Ended; }));
       EXPECT_EQ(room->ErrorCode(), "host_gone");
-      EXPECT_EQ(room->Status(), "Your friend left that game. Ask them for a new invite.");
+      EXPECT_EQ(room->Status(), "Host closed game window.");
       EXPECT_EQ(JoinFailureStatus(*room), "orca state host-left host_gone\n");
       room->Leave();
       EXPECT_EQ(Connections(code), 1);
@@ -3954,7 +3954,7 @@ TEST_F(OrcaRoomRuntime, HostGoneRefusalsEndOnceWithTheExistingHostLeftState)
       Action(code, fmt::format(R"({{"refuse":{},"refuse_status":{},"close":1013}})", body, status));
       ASSERT_TRUE(Wait([&] { return room->GetState() == RoomState::Ended; }));
       EXPECT_EQ(room->ErrorCode(), "host_gone");
-      EXPECT_EQ(room->Status(), "Your friend left that game. Ask them for a new invite.");
+      EXPECT_EQ(room->Status(), "Host closed game window.");
       room->Leave();
       EXPECT_EQ(Connections(code), 2);
       EXPECT_EQ(Request("/state/" + code).get("tickets").get<double>(), 1);
@@ -5281,7 +5281,7 @@ TEST_F(OrcaRoomRuntime, LaunchJoinHostGoneBeforeCapsEndsAtTheBoundary)
     ASSERT_EQ(Orca::Online::Joining(), true);
     ASSERT_EQ(Orca::Online::RoomErrorCode(), "host_gone");
     EXPECT_EQ(Orca::Online::StatusLine(),
-              "Your friend left that game. Ask them for a new invite.");
+              "Host closed game window.");
     const auto result = Rollback::OnlineMatch::PumpLaunchJoinBoundaryForTest();
     EXPECT_EQ(result.finished, !soft);
     EXPECT_EQ(result.has_port, soft);

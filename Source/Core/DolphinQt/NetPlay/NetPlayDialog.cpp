@@ -493,8 +493,8 @@ void NetPlayDialog::OnStart()
       ModalMessageBox::information(this, tr("Rollback NetPlay"), QString::fromStdString(error));
       return;
     }
-    DisplayMessage(tr("Starting rollback NetPlay: the host's game opens first, then everyone "
-                      "else's joins it."),
+    DisplayMessage(tr("Starting. Will load main menu, then automatically go to the character "
+                      "select screen; do not press any buttons."),
                    "green");
     return;
   }
@@ -949,7 +949,7 @@ void NetPlayDialog::OnPadBufferChanged(u32 buffer)
     m_buffer_size_box->setValue(buffer);
   });
   DisplayMessage(m_host_input_authority ? tr("Max buffer size changed to %1").arg(buffer) :
-                                          tr("Buffer size changed to %1").arg(buffer),
+                                          tr("Buffer changed to %1").arg(buffer),
                  "darkcyan");
 
   m_buffer_size = static_cast<int>(buffer);
@@ -1020,7 +1020,7 @@ void NetPlayDialog::OnTraversalError(Common::TraversalClient::FailureReason erro
       break;
     case Common::TraversalClient::FailureReason::VersionTooOld:
       ModalMessageBox::critical(this, tr("Traversal Error"),
-                                tr("Dolphin is too old for traversal server"));
+                                tr("Dolphin base is too old for traversal server"));
       QDialog::reject();
       break;
     case Common::TraversalClient::FailureReason::ServerForgotAboutUs:
@@ -1077,6 +1077,17 @@ bool NetPlayDialog::IsRecording()
   return false;
 }
 
+namespace
+{
+bool IsBrawlRev1Rev2Pair(const UICommon::GameFile& file, const NetPlay::SyncIdentifier& host)
+{
+  const auto rev_1_or_2 = [](u16 revision) { return revision == 1 || revision == 2; };
+  return file.GetGameID() == "RSBE01" && host.game_id == "RSBE01" &&
+         file.GetRevision() != host.revision && rev_1_or_2(file.GetRevision()) &&
+         rev_1_or_2(host.revision) && file.GetDiscNumber() == host.disc_number;
+}
+}  // namespace
+
 std::shared_ptr<const UICommon::GameFile>
 NetPlayDialog::FindGameFile(const NetPlay::SyncIdentifier& sync_identifier,
                             NetPlay::SyncIdentifierComparison* found)
@@ -1092,7 +1103,16 @@ NetPlayDialog::FindGameFile(const NetPlay::SyncIdentifier& sync_identifier,
         for (int i = 0; i < m_game_list_model.rowCount(QModelIndex()); i++)
         {
           auto file = m_game_list_model.GetGameFile(i);
-          *found = std::min(*found, file->CompareSyncIdentifier(sync_identifier));
+          auto comparison = file->CompareSyncIdentifier(sync_identifier);
+          // USA Brawl Rev 1 and Rev 2 are one game for rollback: the engine plays an unmodified
+          // Rev 1 as Rev 2 (Orca/Disc.cpp AliasRevision) and refuses any other Rev 1 at Start, so
+          // the lobby lets the two revisions meet (their disc hashes always differ).
+          if (comparison == NetPlay::SyncIdentifierComparison::DifferentRevision &&
+              IsBrawlRev1Rev2Pair(*file, sync_identifier) && IsRollbackGame(*file))
+          {
+            comparison = NetPlay::SyncIdentifierComparison::SameGame;
+          }
+          *found = std::min(*found, comparison);
           if (*found == NetPlay::SyncIdentifierComparison::SameGame)
             return file;
         }
@@ -1375,7 +1395,7 @@ QString PrepareRollbackUserFolder(const std::string& game_id, QString* error)
   const QString config = root + QStringLiteral("/Config");
   if (!QDir().mkpath(config))
   {
-    *error = QStringLiteral("can't create %1").arg(config);
+    *error = QStringLiteral("can't create %1").arg(QDir::toNativeSeparators(config));
     return {};
   }
   for (const char* name : {"Dolphin.ini", "GFX.ini", "GCPadNew.ini", "GCKeyNew.ini", "Hotkeys.ini"})
@@ -1412,19 +1432,25 @@ QString PrepareRollbackUserFolder(const std::string& game_id, QString* error)
 
 void NetPlayDialog::StartOrcaEngine(const NetPlay::OrcaLaunch& launch)
 {
-  const auto game = FindGameFile(m_current_game_identifier);
+  NetPlay::SyncIdentifierComparison found;
+  const auto game = FindGameFile(m_current_game_identifier, &found);
+  if (!game && found == NetPlay::SyncIdentifierComparison::DifferentRevision &&
+      m_current_game_identifier.game_id == "RSBE01")
+  {
+    // Rev 1 and Rev 2 meet (FindGameFile), so one side of this is Rev 0.
+    DisplayMessage(tr("Rev 0 not supported."), "red");
+    return;
+  }
   if (!game)
   {
-    DisplayMessage(tr("Rollback: you don't have the selected game, so your game can't start."),
+    DisplayMessage(tr("You don't have the selected game, so your game can't start."),
                    "red");
     return;
   }
   const QString engine = FindOrcaEngine();
   if (engine.isEmpty())
   {
-    DisplayMessage(tr("Rollback: the YG engine (DolphinNoGUI) isn't next to Dolphin. Build the "
-                      "dolphin-nogui target too."),
-                   "red");
+    DisplayMessage(tr("Start failed: SubspaceNoGUI.exe missing."), "red");
     return;
   }
 
@@ -1432,7 +1458,7 @@ void NetPlayDialog::StartOrcaEngine(const NetPlay::OrcaLaunch& launch)
   const QString rollback_user = PrepareRollbackUserFolder(game->GetGameID(), &folder_error);
   if (rollback_user.isEmpty())
   {
-    DisplayMessage(tr("Rollback: your game can't start (%1).").arg(folder_error), "red");
+    DisplayMessage(tr("Game can't start; %1.").arg(folder_error), "red");
     return;
   }
 
@@ -1507,17 +1533,22 @@ void NetPlayDialog::StartOrcaEngine(const NetPlay::OrcaLaunch& launch)
   connect(process, &QProcess::finished, this, [this, process](int code, QProcess::ExitStatus) {
     if (process != m_orca_process)
       return;
-    if (!m_orca_error.isEmpty() && !m_orca_error_passed)
+    // These read on their own, with no "Your game closed" prefix.
+    if (m_orca_error == QStringLiteral("Rev 0 not supported.") ||
+        m_orca_error == QStringLiteral("Host closed game window.") ||
+        m_orca_error == QStringLiteral("Game window closed. Host is running a different Subspace version."))
+      DisplayMessage(m_orca_error, "red");
+    else if (!m_orca_error.isEmpty() && !m_orca_error_passed)
       DisplayMessage(tr("Your game closed: %1").arg(m_orca_error), "red");
     else if (!m_orca_error.isEmpty())
-      DisplayMessage(tr("Your game window closed."), "");
+      DisplayMessage(tr("Game window closed."), "");
     else if (code != 0)
-      DisplayMessage(tr("Your game closed (exit code %1). Details: Logs\\orca-engine.log in your "
-                        "Dolphin user folder.")
+      DisplayMessage(tr("Your game closed (exit code %1). Details: User\\Logs\\orca-engine.log in "
+                        "your Subspace folder.")
                          .arg(code),
                      "red");
     else
-      DisplayMessage(tr("Your game window closed."), "");
+      DisplayMessage(tr("Game window closed."), "");
     m_orca_process->deleteLater();
     m_orca_process = nullptr;
     m_orca_log.reset();
@@ -1526,15 +1557,19 @@ void NetPlayDialog::StartOrcaEngine(const NetPlay::OrcaLaunch& launch)
   connect(process, &QProcess::errorOccurred, this, [this, process](QProcess::ProcessError error) {
     if (process != m_orca_process || error != QProcess::FailedToStart)
       return;
-    DisplayMessage(tr("Rollback: the YG engine failed to start."), "red");
+    DisplayMessage(tr("Start failed: SubspaceNoGUI.exe failed."), "red");
   });
 
   // Only one program can hold a GameCube adapter: let go of it so the game can read it.
   GCAdapter::Shutdown();
   m_orca_process->start(engine, arguments);
-  DisplayMessage(launch.joining ? tr("Your game is starting and will join the host's.") :
-                                  tr("Your game is starting; everyone else joins once it's up."),
-                 "green");
+  // The host already got the Start message (OnStart).
+  if (launch.joining)
+  {
+    DisplayMessage(tr("Starting. Will boot directly to character select screen; do not press any "
+                      "buttons."),
+                   "green");
+  }
 }
 
 void NetPlayDialog::StopOrcaEngine()

@@ -298,6 +298,16 @@ if(MSVC)
   add_compile_options(/experimental:deterministic)
   add_link_options(/experimental:deterministic)
 
+  # Subspace: record source paths (__FILE__ in asserts and logs, debug info) as Subspace\... and not
+  # as this PC's source folder, whose path holds the Windows user name; the exe names its .pdb by file
+  # name only. build-netplay.bat turns it on (/pathmap needs /experimental:deterministic, above).
+  if(SUBSPACE_NEUTRAL_PATHS)
+    file(TO_NATIVE_PATH "${CMAKE_SOURCE_DIR}" subspace_source_dir)
+    add_compile_options("/pathmap:${subspace_source_dir}=Subspace")
+    add_link_options("/pathmap:${subspace_source_dir}=Subspace")
+    string(APPEND CMAKE_EXE_LINKER_FLAGS " /PDBALTPATH:%_PDB%")
+  endif()
+
   # Enable function-level linking
   add_compile_options(/Gy)
   # Generate intrinsic functions

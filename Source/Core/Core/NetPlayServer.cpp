@@ -1380,7 +1380,7 @@ bool NetPlayServer::StartOrcaRoom(std::string* error)
     const auto host = m_players.find(1);
     if (host == m_players.end())
     {
-      *error = "The host isn't connected to its own lobby.";
+      *error = "Host not connected to lobby.";
       return false;
     }
     players.push_back({1, host->second.name});
@@ -1398,15 +1398,13 @@ bool NetPlayServer::StartOrcaRoom(std::string* error)
   const bool was_running = m_orca_room->Running();
   if (!was_running && players.size() < 2)
   {
-    *error = "Nobody else has a controller port yet. Assign ports with \"Assign Controller "
-             "Ports\", then press Start.";
+    *error = "Non-host controller ports not assigned. Assign ports with \"Assign Controller "
+             "Ports,\" then press Start.";
     return false;
   }
   if (m_orca_room->Start(players) <= 0)
   {
-    *error = was_running ? "Everyone with a controller port is already in the game (rollback rooms "
-                           "seat four)." :
-                           "The rollback room could not be opened.";
+    *error = was_running ? "All ports already assigned." : "The room could not be opened.";
     return false;
   }
   return true;

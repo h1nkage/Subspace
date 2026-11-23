@@ -108,7 +108,7 @@ if(APPLE AND ORCA_MACOS_BUNDLE)
   file(GLOB_RECURSE orca_sys RELATIVE "${CMAKE_SOURCE_DIR}/Data" "${CMAKE_SOURCE_DIR}/Data/Sys/*")
   list(FILTER orca_sys EXCLUDE REGEX "^Sys/Themes/")
   list(FILTER orca_sys EXCLUDE REGEX
-       "^Sys/Resources/(Flag_|Platform_|achievements_|dolphin_logo|isoproperties_|nobanner)")
+       "^Sys/Resources/(Flag_|Platform_|achievements_|subspace_logo|isoproperties_|nobanner)")
   foreach(res ${orca_sys})
     target_sources(dolphin-nogui PRIVATE "${CMAKE_SOURCE_DIR}/Data/${res}")
     get_filename_component(resdir "${res}" DIRECTORY)
