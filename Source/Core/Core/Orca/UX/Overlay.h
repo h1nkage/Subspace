@@ -54,7 +54,7 @@ struct LinkView
   int round_trip_ms = -1;  // of the direct link when up, else of the relay
   int transport = 0;       // 0 relay, 1 direct, 2 TURN
   int stalled_ms = 0;     // current stall, 0 if none, -1 if unknown
-  int waiting_seat = -1;  // seat being waited for (seat s is GameCube port s)
+  int waiting_seat = -1;  // seat being waited for (its port: Online::SeatPort)
 };
 LinkView ViewOf(const Events::LinkStats& stats);
 

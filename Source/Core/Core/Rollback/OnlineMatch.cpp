@@ -459,7 +459,25 @@ bool Stopping(Core::System& system)
 constexpr std::chrono::microseconds HITCH_TIME{33'334};
 // A peer frozen with its connection open: after this long the host unplugs it, a joiner stops.
 constexpr auto PEER_SILENCE_LIMIT = Orca::Net::PEER_SILENCE_LIMIT;
-constexpr char PEER_SILENT_SENTENCE[] = "Your friend's game stopped responding";
+constexpr char PEER_SILENT_SENTENCE[] = "Opponent's game stopped responding";
+// Subspace: "<name>'s game stopped responding", naming whoever went quiet; PEER_SILENT_SENTENCE
+// when no name is known.
+std::string SilentSentence(const std::vector<std::string>& names)
+{
+  std::vector<std::string> known;
+  for (const std::string& name : names)
+  {
+    // "your friend" is the stand-in for a host with no name.
+    if (!name.empty() && name != "your friend")
+      known.push_back(name);
+  }
+  if (known.empty())
+    return PEER_SILENT_SENTENCE;
+  std::string who = known[0];
+  for (std::size_t i = 1; i < known.size(); ++i)
+    who += (i + 1 == known.size() ? " and " : ", ") + known[i];
+  return fmt::format("{}'s {} stopped responding", who, known.size() == 1 ? "game" : "games");
+}
 // A joiner past its unplug frame waits this long for the host's final acknowledgement
 // (Session::LeftDone), then leaves anyway.
 constexpr std::chrono::seconds LEAVE_SILENCE_LIMIT{3};
@@ -495,14 +513,21 @@ constexpr std::chrono::milliseconds SET_OVER_HOLD{1500};
 // delay: players want a delay that never moves with the link; lag shows as rollbacks or stalls.
 constexpr int DEFAULT_DELAY = 3;
 
-// The input delay this player plays at: the page's "delay N" (with "caps delay"), else
-// DEFAULT_DELAY. Always fixed.
+// The input delay this player plays at: the page's "delay N" (with "caps delay"), else the
+// Subspace lobby's Buffer (ORCA_INPUT_DELAY, set at launch; 1 to max_delay, larger values capped),
+// else DEFAULT_DELAY. Always fixed.
 std::optional<int> ChosenDelay()
 {
   if (Orca::Status::Cap("delay"))
   {
     if (const std::optional<int> chosen = Orca::Online::ChosenDelay())
       return chosen;
+  }
+  if (const char* env = std::getenv("ORCA_INPUT_DELAY"); env && *env)
+  {
+    const int frames = std::atoi(env);
+    if (frames >= 1)
+      return std::min(frames, Orca::Net::Config{}.max_delay);
   }
   return DEFAULT_DELAY;
 }
@@ -1177,7 +1202,7 @@ void Reseat(Match& match)
   else
   {
     NOTICE_LOG_FMT(ROLLBACK, "Drop-in: port {} moves to port 1 from frame {}",
-                   match.local_seat + 1, match.running + 1);
+                   Orca::Online::SeatPort(match.local_seat) + 1, match.running + 1);
     auto pending = std::move(match.queued_local[match.local_seat]);
     ClearQueuedLocal(match);
     match.queued_local[0] = std::move(pending);
@@ -1413,7 +1438,7 @@ void BecomeSolo(Match& match, const char* why, const char* state, bool own_boot 
   if (!keep_room)
     ReopenRoom(match);
   NOTICE_LOG_FMT(ROLLBACK, "Drop-in: playing solo on port {} from frame {} ({})",
-                 match.local_seat + 1, match.running + 1, why);
+                 Orca::Online::SeatPort(match.local_seat) + 1, match.running + 1, why);
   if (state)
     Orca::Status::State(state);
 }
@@ -1561,15 +1586,15 @@ void HostEvents(Core::System& system, Match& match, Orca::Net::RelayRoom* test_r
       {
         NOTICE_LOG_FMT(ROLLBACK,
                        "Drop-in: {} arrived for port {}: room_full",
-                       event.name, event.seat + 1);
+                       event.name, Orca::Online::SeatPort(event.seat) + 1);
         if (test_room)
           test_room->DropPeer(event.seat, "room_full");
         else
           Orca::Online::DropPeer(event.seat, "room_full");
         continue;
       }
-      NOTICE_LOG_FMT(ROLLBACK, "Drop-in: {} arrived for port {}", event.name, event.seat + 1);
-      Core::DisplayMessage(fmt::format("{} is joining on port {}", event.name, event.seat + 1), 4000);
+      NOTICE_LOG_FMT(ROLLBACK, "Drop-in: {} arrived for port {}", event.name, Orca::Online::SeatPort(event.seat) + 1);
+      Core::DisplayMessage(fmt::format("{} is joining in Port {}", event.name, Orca::Online::SeatPort(event.seat) + 1), 4000);
       auto& arrivals = match.doubles && !on_menus && !event.recovering ?
                           match.menu_waiting : match.waiting;
       arrivals[event.seat] = {event.name, event.controls, event.queue, event.recovering,
@@ -1612,7 +1637,7 @@ void HostEvents(Core::System& system, Match& match, Orca::Net::RelayRoom* test_r
       const bool was_playing = match.seated.erase(event.seat) > 0;
       if (match.session)
       {
-        NOTICE_LOG_FMT(ROLLBACK, "Drop-in: port {} left the room{}{}", event.seat + 1,
+        NOTICE_LOG_FMT(ROLLBACK, "Drop-in: port {} left the room{}{}", Orca::Online::SeatPort(event.seat) + 1,
                        event.reason.empty() ? "" : ": ", event.reason);
         match.session->DropSeat(event.seat);
       }
@@ -2039,7 +2064,7 @@ void HostEvents(Core::System& system, Match& match, Orca::Net::RelayRoom* test_r
     if (it->second.doubles)
       match.doubles_seats.insert(seat);
     match.plugging.insert(seat);
-    NOTICE_LOG_FMT(ROLLBACK, "Drop-in: port {} is {} from frame {}{}", seat + 1, it->second.name,
+    NOTICE_LOG_FMT(ROLLBACK, "Drop-in: port {} is {} from frame {}{}", Orca::Online::SeatPort(seat) + 1, it->second.name,
                    live_from, it->second.controls.empty() ? "" : ", with their own controls");
     if (!batch)
       AddName(match, {seat, live_from, it->second.name, it->second.controls, it->second.queue});
@@ -2064,7 +2089,7 @@ void HostEvents(Core::System& system, Match& match, Orca::Net::RelayRoom* test_r
       }
     }
     NOTICE_LOG_FMT(ROLLBACK,
-                   "Drop-in: port {} replays from keyframe frame {}, live from frame {}", seat + 1,
+                   "Drop-in: port {} replays from keyframe frame {}, live from frame {}", Orca::Online::SeatPort(seat) + 1,
                    keyframe_frame, live_from);
     it = match.waiting.erase(it);
   }
@@ -3427,7 +3452,7 @@ void TellNoRoom(Match& match)
   if (!match.tell_no_room || Orca::Online::RoomsLeaving())
     return;
   match.tell_no_room = false;
-  NOTICE_LOG_FMT(ROLLBACK, "Drop-in: no room of its own on port {}", match.local_seat + 1);
+  NOTICE_LOG_FMT(ROLLBACK, "Drop-in: no room of its own on port {}", Orca::Online::SeatPort(match.local_seat) + 1);
   Orca::Status::State("no-room");
 }
 
@@ -3481,7 +3506,7 @@ void SetNames(Match& match, const Orca::Net::KeyframeInfo& from_host)
                    [](const auto& a, const auto& b) { return a.from < b.from; });
   for (auto& name : sorted)
   {
-    NOTICE_LOG_FMT(ROLLBACK, "Drop-in: port {} is {} from frame {}{}", name.seat + 1, name.name,
+    NOTICE_LOG_FMT(ROLLBACK, "Drop-in: port {} is {} from frame {}{}", Orca::Online::SeatPort(name.seat) + 1, name.name,
                    name.from, name.controls.empty() ? "" : ", with their own controls");
     match.port_names[name.seat].push_back(std::move(name));
   }
@@ -3503,6 +3528,25 @@ const Orca::Net::KeyframeInfo::Name* EntryAt(const Match& match, int seat, int f
       return &*entry;
   }
   return nullptr;
+}
+
+// Subspace: the name a seat's port shows (its newest values), else the room roster's.
+std::string SeatShownName(const Match& match, int seat)
+{
+  if (const Orca::Net::KeyframeInfo::Name* entry = EntryAt(match, seat, match.running + 1);
+      entry && !entry->name.empty())
+  {
+    return entry->name;
+  }
+  return Orca::Online::SeatName(seat);
+}
+
+// Subspace: the host's name for a joiner's messages: the join's, else the host seat's port.
+std::string HostShownName(const Match& match)
+{
+  if (!match.host_name.empty() && match.host_name != "your friend")
+    return match.host_name;
+  return SeatShownName(match, match.host_seat);
 }
 
 void RefreshCoValues(Match& match, int frame)
@@ -3537,7 +3581,7 @@ void RefreshOwnValues(Match& match, int frame)
   {
     return;
   }
-  NOTICE_LOG_FMT(ROLLBACK, "Drop-in: port {} is {} from frame {}{}", match.local_seat + 1, own,
+  NOTICE_LOG_FMT(ROLLBACK, "Drop-in: port {} is {} from frame {}{}", Orca::Online::SeatPort(match.local_seat) + 1, own,
                  frame, controls.empty() ? "" : ", with their own controls");
   AddName(match, {match.local_seat, frame, std::move(own), std::move(controls), std::move(queue)});
 }
@@ -3545,9 +3589,10 @@ void RefreshOwnValues(Match& match, int frame)
 // Controllers plugged in at `frame` (the session's plan, or solo just this player).
 std::vector<Orca::Events::PortInfo> PortsAt(Match& match, int frame)
 {
-  // The canonical boot: port 1, with no values, on every machine.
+  // The canonical boot: the host's seat, with no values, on every machine (port 1 unless the
+  // Subspace lobby gave the host another port).
   if (CanonicalBoot(match))
-    return {Orca::Events::PortInfo{0, "", false, {}, {}}};
+    return {Orca::Events::PortInfo{Orca::Online::SeatPort(0), "", false, {}, {}}};
   // A host names its own port, with its own controls, only while solo: in a session a friend may
   // already have run this frame. A joiner takes all values from its host. Solo frames are never
   // re-run, and a friend who joins later gets these entries with the keyframe.
@@ -3568,7 +3613,7 @@ std::vector<Orca::Events::PortInfo> PortsAt(Match& match, int frame)
   if (!match.joining && !match.session)
     RefreshCoValues(match, frame);
   const auto port = [&](int seat) {
-    Orca::Events::PortInfo info{seat, "", !IsLocal(match, seat), {}};
+    Orca::Events::PortInfo info{Orca::Online::SeatPort(seat), "", !IsLocal(match, seat), {}};
     if (const Orca::Net::KeyframeInfo::Name* entry = EntryAt(match, seat, frame))
     {
       info.name = entry->name;
@@ -3956,7 +4001,7 @@ void CheckOwnValues(Match& match)
   WARN_LOG_FMT(ROLLBACK,
                "Drop-in: the host's values for port {} aren't this player's own: the "
                "session ends",
-               match.local_seat + 1);
+               Orca::Online::SeatPort(match.local_seat) + 1);
   match.session->EndForPeer("The host changed this player's own port values");
 }
 
@@ -4674,10 +4719,10 @@ static std::optional<int> SessionBoundary(
           NOTICE_LOG_FMT(ROLLBACK,
                          "Drop-in: plugged into port {} at frame {}: catch-up {:.0f} ms, {:.0f} ms "
                          "since the keyframe was offered, {:.0f} ms since this Orca's first frame",
-                         match.local_seat + 1, step.frame, catch_up, MsSince(match.offered_time),
+                         Orca::Online::SeatPort(match.local_seat) + 1, step.frame, catch_up, MsSince(match.offered_time),
                          MsSince(match.boot_time));
           ShowJoinMessage(
-              fmt::format("Joined {}'s game on port {}", match.host_name, match.local_seat + 1),
+              fmt::format("Joined {}'s game in Port {}", match.host_name, Orca::Online::SeatPort(match.local_seat) + 1),
               4000);
         }
         if (match.session->LeftDone() && step.kind == Orca::Net::StepKind::Run &&
@@ -4778,7 +4823,7 @@ static std::optional<int> SessionBoundary(
       {
         NOTICE_LOG_FMT(ROLLBACK, "Drop-in: port {} left the room while this game waited on it: "
                                  "unplugged at once, frame {}",
-                       seat + 1, match.running + 1);
+                       Orca::Online::SeatPort(seat) + 1, match.running + 1);
         match.session->DropSeat(seat);
       }
       // A shrinking in-play roster bounds the additional passes. The scope guard spends an
@@ -4801,7 +4846,18 @@ static std::optional<int> SessionBoundary(
         Orca::UX::SetEnd::Current().OpponentLeftAfterSet(Orca::UX::SetEnd::NowMs());
       if (!room_gone && !ranked_stall && !set_over)
       {
-        Core::DisplayMessage(peer_silent ? std::string(PEER_SILENT_SENTENCE) :
+        // The friends whose inputs never came, by the names their ports show. Only those the
+        // session is sure of; none named means the generic sentence.
+        std::vector<std::string> silent;
+        if (peer_silent)
+        {
+          for (const int seat : match.session->MissingInputSeats())
+          {
+            if (seat != match.local_seat)
+              silent.push_back(SeatShownName(match, seat));
+          }
+        }
+        Core::DisplayMessage(peer_silent ? SilentSentence(silent) :
                                            fmt::format("Your friend was disconnected: {}", error),
                              6000);
       }
@@ -4874,7 +4930,7 @@ static std::optional<int> SessionBoundary(
     {
       WARN_LOG_FMT(ROLLBACK, "Online: no word from the host for {} s at frame {}",
                    PEER_SILENCE_LIMIT.count(), match.running);
-      Orca::Online::ReportPeerStalled(PEER_SILENT_SENTENCE);
+      Orca::Online::ReportPeerStalled(SilentSentence({HostShownName(match)}));
     }
     const bool survivable = Orca::Online::ReportSessionEnd(error, match.session->ErrorFromPeer());
     if (Orca::Online::IsDesync(error))
@@ -4907,7 +4963,7 @@ static std::optional<int> SessionBoundary(
     if (Soft() && survivable && match.joining)
     {
       // Unplugged from the host's game; this one goes on.
-      Core::DisplayMessage(peer_silent ? std::string(PEER_SILENT_SENTENCE) :
+      Core::DisplayMessage(peer_silent ? SilentSentence({HostShownName(match)}) :
                                          "The connection to your friend's game ended: you play on",
                            6000);
       BecomeSolo(match, "the session ended", "host-left");
@@ -4915,7 +4971,7 @@ static std::optional<int> SessionBoundary(
       return rewound_to;
     }
     End("session ended");
-    StopEmulation(system, peer_silent ? std::string(PEER_SILENT_SENTENCE) :
+    StopEmulation(system, peer_silent ? SilentSentence({HostShownName(match)}) :
                                         fmt::format("Online match ended: {}",
                                                     error.empty() ? "stopped" : error));
     return rewound_to;
@@ -5034,7 +5090,7 @@ std::optional<int> OnBoundary(Core::System& system,
   ConfirmResults(TheMatch());
   NoteRankedFight(TheMatch());
   SetOverLeave(TheMatch());
-  Orca::UX::Game().SetLocalPort(TheMatch().local_seat);
+  Orca::UX::Game().SetLocalPort(Orca::Online::SeatPort(TheMatch().local_seat));
   s_solo_idle = SoloIdle(TheMatch());
   return rewound_to;
 }

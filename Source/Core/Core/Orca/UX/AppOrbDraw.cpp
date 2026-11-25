@@ -437,7 +437,8 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
               (cut ? AppCard::TextWidth(ELLIPSIS, m.text_px) : 0);
       l.height = std::max(m.avatar, m.text_px * m.line);
     }
-    l.width = m.avatar + m.avatar_gap + words;
+    // Subspace: a toast is text only (no logo), so it takes no avatar room.
+    l.width = (r.type == PillRow::Type::Toast ? 0.0f : m.avatar + m.avatar_gap) + words;
     content_w = std::max(content_w, l.width);
     content_h += l.height + (count ? m.gap : 0);
     alpha = std::max(alpha, r.alpha);
@@ -485,7 +486,7 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
       const ImVec2 c(x0 + r_av, y + l.height / 2);
       if (r.type == PillRow::Type::Toast)
       {
-        AppCard::Logo(dl, ImVec2(c.x - r_av, c.y - r_av), m.avatar, a);
+        // Subspace: no logo; the text starts at the row's left edge.
       }
       else if (r.type == PillRow::Type::Talk)
       {
@@ -530,7 +531,7 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
       }
       // Name in bright ink, text softer, on the row's centre line.
       const float ty = c.y - m.text_px * m.line / 2 + (m.text_px * (m.line - 1)) / 2;
-      float x = tx;
+      float x = r.type == PillRow::Type::Toast ? x0 : tx;
       if (!l.a.empty())
       {
         x += TextWithEllipsis(dl, ImVec2(x, ty + (m.text_px - m.name_px) * 0.6f), m.name_px,

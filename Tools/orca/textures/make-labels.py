@@ -43,8 +43,10 @@ SCALE = 4
 #          brawl-css and pplus-css (the character select's mode title: a gradient fill, black outline)
 LABELS = [
     # Brawl's main menu: the Wi-Fi button's label (MenMainFrTop15, "NINTENDO Wi-Fi CONNECTION").
-    dict(name="tex1_127x96_fdd5334e5af7357c_2", lines=["Play", "Online"], box=(7, 12, 119, 84),
-         style="brawl"),
+    # Subspace: off for now, so the game's own label shows. The last drawn art is kept in
+    # placeholders/ (not loaded); uncomment this entry or copy those three PNGs back to bring it back.
+    # dict(name="tex1_127x96_fdd5334e5af7357c_2", lines=["Play", "Online"], box=(7, 12, 119, 84),
+    #      style="brawl"),
     # Brawl's page title and breadcrumb on the Online pages (MenMainTtlJ.03, "NINTENDO WFC"): its
     # letters span the slot at the height of every title's (rows 1-14); ours take that height.
     dict(name="tex1_120x16_a56825159146a723_0", lines=["ONLINE"], box=(3, 1, 117, 14),
@@ -68,14 +70,18 @@ LABELS = [
          box=(8, 12, 124, 36), style="brawl-css"),
     dict(name="tex1_132x48_44a1dd712ec999f0_4d236969243ec2d8_9", lines=["Ranked"],
          box=(8, 12, 124, 36), style="brawl-css"),
-    dict(name="tex1_132x48_44a1dd712ec999f0_952be74b413d03a4_9", lines=["Friends"],
-         box=(8, 12, 124, 36), style="brawl-css"),
+    # Subspace: FRIENDS off for now, so the game's own title shows; the last drawn art is kept in
+    # placeholders/ (not loaded). Uncomment or copy those PNGs back to bring it back.
+    # dict(name="tex1_132x48_44a1dd712ec999f0_952be74b413d03a4_9", lines=["Friends"],
+    #      box=(8, 12, 124, 36), style="brawl-css"),
     dict(name="tex1_128x56_57564f7b1ba3bc1c_96a987e9e0ec657e_9", lines=["CASUAL"],
          box=(16, 17, 113, 39), style="pplus-css"),
     dict(name="tex1_128x56_57564f7b1ba3bc1c_e2dffeab0d95d424_9", lines=["RANKED"],
          box=(16, 17, 113, 39), style="pplus-css"),
-    dict(name="tex1_128x56_57564f7b1ba3bc1c_faaf2c3553d21273_9", lines=["FRIENDS"],
-         box=(13, 17, 116, 39), style="pplus-css"),
+    # Subspace: FRIENDS off for now, so the game's own title shows; the last drawn art is kept in
+    # placeholders/ (not loaded). Uncomment or copy those PNGs back to bring it back.
+    # dict(name="tex1_128x56_57564f7b1ba3bc1c_faaf2c3553d21273_9", lines=["FRIENDS"],
+    #      box=(13, 17, 116, 39), style="pplus-css"),
 ]
 
 # The relabels (Core/Orca/Games/Brawl/Relabel.h, ORCA.md "On-screen UI"): the game's big words say what

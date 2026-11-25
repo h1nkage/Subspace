@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <array>
+#include <cstring>
+#include <string_view>
 #include <atomic>
 #include <cfloat>
 #include <cmath>
@@ -22,6 +24,9 @@
 #include "Common/Logging/Log.h"
 #include "Core/Orca/UX/GameFont.h"
 #include "Core/Orca/UX/Overlay.h"
+#include "DiscIO/DiscExtractor.h"
+#include "DiscIO/Filesystem.h"
+#include "DiscIO/Volume.h"
 #include "VideoCommon/AbstractGfx.h"
 #include "VideoCommon/AbstractTexture.h"
 #include "VideoCommon/RenderState.h"
@@ -60,6 +65,192 @@ std::array<GpuFace, FACES> s_gpu;
 std::atomic<int> s_faces_ready{0};  // bit per face
 std::atomic<Look> s_look{Look::Brawl};
 
+// Subspace: the connection lamp is Brawl's own Wi-Fi signal lamp (MenWifiSignal05 poor, 03 OK,
+// 01 good, from the friend list's menu file), read from the player's disc on the font thread, so
+// it is the game's art without Subspace shipping it. Without it, no lamp is drawn.
+constexpr const char* SIGNAL_FILE = "menu/wifi/wifi_friend_list_en.brres";
+constexpr int SIGNALS = 3;
+constexpr std::array<std::string_view, SIGNALS> SIGNAL_NAMES = {"MenWifiSignal05", "MenWifiSignal03",
+                                                                "MenWifiSignal01"};
+struct SignalImage
+{
+  u32 width = 0, height = 0;
+  std::vector<u8> rgba;
+};
+std::array<std::optional<SignalImage>, SIGNALS> s_read_signals;  // under s_lock
+struct GpuSignal
+{
+  const AbstractGfx* gfx = nullptr;
+  bool tried = false;
+  std::unique_ptr<AbstractTexture> texture;
+};
+std::array<GpuSignal, SIGNALS> s_gpu_signals;  // video thread only, as s_gpu
+
+u32 Be32(const std::vector<u8>& b, std::size_t at)
+{
+  return at + 4 <= b.size() ? (u32{b[at]} << 24) | (u32{b[at + 1]} << 16) | (u32{b[at + 2]} << 8) | b[at + 3] :
+                              0;
+}
+u16 Be16(const std::vector<u8>& b, std::size_t at)
+{
+  return at + 2 <= b.size() ? static_cast<u16>((b[at] << 8) | b[at + 1]) : 0;
+}
+
+// The resource `name` in the BRRES index group at `group`, or 0.
+std::size_t BrresFind(const std::vector<u8>& b, std::size_t group, std::string_view name)
+{
+  const u32 count = Be32(b, group + 4);
+  for (u32 i = 1; i <= count && group + 8 + std::size_t{i} * 16 + 16 <= b.size(); ++i)
+  {
+    const std::size_t entry = group + 8 + std::size_t{i} * 16;
+    const s64 name_at = static_cast<s64>(group) + static_cast<s32>(Be32(b, entry + 8));
+    const s64 data_at = static_cast<s64>(group) + static_cast<s32>(Be32(b, entry + 12));
+    if (name_at < 4 || static_cast<u64>(name_at) > b.size())
+      continue;
+    const u32 length = Be32(b, static_cast<std::size_t>(name_at) - 4);
+    if (static_cast<u64>(name_at) + length > b.size())
+      continue;
+    if (std::string_view(reinterpret_cast<const char*>(b.data() + name_at), length) == name)
+      return data_at > 0 && static_cast<u64>(data_at) < b.size() ? static_cast<std::size_t>(data_at) : 0;
+  }
+  return 0;
+}
+
+// One GX colour: IA8 (0), RGB565 (1) or RGB5A3 (2), as RGBA8.
+std::array<u8, 4> GxColour(u16 v, u32 format)
+{
+  const auto five = [](u32 x) { return static_cast<u8>((x << 3) | (x >> 2)); };
+  if (format == 0)
+    return {static_cast<u8>(v), static_cast<u8>(v), static_cast<u8>(v), static_cast<u8>(v >> 8)};
+  if (format == 1)
+    return {five((v >> 11) & 31), static_cast<u8>((((v >> 5) & 63) << 2) | (((v >> 5) & 63) >> 4)),
+            five(v & 31), 255};
+  if (v & 0x8000)
+    return {five((v >> 10) & 31), five((v >> 5) & 31), five(v & 31), 255};
+  const u32 a = (v >> 12) & 7;
+  return {static_cast<u8>(((v >> 8) & 15) * 17), static_cast<u8>(((v >> 4) & 15) * 17),
+          static_cast<u8>((v & 15) * 17), static_cast<u8>((a << 5) | (a << 2) | (a >> 1))};
+}
+
+// A TEX0 in C4, C8 (with its PLT0 of the same name) or RGB5A3, as RGBA8.
+std::optional<SignalImage> DecodeTex(const std::vector<u8>& b, std::size_t tex, std::size_t plt)
+{
+  if (Be32(b, tex) != 0x54455830)  // "TEX0"
+    return std::nullopt;
+  SignalImage image;
+  image.width = Be16(b, tex + 0x1C);
+  image.height = Be16(b, tex + 0x1E);
+  const u32 format = Be32(b, tex + 0x20);
+  if (image.width == 0 || image.height == 0 || image.width > 256 || image.height > 256)
+    return std::nullopt;
+  std::size_t at = tex + Be32(b, tex + 0x10);
+  std::vector<std::array<u8, 4>> palette;
+  if (format == 8 || format == 9)
+  {
+    if (plt == 0 || Be32(b, plt) != 0x504C5430)  // "PLT0"
+      return std::nullopt;
+    const u32 plt_format = Be32(b, plt + 0x18);
+    const u32 count = Be16(b, plt + 0x1C);
+    const std::size_t data = plt + Be32(b, plt + 0x10);
+    if (plt_format > 2 || data + std::size_t{count} * 2 > b.size())
+      return std::nullopt;
+    for (u32 i = 0; i < count; ++i)
+      palette.push_back(GxColour(Be16(b, data + std::size_t{i} * 2), plt_format));
+  }
+  else if (format != 5)
+  {
+    return std::nullopt;
+  }
+  const u32 tile_w = format == 5 ? 4 : 8, tile_h = format == 8 ? 8 : 4;
+  const u32 padded_w = (image.width + tile_w - 1) / tile_w * tile_w;
+  const u32 padded_h = (image.height + tile_h - 1) / tile_h * tile_h;
+  const std::size_t bytes = format == 8 ? std::size_t{padded_w} * padded_h / 2 :
+                            format == 9 ? std::size_t{padded_w} * padded_h :
+                                          std::size_t{padded_w} * padded_h * 2;
+  if (at + bytes > b.size())
+    return std::nullopt;
+  image.rgba.assign(std::size_t{image.width} * image.height * 4, 0);
+  const auto put = [&](u32 x, u32 y, std::array<u8, 4> c) {
+    if (x < image.width && y < image.height)
+      std::memcpy(&image.rgba[(std::size_t{y} * image.width + x) * 4], c.data(), 4);
+  };
+  const auto entry = [&](u32 index) {
+    return index < palette.size() ? palette[index] : std::array<u8, 4>{0, 0, 0, 0};
+  };
+  for (u32 ty = 0; ty < padded_h; ty += tile_h)
+  {
+    for (u32 tx = 0; tx < padded_w; tx += tile_w)
+    {
+      for (u32 y = 0; y < tile_h; ++y)
+      {
+        for (u32 x = 0; x < tile_w; ++x)
+        {
+          if (format == 5)
+          {
+            put(tx + x, ty + y, GxColour(Be16(b, at), 2));
+            at += 2;
+          }
+          else if (format == 9)
+          {
+            put(tx + x, ty + y, entry(b[at++]));
+          }
+          else
+          {
+            put(tx + x, ty + y, entry(x % 2 == 0 ? b[at] >> 4 : b[at] & 15));
+            if (x % 2 == 1)
+              ++at;
+          }
+        }
+      }
+    }
+  }
+  return image;
+}
+
+std::array<std::optional<SignalImage>, SIGNALS> ReadSignals(const std::string& disc, std::string* error)
+{
+  std::array<std::optional<SignalImage>, SIGNALS> images;
+  const std::unique_ptr<DiscIO::Volume> volume = DiscIO::CreateVolume(disc);
+  if (!volume)
+  {
+    *error = "can't open the disc";
+    return images;
+  }
+  const DiscIO::Partition partition = volume->GetGamePartition();
+  const DiscIO::FileSystem* fs = volume->GetFileSystem(partition);
+  if (!fs || volume->GetGameID(partition) != GAME_ID)
+  {
+    *error = "not RSBE01";
+    return images;
+  }
+  const std::unique_ptr<DiscIO::FileInfo> info = fs->FindFileInfo(SIGNAL_FILE);
+  if (!info || info->GetSize() < 0x20 || info->GetSize() > (16u << 20))
+  {
+    *error = fmt::format("{} not on the disc", SIGNAL_FILE);
+    return images;
+  }
+  std::vector<u8> b(info->GetSize());
+  if (DiscIO::ReadFile(*volume, partition, info.get(), b.data(), b.size()) != b.size() ||
+      std::memcmp(b.data(), "bres", 4) != 0)
+  {
+    *error = fmt::format("{} unreadable", SIGNAL_FILE);
+    return images;
+  }
+  const std::size_t top = std::size_t{Be16(b, 0x0C)} + 8;
+  const std::size_t textures = BrresFind(b, top, "Textures(NW4R)");
+  const std::size_t palettes = BrresFind(b, top, "Palettes(NW4R)");
+  for (int i = 0; i < SIGNALS; ++i)
+  {
+    const std::size_t tex = textures ? BrresFind(b, textures, SIGNAL_NAMES[i]) : 0;
+    const std::size_t plt = palettes ? BrresFind(b, palettes, SIGNAL_NAMES[i]) : 0;
+    if (tex)
+      images[i] = DecodeTex(b, tex, plt);
+    if (!images[i])
+      *error = fmt::format("{}: {} not decoded", SIGNAL_FILE, SIGNAL_NAMES[i]);
+  }
+  return images;
+}
+
 void ReadFonts(std::string path)
 {
   std::array<std::optional<GameFont::Atlas>, FACES> atlases;
@@ -78,9 +269,14 @@ void ReadFonts(std::string path)
     NOTICE_LOG_FMT(ROLLBACK, "Orca kit: {} read, {} glyphs, {}x{}", FONT_FILES[face],
                    atlases[face]->glyphs.size(), atlases[face]->width, atlases[face]->height);
   }
+  std::string signal_error;
+  std::array<std::optional<SignalImage>, SIGNALS> signals = ReadSignals(path, &signal_error);
+  if (!signal_error.empty())
+    WARN_LOG_FMT(ROLLBACK, "Orca kit: the signal lamps: {}", signal_error);
   {
     std::lock_guard lk(s_lock);
     s_read_atlases = std::move(atlases);
+    s_read_signals = std::move(signals);
   }
   s_read = true;
 }
@@ -445,11 +641,39 @@ void BeginFrame()
       ready |= 1 << face;
   }
   s_faces_ready = ready;
+  for (int i = 0; i < SIGNALS; ++i)
+  {
+    GpuSignal& g = s_gpu_signals[i];
+    if (g.gfx != g_gfx.get())
+    {
+      (void)g.texture.release();  // leak the old backend's texture (see GpuFace)
+      g.gfx = g_gfx.get();
+      g.tried = false;
+    }
+    if (g.tried)
+      continue;
+    g.tried = true;
+    std::lock_guard lk(s_lock);
+    const std::optional<SignalImage>& read = s_read_signals[i];
+    if (!read)
+      continue;
+    const TextureConfig config(read->width, read->height, 1, 1, 1, AbstractTextureFormat::RGBA8, 0,
+                               AbstractTextureType::Texture_2DArray);
+    g.texture = g_gfx->CreateTexture(config, "Orca signal lamp");
+    if (g.texture)
+      g.texture->Load(0, read->width, read->height, read->width, read->rgba.data(), read->rgba.size());
+  }
 }
 
 void ReleaseGpu()
 {
   for (GpuFace& g : s_gpu)
+  {
+    g.texture.reset();
+    g.gfx = nullptr;
+    g.tried = false;
+  }
+  for (GpuSignal& g : s_gpu_signals)
   {
     g.texture.reset();
     g.gfx = nullptr;
@@ -1469,30 +1693,22 @@ void Disc(ImDrawList* dl, ImVec2 centre, float radius, float unit, Tone tone, fl
 
 void Connection(ImDrawList* dl, ImVec2 c, float radius, float unit, int bars, float alpha)
 {
+  // Subspace: Brawl's own Wi-Fi signal lamp, blue for good, yellow for OK, red for poor, read from
+  // the disc (s_gpu_signals). Nothing is drawn until it loads, or if it can't be read.
+  (void)unit;
   if (radius <= 0 || alpha <= 0)
     return;
   bars = std::clamp(bars, 1, 3);
-  // Panel disc, layered like the buttons.
-  const float body = DiscBody(dl, c, radius, unit, PaintOf(Tone::Panel), alpha);
-  // Arcs with a dark outline so they read on any panel.
-  const ImU32 on = bars == 3 ? Rgb(96, 206, 255, alpha) :
-                   bars == 2 ? Rgb(255, 210, 64, alpha) :
-                               Rgb(255, 76, 64, alpha);
-  const ImU32 off = Rgb(255, 255, 255, 0.28f * alpha);
-  const ImU32 dark = Rgb(0, 0, 0, 0.7f * alpha);
-  const ImVec2 base(c.x, c.y + body * 0.5f);
-  const float w = std::max(1.5f, body * 0.13f);
-  const float pi = std::numbers::pi_v<float>;
-  for (int i = 0; i < 3; ++i)
-  {
-    const float r = body * (0.36f + 0.24f * static_cast<float>(i));
-    dl->PathArcTo(base, r, pi * 1.25f, pi * 1.75f, 16);
-    dl->PathStroke(dark, ImDrawFlags_None, w + std::max(1.0f, 0.5f * w));
-    dl->PathArcTo(base, r, pi * 1.25f, pi * 1.75f, 16);
-    dl->PathStroke(i < bars ? on : off, ImDrawFlags_None, w);
-  }
-  dl->AddCircleFilled(base, w * 0.95f + std::max(0.5f, 0.25f * w), dark, 16);
-  dl->AddCircleFilled(base, w * 0.95f, on, 16);
+  GpuSignal& g = s_gpu_signals[bars - 1];
+  if (!g.texture || !g_gfx || g.gfx != g_gfx.get())
+    return;
+  // Its 32x32 art has a 1-pixel clear border, so the quad is 32/30 of the lamp's size.
+  const float half = radius * 32.0f / 30.0f;
+  const ImTextureRef texture = *g.texture;
+  dl->AddCallback(&LinearSampler, nullptr);
+  dl->AddImage(texture, ImVec2(c.x - half, c.y - half), ImVec2(c.x + half, c.y + half),
+               ImVec2(0, 0), ImVec2(1, 1), Rgb(255, 255, 255, alpha));
+  dl->AddCallback(&PointSampler, nullptr);
 }
 
 ImU32 Accent()

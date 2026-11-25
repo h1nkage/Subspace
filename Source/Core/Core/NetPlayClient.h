@@ -59,6 +59,8 @@ struct OrcaLaunch
   // The engine's ORCA_SITE: this Dolphin's gateway on 127.0.0.1.
   std::string site;
   std::string name;
+  // The GameCube port (0-3) the host plays on: the game's seat-to-port table (ORCA_HOST_PORT).
+  u8 host_port = 0;
 };
 
 class NetPlayUI

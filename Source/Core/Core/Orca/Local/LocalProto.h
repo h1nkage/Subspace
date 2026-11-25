@@ -72,6 +72,9 @@ struct LaunchInfo
   bool joining = false;
   // NetPlay ids of everyone launched into the room so far (for the link estimate in pongs).
   std::vector<u8> room_pids;
+  // Subspace: the GameCube port (0-3) the host (seat 0) plays on. Seats map to ports by swapping
+  // seat 0 with this port; every other seat is its own port (Orca::Online::SeatPort).
+  u8 host_port = 0;
 };
 
 // The room identity of a lobby player.

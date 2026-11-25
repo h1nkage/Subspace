@@ -930,7 +930,8 @@ u8 RoomTeamsMask(bool doubles, const std::map<int, int>& teams)
   u8 mask = 0;
   for (int port = 0; port < 4; ++port)
   {
-    const auto it = teams.find(port);
+    // The room's teams are by seat; the game's ports follow Subspace's seat-to-port table.
+    const auto it = teams.find(Orca::Online::PortSeat(port));
     if (it == teams.end() || (it->second != 0 && it->second != 1))
       return 0;
     mask |= static_cast<u8>(it->second << port);

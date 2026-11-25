@@ -2854,7 +2854,9 @@ void NetPlayClient::OnOrcaRoom(sf::Packet& packet)
       packet >> pid;
       pids.push_back(pid);
     }
-    if (!packet || !Orca::Local::ValidRoomCode(room))
+    u8 host_port = 0;
+    packet >> host_port;
+    if (!packet || !Orca::Local::ValidRoomCode(room) || host_port > 3)
       break;
     if (!m_orca_backend)
       m_orca_backend = std::make_unique<OrcaBackend>(*this);
@@ -2876,6 +2878,7 @@ void NetPlayClient::OnOrcaRoom(sf::Packet& packet)
     launch.room = room;
     launch.ticket = ticket;
     launch.joining = joining != 0;
+    launch.host_port = host_port;
     launch.site = fresh->Site();
     launch.name = m_player_name;
     m_dialog->LaunchOrca(launch);

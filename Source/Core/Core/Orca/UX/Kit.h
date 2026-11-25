@@ -27,7 +27,8 @@
 //   - Pointer / Frame: a player's cursor ring or a framed tile, with their tab.
 //   - PortraitFrame / Ribbon: character select portrait highlight and its LOCKED IN ribbon.
 //   - SetDots: a best-of-three's games as dots; SearchRing: an empty seat while searching.
-//   - Connection: link quality lamp with one to three lit arcs.
+//   - Connection: link quality lamp: Brawl's own Wi-Fi signal lamp read from the disc (blue good,
+//     yellow OK, red poor); nothing when it can't be read.
 //
 // Drawn with the host's ImGui over the presented picture, so it is display only and never touches
 // emulation. Sizes are pixels; `unit` is 1% of the picture's height (OverlayUnit).
@@ -219,7 +220,8 @@ Box Guide(ImDrawList* dl, float right, float cy, float unit, const std::vector<G
 // Frames a tile in `tone` with `tag` on a tab on its top edge.
 void Frame(ImDrawList* dl, ImVec2 min, ImVec2 max, float unit, Tone tone, std::string_view tag,
            bool tag_left, float inset = 0);
-// Connection lamp with `bars` (1-3) arcs lit: blue for three, gold for two, red for one.
+// Connection lamp for `bars` (1-3): Brawl's MenWifiSignal01/03/05 from the disc (blue, yellow,
+// red); draws nothing until or unless they load.
 void Connection(ImDrawList* dl, ImVec2 centre, float radius, float unit, int bars,
                 float alpha = 1);
 

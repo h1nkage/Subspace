@@ -43,14 +43,19 @@ public:
   {
     u8 pid = 0;
     std::string name;
+    // The seat its GameCube port gives it (0: the host, which runs the match).
+    int seat = 0;
   };
 
   explicit RoomServer(Sink& sink);
 
-  // Opens a room for `players` (the lobby host first, at most four) and launches the host's engine.
-  // While a room is open, launches only players not in it yet, into free seats (drop-in), and
-  // returns how many were added. -1: no room could be opened (empty list).
-  int Start(const std::vector<Player>& players);
+  // Opens a room for `players` (the lobby host first, at most four, each with the seat its port
+  // gives it) and launches the host's engine; the host plays on `host_port`. While a room is open,
+  // launches only players not in it yet, into their seats (drop-in), and returns how many were
+  // added; PORTS_CHANGED (nothing launched) if the host's port changed or a seated player's seat
+  // changed or went: ports only change while the host's game is closed. -1: no room was opened.
+  static constexpr int PORTS_CHANGED = -2;
+  int Start(const std::vector<Player>& players, int host_port);
   bool Running() const;
   std::string Code() const;
   // Lobby players with a seat in the room.
@@ -92,6 +97,8 @@ private:
   bool m_running = false;
   std::string m_code;
   bool m_doubles = false;
+  // The GameCube port the host plays on (LaunchInfo::host_port), fixed while the room is open.
+  int m_host_port = 0;
   // Everyone the lobby launched, by NetPlay id.
   std::map<u8, Seat> m_launched;
   // Launched but waiting for the host's engine to be in the room.

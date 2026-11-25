@@ -19,7 +19,9 @@
 #include <imgui.h>
 
 #include "Common/HookableEvent.h"
+#include "Common/StringUtil.h"
 #include "Core/Core.h"
+#include "Core/Orca/Session/Online.h"
 #include "Core/Orca/UX/Kit.h"
 #include "Core/Orca/UX/OrbCombo.h"
 #include "Core/Orca/UX/QueueApp.h"
@@ -39,6 +41,19 @@ namespace
 {
 // The window of recent stalls that decides the signal.
 constexpr double STALL_WINDOW_MS = 3000;
+
+// Subspace: the overlay's notices (joined, left, restarting) go to Dolphin's on-screen messages,
+// the same yellow text as the rest of netplay's, not the app's cards. Called with no lock held.
+constexpr u32 NOTICE_MS = 4000;
+void Notice(std::string text)
+{
+  for (char& c : text)
+  {
+    if (!Common::IsPrintableCharacter(c))
+      c = '?';
+  }
+  OSD::AddMessage(std::move(text), NOTICE_MS);
+}
 
 double NowMs()
 {
@@ -104,7 +119,9 @@ LinkView ViewOf(const Events::LinkStats& stats)
 
 void OverlayModel::OnPorts(int frame, const std::vector<Events::PortInfo>& ports, double now_ms)
 {
-  std::lock_guard lk(m_lock);
+  (void)now_ms;
+  std::vector<std::string> notices;
+  std::unique_lock lk(m_lock);
   // A drop-in join can move the frame number backwards, so frames don't order the lists.
   (void)frame;
   const auto find = [](const std::vector<Events::PortInfo>& list, int port) {
@@ -121,8 +138,8 @@ void OverlayModel::OnPorts(int frame, const std::vector<Events::PortInfo>& ports
     if (was != m_ports.end() && was->name == p.name && was->remote)
       continue;
     // A joiner's first list already has the host, who is not joining.
-    m_toasts.emplace_back(now_ms, first ? fmt::format("{} is on port {}", NameOf(p), p.port + 1) :
-                                          fmt::format("{} joined on port {}", NameOf(p), p.port + 1));
+    notices.push_back(first ? fmt::format("{} is in Port {}", NameOf(p), p.port + 1) :
+                              fmt::format("{} joined in Port {}", NameOf(p), p.port + 1));
   }
   for (const Events::PortInfo& p : m_ports)
   {
@@ -130,19 +147,18 @@ void OverlayModel::OnPorts(int frame, const std::vector<Events::PortInfo>& ports
       continue;
     const auto now = find(ports, p.port);
     if (now == ports.end() || now->name != p.name)
-      m_toasts.emplace_back(now_ms, fmt::format("{} left", NameOf(p)));
+      notices.push_back(fmt::format("{} left", NameOf(p)));
   }
   m_ports = ports;
-  while (m_toasts.size() > 3)
-    m_toasts.pop_front();
+  lk.unlock();
+  for (std::string& text : notices)
+    Notice(std::move(text));
 }
 
 void OverlayModel::AddToast(std::string text, double now_ms)
 {
-  std::lock_guard lk(m_lock);
-  m_toasts.emplace_back(now_ms, std::move(text));
-  while (m_toasts.size() > 3)
-    m_toasts.pop_front();
+  (void)now_ms;
+  Notice(std::move(text));
 }
 
 void OverlayModel::AddChat(std::string name, std::string text, double now_ms)
@@ -298,10 +314,11 @@ OverlayModel::Frame OverlayModel::View(double now_ms, Stats stats, Perf perf) co
     std::string who = "your friend";
     for (const Events::PortInfo& p : m_ports)
     {
-      if (p.port == m_link.waiting_seat && p.remote)
+      // A seat is a port through the host's choice of port (Online::SeatPort).
+      if (m_link.waiting_seat >= 0 && p.port == ::Orca::Online::SeatPort(m_link.waiting_seat) && p.remote)
         who = NameOf(p);
     }
-    f.waiting = fmt::format("Waiting for {}…", who);
+    f.waiting = fmt::format("Waiting for {}...", who);
   }
   for (const auto& [at, text] : m_toasts)
   {
@@ -1168,7 +1185,11 @@ void DrawScene()
   if (!f.waiting.empty())
   {
     const float top = std::max(vis.y + vis_size.y * 0.18f, centre.max.y + 1.5f * unit);
-    Kit::Title(dl, ImVec2(vis.x + vis_size.x / 2, top), unit, f.waiting, 5.0f, Kit::Align::Centre);
+    // Subspace: the title look in the menus' Latin font (font_latin1). The display face is Brawl's
+    // Japanese font (font_hira), whose ellipsis is the mid-height Japanese one.
+    Kit::TextLook look = Kit::TitleLook(unit, 7.0f);
+    look.face = Kit::Face::Body;
+    Kit::Text(dl, ImVec2(vis.x + vis_size.x / 2, top), look, f.waiting, 1.0f, Kit::Align::Centre);
   }
   // Toasts and chat go below the corner, Dolphin's messages and the top-centre banners.
   if (orb_top)

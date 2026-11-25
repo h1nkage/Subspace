@@ -123,6 +123,12 @@ std::optional<bool> Joining();
 // and whether the room is gone.
 Net::Transport* Transport();
 int Seat();
+// Subspace: the GameCube port (0-3) the room's host plays on (ORCA_HOST_PORT from the lobby; 0
+// otherwise). Seats map to ports by swapping seat 0 and that port; every other seat is its own
+// port. The same swap maps a port back to its seat. Fixed for the process; in the key.
+int HostPort();
+int SeatPort(int seat);
+int PortSeat(int port);
 std::vector<int> CoSeats();
 std::optional<std::vector<int>> CoSeatsForSolo();
 void SetSessionActive(bool active);

@@ -142,7 +142,10 @@ void NetPlayDialog::CreateMainLayout()
   m_game_button = new QPushButton;
   m_start_button = new QPushButton(tr("Start"));
   m_buffer_size_box = new QSpinBox;
-  m_buffer_size_box->setMaximum(NetPlay::MAX_TARGET_PAD_BUFFER_SIZE);
+  // Subspace: the Buffer is the rollback input delay in frames: 1 to 12 (a delay of 0 can't be
+  // played, and 12 is the rollback session's max_delay).
+  m_buffer_size_box->setMinimum(1);
+  m_buffer_size_box->setMaximum(12);
   m_buffer_label = new QLabel(tr("Buffer:"));
   m_quit_button = new QPushButton(tr("Quit"));
   m_splitter = new QSplitter(Qt::Horizontal);
@@ -1478,6 +1481,14 @@ void NetPlayDialog::StartOrcaEngine(const NetPlay::OrcaLaunch& launch)
   env.insert(QStringLiteral("ORCA_ROOM"), QString::fromStdString(launch.room));
   env.insert(QStringLiteral("ORCA_JOIN"), launch.joining ? QStringLiteral("1") : QStringLiteral("0"));
   env.insert(QStringLiteral("ORCA_NAME"), QString::fromStdString(launch.name).left(32));
+  // The host's GameCube port: every game in the room maps seats to ports with it.
+  env.insert(QStringLiteral("ORCA_HOST_PORT"), QString::number(launch.host_port));
+  // The lobby's Buffer is this player's rollback input delay, in frames (the game keeps it within
+  // 1 to 12). The Buffer is never below 1; none yet leaves the game's default, 3.
+  if (m_buffer_size > 0)
+    env.insert(QStringLiteral("ORCA_INPUT_DELAY"), QString::number(m_buffer_size));
+  else
+    env.remove(QStringLiteral("ORCA_INPUT_DELAY"));
   m_orca_process->setProcessEnvironment(env);
 
   // The engine's output goes to Logs/orca-engine.log, and its "orca error <code> <sentence>" line,
@@ -1553,6 +1564,7 @@ void NetPlayDialog::StartOrcaEngine(const NetPlay::OrcaLaunch& launch)
     m_orca_process = nullptr;
     m_orca_log.reset();
     GCAdapter::Init();  // the game gave the adapter back
+    m_assign_ports_button->setEnabled(true);
   });
   connect(process, &QProcess::errorOccurred, this, [this, process](QProcess::ProcessError error) {
     if (process != m_orca_process || error != QProcess::FailedToStart)
@@ -1560,6 +1572,8 @@ void NetPlayDialog::StartOrcaEngine(const NetPlay::OrcaLaunch& launch)
     DisplayMessage(tr("Start failed: SubspaceNoGUI.exe failed."), "red");
   });
 
+  // Ports only change while the game window is closed (the host's button; hidden for others).
+  m_assign_ports_button->setEnabled(false);
   // Only one program can hold a GameCube adapter: let go of it so the game can read it.
   GCAdapter::Shutdown();
   m_orca_process->start(engine, arguments);
@@ -1591,4 +1605,5 @@ void NetPlayDialog::StopOrcaEngine()
   process->deleteLater();
   m_orca_log.reset();
   GCAdapter::Init();
+  m_assign_ports_button->setEnabled(true);
 }

@@ -201,10 +201,10 @@ struct Config
   // Frames between sampling a local input and the frame it applies to: the starting delay and the
   // adaptive floor. Two, like Slippi: rollback hides the rest of a normal link.
   int input_delay = 2;
-  // Ceiling of the adaptive or chosen delay (100 ms at 60 Hz). At or below input_delay the adaptive
-  // delay never changes. Each player's delay is its own: every input travels explicitly, so peers
-  // with different delays still agree on every frame.
-  int max_delay = 6;
+  // Ceiling of the adaptive or chosen delay (200 ms at 60 Hz; Subspace's lobby Buffer goes up to
+  // it). At or below input_delay the adaptive delay never changes. Each player's delay is its own:
+  // every input travels explicitly, so peers with different delays still agree on every frame.
+  int max_delay = 12;
   // The delay this player chose (the app's "delay N"), used exactly from the first frame (clamped
   // to 1..max_delay). nullopt: adaptive. SetFixedDelay changes it.
   std::optional<int> fixed_delay;

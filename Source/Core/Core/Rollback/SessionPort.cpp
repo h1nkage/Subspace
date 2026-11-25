@@ -10,6 +10,7 @@
 
 #include "Common/Logging/Log.h"
 #include "Core/Core.h"
+#include "Core/Orca/Session/Online.h"
 #include "Core/Orca/Session/PadCodec.h"
 #include "Core/Orca/Session/Replay.h"
 #include "Core/Rollback/Diag.h"
@@ -95,9 +96,10 @@ bool RingPort::Load(int frame)
 void RingPort::SetPads(int frame, const Orca::Net::Pads& pads)
 {
   Orca::Net::ReplayRecordingScope::RecordPads(frame, pads);
-  // Called once for every frame about to run.
-  for (std::size_t port = 0; port < pads.size(); ++port)
-    m_pads[port] = Orca::Net::DecodePad(pads[port]);
+  // Called once for every frame about to run. `pads` is by seat; the game reads ports, and each
+  // seat plays on the port Subspace's seat-to-port table gives it (Orca::Online::SeatPort).
+  for (std::size_t seat = 0; seat < pads.size(); ++seat)
+    m_pads[Orca::Online::SeatPort(static_cast<int>(seat))] = Orca::Net::DecodePad(pads[seat]);
   m_saved_since_run = -1;
 }
 

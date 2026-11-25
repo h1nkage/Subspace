@@ -160,6 +160,7 @@ std::string ModKeyParts(const Profile& profile)
                          location.key, value);
   parts += UniversalKeyParts();
   parts += RunningUxKeyPart();
+  parts += fmt::format("|hostport={}", HostPort());
   return parts;
 }
 }  // namespace
@@ -237,6 +238,9 @@ std::string CompatibilityKeyParts()
   parts += "|disc=" + Env("ORCA_DISC_SHA1");
   // Version of what the in-game UX writes to emulated memory (name tags, mode locks).
   parts += RunningUxKeyPart();
+  // Subspace: the seat-to-port table (HostPort). Games that put seats on different ports would run
+  // different games, so they never meet.
+  parts += fmt::format("|hostport={}", HostPort());
   return parts;
 }
 
@@ -547,6 +551,31 @@ int Seat()
 {
   const auto room = Room();
   return room ? room->Seat() : -1;
+}
+
+int HostPort()
+{
+  static const int port = [] {
+    const std::string value = Env("ORCA_HOST_PORT");
+    return value.size() == 1 && value[0] >= '0' && value[0] <= '3' ? value[0] - '0' : 0;
+  }();
+  return port;
+}
+
+int SeatPort(int seat)
+{
+  const int host = HostPort();
+  if (seat == 0)
+    return host;
+  if (seat == host)
+    return 0;
+  return seat;
+}
+
+int PortSeat(int port)
+{
+  // A swap is its own inverse.
+  return SeatPort(port);
 }
 
 std::vector<int> CoSeats()

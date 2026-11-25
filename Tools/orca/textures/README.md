@@ -7,7 +7,7 @@ textures as `RSBE01`; their labels hash differently, so one folder serves both.
 
 | File (and its `_mip1`, `_mip2`)      | Replaces                                                                                        | Game     |
 | ------------------------------------ | ----------------------------------------------------------------------------------------------- | -------- |
-| `tex1_127x96_fdd5334e5af7357c_2.png` | the main menu's "NINTENDO Wi-Fi CONNECTION" button label (MenMainFrTop15)                       | Brawl    |
+| `tex1_127x96_fdd5334e5af7357c_2.png` | the main menu's "NINTENDO Wi-Fi CONNECTION" button label (MenMainFrTop15). **Subspace: off for now**; the art is kept in `placeholders/`, not loaded | Brawl    |
 | `tex1_120x16_a56825159146a723_0.png` | the page title "NINTENDO WFC" (MenMainTtlJ.03; it heads the ONLINE pages and their breadcrumbs) | Brawl    |
 | `tex1_144x88_115d82941c7412cd_2.png` | With Anyone's "BASIC BRAWL" (MenMainWifi22): CASUAL                                             | Brawl    |
 | `tex1_160x80_e364b4db513567ba_2.png` | With Anyone's "TEAM BATTLE" (MenMainWifi23): RANKED                                             | Brawl    |
@@ -15,10 +15,10 @@ textures as `RSBE01`; their labels hash differently, so one folder serves both.
 | `tex1_160x80_5b8f52ac0127b2a8_5.png` | With Anyone's "TEAM BATTLE" (MenMainWifi23): RANKED                                             | Project+ |
 | `tex1_132x48_44a1dd712ec999f0_159b390ed5eec04d_9.png` | the character select's BRAWL logo (MenSelchrPanelRule3.1) marked casual: CASUAL | Brawl |
 | `tex1_132x48_44a1dd712ec999f0_4d236969243ec2d8_9.png` | the same marked ranked: RANKED | Brawl |
-| `tex1_132x48_44a1dd712ec999f0_952be74b413d03a4_9.png` | the same marked friends: FRIENDS | Brawl |
+| `tex1_132x48_44a1dd712ec999f0_952be74b413d03a4_9.png` | the same marked friends: FRIENDS. **Subspace: off for now**; the art is kept in `placeholders/`, not loaded | Brawl |
 | `tex1_128x56_57564f7b1ba3bc1c_96a987e9e0ec657e_9.png` | the character select's VERSUS (MenSelchrPanelRule3.1) marked casual: CASUAL | Project+ |
 | `tex1_128x56_57564f7b1ba3bc1c_e2dffeab0d95d424_9.png` | the same marked ranked: RANKED | Project+ |
-| `tex1_128x56_57564f7b1ba3bc1c_faaf2c3553d21273_9.png` | the same marked friends: FRIENDS | Project+ |
+| `tex1_128x56_57564f7b1ba3bc1c_faaf2c3553d21273_9.png` | the same marked friends: FRIENDS. **Subspace: off for now**; the art is kept in `placeholders/`, not loaded | Project+ |
 
 Project+'s own button already reads PLAY ONLINE and its title ONLINE.
 

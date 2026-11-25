@@ -246,7 +246,7 @@ int main()
   }
 
   Host host;
-  CHECK(host.room.Start({{1, "Hinkage"}, {2, "Friend"}}) == 2, "room opened for two");
+  CHECK(host.room.Start({{1, "Hinkage", 0}, {2, "Friend", 1}}, 0) == 2, "room opened for two");
   const std::string code = host.room.Code();
   CHECK(ValidRoomCode(code), "code %s", code.c_str());
   CHECK(host.gateways.contains(1) && !host.gateways.contains(2), "only the host launched first");
@@ -368,7 +368,7 @@ int main()
   CHECK(!Next(ws1, "back").empty(), "host hears back");
 
   // A third player dropping in mid-room.
-  CHECK(host.room.Start({{1, "Hinkage"}, {2, "Friend"}, {3, "Third"}}) == 1, "drop-in added");
+  CHECK(host.room.Start({{1, "Hinkage", 0}, {2, "Friend", 1}, {3, "Third", 2}}, 0) == 1, "drop-in added");
   CHECK(host.gateways.contains(3) && host.launches[3].joining, "third launched at once");
   Common::WebSocket ws3;
   CHECK(ws3.Connect(WsUrl(*host.gateways[3], code, "np3"), 3000ms, &error), "third connects");
@@ -403,7 +403,7 @@ int main()
   // Start again after games closed (the lobby's Start pressed again).
   {
     host.launches.clear();
-    CHECK(host.room.Start({{1, "Hinkage"}, {2, "Friend"}}) == 2, "a new room for two");
+    CHECK(host.room.Start({{1, "Hinkage", 0}, {2, "Friend", 1}}, 0) == 2, "a new room for two");
     const std::string code2 = host.room.Code();
     CHECK(code2 != code, "with a new code");
     Common::WebSocket h1;
@@ -422,13 +422,13 @@ int main()
     CHECK(f1.Connect(WsUrl(*host.gateways[2], code2, "np2"), 3000ms, &error), "friend in: %s",
           error.c_str());
     CHECK(!Next(f1, "welcome").empty() && !Next(h1, "join").empty(), "both in");
-    CHECK(host.room.Start({{1, "Hinkage"}, {2, "Friend"}}) == 0, "both playing: nobody to add");
+    CHECK(host.room.Start({{1, "Hinkage", 0}, {2, "Friend", 1}}, 0) == 0, "both playing: nobody to add");
 
     // The friend's game leaves (window closed): Start launches it again, into the same room.
     f1.SendText(R"({"t":"leave"})", 1000ms);
     CHECK(!Next(h1, "leave").empty(), "host hears the friend leave");
     host.launches.clear();
-    CHECK(host.room.Start({{1, "Hinkage"}, {2, "Friend"}}) == 1, "friend relaunched");
+    CHECK(host.room.Start({{1, "Hinkage", 0}, {2, "Friend", 1}}, 0) == 1, "friend relaunched");
     CHECK(launched(2) && host.launches[2].joining && host.launches[2].room == code2,
           "joining the same room");
     Common::WebSocket f2;
@@ -439,7 +439,7 @@ int main()
     f2.Close();
     CHECK(!Next(h1, "away").empty(), "host hears away");
     host.launches.clear();
-    CHECK(host.room.Start({{1, "Hinkage"}, {2, "Friend"}}) == 1, "crashed friend relaunched");
+    CHECK(host.room.Start({{1, "Hinkage", 0}, {2, "Friend", 1}}, 0) == 1, "crashed friend relaunched");
     CHECK(launched(2), "launched");
     Common::WebSocket f3;
     CHECK(f3.Connect(WsUrl(*host.gateways[2], code2, "np2"), 3000ms, &error), "in again");
@@ -451,7 +451,7 @@ int main()
     (void)f3.ReceiveText(300ms);
     CHECK(!host.room.Running() && !f3.IsOpen(), "host's leave ends the room");
     host.launches.clear();
-    CHECK(host.room.Start({{1, "Hinkage"}, {2, "Friend"}}) == 2, "fresh room after the host left");
+    CHECK(host.room.Start({{1, "Hinkage", 0}, {2, "Friend", 1}}, 0) == 2, "fresh room after the host left");
     CHECK(launched(1) && !host.launches[1].joining, "host launched first again");
     const std::string code3 = host.room.Code();
     Common::WebSocket h2;
@@ -462,7 +462,7 @@ int main()
     h2.Close();
     std::this_thread::sleep_for(200ms);
     host.launches.clear();
-    CHECK(host.room.Start({{1, "Hinkage"}, {2, "Friend"}}) == 2, "fresh room after a crash");
+    CHECK(host.room.Start({{1, "Hinkage", 0}, {2, "Friend", 1}}, 0) == 2, "fresh room after a crash");
     CHECK(host.room.Code() != code3, "new code");
     host.room.Stop();
   }

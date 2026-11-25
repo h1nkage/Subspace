@@ -34,7 +34,7 @@ RoomServer::RoomServer(Sink& sink) : m_sink(sink)
 {
 }
 
-int RoomServer::Start(const std::vector<Player>& players)
+int RoomServer::Start(const std::vector<Player>& players, int host_port)
 {
   std::lock_guard lock(m_mutex);
   if (m_running)
@@ -57,6 +57,24 @@ int RoomServer::Start(const std::vector<Player>& players)
       ForgetLocked(pid);
     }
   }
+  if (m_running)
+  {
+    // Ports reassigned while the game runs: the host's own port moved (every seat's port does then),
+    // or someone still seated now has another seat or no port at all. Seats can't move during a
+    // game, and Subspace only takes port changes while the host's game is closed: refused.
+    bool changed = host_port != m_host_port;
+    for (const auto& [pid, seat] : m_launched)
+    {
+      const auto it = std::find_if(players.begin(), players.end(),
+                                   [pid = pid](const Player& player) { return player.pid == pid; });
+      changed = changed || it == players.end() || it->seat != seat.seat;
+    }
+    if (changed)
+    {
+      NOTICE_LOG_FMT(NETPLAY, "Orca local room {}: ports changed during a game, refused", m_code);
+      return PORTS_CHANGED;
+    }
+  }
   if (!m_running)
   {
     if (players.empty())
@@ -75,8 +93,9 @@ int RoomServer::Start(const std::vector<Player>& players)
     // Two engines play an ordinary friends room; three or four the four-seat room (the
     // "doubles" room, which runs every player's inputs separately). Both are tested modes.
     m_doubles = count > 2;
+    m_host_port = host_port;
     for (size_t i = 0; i < count; ++i)
-      m_launched[players[i].pid] = {players[i].name, static_cast<int>(i)};
+      m_launched[players[i].pid] = {players[i].name, i == 0 ? 0 : players[i].seat};
     const u8 host = players.front().pid;
     for (size_t i = 1; i < count; ++i)
       m_pending.push_back(players[i].pid);
@@ -86,7 +105,7 @@ int RoomServer::Start(const std::vector<Player>& players)
     return static_cast<int>(count);
   }
 
-  // Drop-in: newcomers take the lowest free seats.
+  // Drop-in: newcomers take the seat their port gives them.
   int added = 0;
   for (const Player& player : players)
   {
@@ -95,18 +114,9 @@ int RoomServer::Start(const std::vector<Player>& players)
     std::set<int> used;
     for (const auto& [pid, seat] : m_launched)
       used.insert(seat.seat);
-    int free_seat = -1;
-    for (int seat = 1; seat < MAX_ROOM_SEATS; ++seat)
-    {
-      if (!used.contains(seat))
-      {
-        free_seat = seat;
-        break;
-      }
-    }
-    if (free_seat < 0)
-      break;
-    m_launched[player.pid] = {player.name, free_seat};
+    if (player.seat < 1 || player.seat >= MAX_ROOM_SEATS || used.contains(player.seat))
+      continue;
+    m_launched[player.pid] = {player.name, player.seat};
     ++added;
     // A joiner waits for the host's engine like the first ones did.
     const bool host_in = std::any_of(m_launched.begin(), m_launched.end(), [&](const auto& p) {
@@ -171,6 +181,7 @@ void RoomServer::LaunchLocked(u8 pid, bool joining)
   launch.room = m_code;
   launch.ticket = IdLocked(pid);
   launch.joining = joining;
+  launch.host_port = static_cast<u8>(m_host_port);
   for (const auto& [launched, seat] : m_launched)
     launch.room_pids.push_back(launched);
   m_sink.Launch(pid, launch);

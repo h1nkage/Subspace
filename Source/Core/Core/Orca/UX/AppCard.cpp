@@ -244,20 +244,19 @@ Kit::Box ChatCard(ImDrawList* dl, ImVec2 pos, float unit, std::string_view name,
 Kit::Box NoticeCard(ImDrawList* dl, ImVec2 pos, float unit, std::string_view text, float width,
                     float alpha)
 {
-  const float pad = 1.4f * unit, mark = 2.6f * unit, px = 1.95f * unit;
-  const float text_x = pad + mark + 1.1f * unit;
+  // Subspace: text only, no logo mark.
+  const float pad = 1.4f * unit, px = 1.95f * unit;
+  const float text_x = pad;
   const std::vector<std::string> lines = Wrap(text, px, std::max(10.0f * unit, width - text_x - pad));
   float text_w = 0;
   for (const std::string& l : lines)
     text_w = std::max(text_w, Measure(l, px).x);
   const float line_h = px * 1.28f;
-  const float h = std::max(mark, line_h * static_cast<float>(std::max<std::size_t>(lines.size(), 1))) +
-                  2 * pad;
+  const float h = line_h * static_cast<float>(std::max<std::size_t>(lines.size(), 1)) + 2 * pad;
   const Kit::Box box{pos, ImVec2(pos.x + std::min(width, text_x + text_w + pad), pos.y + h)};
   if (alpha <= 0)
     return box;
   Slab(dl, box.min, box.max, unit, alpha);
-  Logo(dl, ImVec2(pos.x + pad, pos.y + (h - mark) / 2), mark, alpha);
   float y = pos.y + (h - line_h * static_cast<float>(lines.size())) / 2 + 0.1f * unit;
   for (const std::string& l : lines)
   {

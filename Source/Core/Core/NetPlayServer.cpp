@@ -181,7 +181,7 @@ NetPlayServer::NetPlayServer(const u16 port, const bool forward_port, NetPlayUI*
     is_connected = true;
     m_do_loop = true;
     m_thread = std::thread(&NetPlayServer::ThreadFunc, this);
-    m_target_buffer_size = 5;
+    m_target_buffer_size = 3;
     m_chunked_data_thread = std::thread(&NetPlayServer::ChunkedDataThreadFunc, this);
 
 #ifdef USE_UPNP
@@ -704,7 +704,9 @@ void NetPlayServer::AdjustPadBufferSize(unsigned int size)
 {
   std::lock_guard lkg(m_crit.game);
 
-  m_target_buffer_size = size;
+  // Subspace: 1 to 12 (an older saved Buffer outside that included); it is the rollback input
+  // delay, and 12 is the rollback session's max_delay.
+  m_target_buffer_size = std::clamp(size, 1u, 12u);
 
   // not needed on clients with host input authority
   if (!m_host_input_authority)
@@ -1350,6 +1352,7 @@ public:
            << static_cast<u8>(launch.joining) << static_cast<u8>(launch.room_pids.size());
     for (const u8 room_pid : launch.room_pids)
       packet << room_pid;
+    packet << launch.host_port;
     m_server.OrcaSend(pid, std::move(packet), DEFAULT_CHANNEL);
   }
 
@@ -1375,6 +1378,7 @@ void NetPlayServer::OrcaSend(PlayerId pid, sf::Packet&& packet, u8 channel_id)
 bool NetPlayServer::StartOrcaRoom(std::string* error)
 {
   std::vector<Orca::Local::RoomServer::Player> players;
+  int host_port = -1;
   {
     std::lock_guard lkp(m_crit.players);
     const auto host = m_players.find(1);
@@ -1383,16 +1387,41 @@ bool NetPlayServer::StartOrcaRoom(std::string* error)
       *error = "Host not connected to lobby.";
       return false;
     }
-    players.push_back({1, host->second.name});
-    // Everyone else who plays: a GameCube port assigned, in port order.
-    for (const PlayerId pid : m_pad_map)
+    // Seats follow the GameCube ports. The host is always seat 0 (its game runs the match) and plays
+    // on its own port; with no port of its own, on the first one nobody else has. The player on
+    // port 1 takes the host's port number as its seat, and everyone else's seat is its port
+    // (Orca::Online::SeatPort swaps seat 0 and the host's port the same way in every game).
+    const auto holder = [&](size_t port) {
+      const PlayerId pid = m_pad_map[port];
+      return pid != 0 && m_players.contains(pid) ? pid : PlayerId{0};
+    };
+    for (size_t port = 0; port < m_pad_map.size() && host_port < 0; ++port)
     {
-      if (pid <= 1 || !m_players.contains(pid) ||
+      if (holder(port) == 1)
+        host_port = static_cast<int>(port);
+    }
+    for (size_t port = 0; port < m_pad_map.size() && host_port < 0; ++port)
+    {
+      if (holder(port) == 0)
+        host_port = static_cast<int>(port);
+    }
+    if (host_port < 0)
+    {
+      *error = "All 4 ports are taken by other players; give the host one.";
+      return false;
+    }
+    players.push_back({1, host->second.name, 0});
+    // Everyone else who plays: a GameCube port assigned (a player's first port, if several).
+    for (size_t port = 0; port < m_pad_map.size(); ++port)
+    {
+      const PlayerId pid = holder(port);
+      if (pid <= 1 ||
           std::any_of(players.begin(), players.end(), [pid](const auto& p) { return p.pid == pid; }))
       {
         continue;
       }
-      players.push_back({pid, m_players.at(pid).name});
+      const int seat = port == 0 ? host_port : static_cast<int>(port);
+      players.push_back({pid, m_players.at(pid).name, seat});
     }
   }
   const bool was_running = m_orca_room->Running();
@@ -1402,7 +1431,13 @@ bool NetPlayServer::StartOrcaRoom(std::string* error)
              "Ports,\" then press Start.";
     return false;
   }
-  if (m_orca_room->Start(players) <= 0)
+  const int started = m_orca_room->Start(players, host_port);
+  if (started == Orca::Local::RoomServer::PORTS_CHANGED)
+  {
+    *error = "Ports can't be changed while the game window is open.";
+    return false;
+  }
+  if (started <= 0)
   {
     *error = was_running ? "All ports already assigned." : "The room could not be opened.";
     return false;

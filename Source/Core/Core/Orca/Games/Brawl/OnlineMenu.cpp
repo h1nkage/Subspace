@@ -15,6 +15,7 @@
 #include "Common/Logging/Log.h"
 #include "Core/Orca/Profile.h"
 #include "Core/Orca/Session/Events.h"
+#include "Core/Orca/Session/Online.h"
 #include "Core/Orca/Session/Replay.h"
 #include "Core/Orca/Status.h"
 #include "Core/Orca/Games/Brawl/BrawlGame.h"
@@ -359,8 +360,9 @@ int FirstFriendFrame()
 Outputs Decide(const Inputs& in)
 {
   namespace B = MatchBlock;
-  // Ports 2-4 are friends.
-  constexpr u8 FRIEND_PORTS = 0x0E;
+  // Every port but the host's is a friend's (the host's is port 1 unless the host picked another:
+  // Online::SeatPort, the same on every machine and in the lobby key).
+  const u8 FRIEND_PORTS = static_cast<u8>(0x0F & ~(1u << Orca::Online::SeatPort(0)));
   Outputs out;
   // Nothing kept yet and no friend plugged in: write nothing. Solo play never touches these bytes.
   const bool kept = in.tag == B::FRIENDS_TAG_VALUE;
