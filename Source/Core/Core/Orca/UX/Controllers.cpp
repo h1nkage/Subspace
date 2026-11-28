@@ -16,11 +16,8 @@ namespace Orca::UX
 {
 namespace
 {
-// A real snapshot is a few KB.
 constexpr size_t MAX_EVENT_BYTES = 64 * 1024;
 
-// picojson has no nesting limit and aborts on a number that overflows a double. Snapshots nest
-// four deep and use short numbers, so reject anything deeper or longer before parsing.
 bool SafeToParse(std::string_view text)
 {
   if (text.size() > MAX_EVENT_BYTES)
@@ -167,7 +164,6 @@ std::optional<AdapterPort> ParsePort(const picojson::value& v, int expected_port
   return p;
 }
 
-// nullopt if malformed. A pad without the standard mapping gets index -1 and is skipped.
 std::optional<StandardPad> ParsePad(const picojson::value& v)
 {
   if (!v.is<picojson::object>())
@@ -221,34 +217,22 @@ u8 ClampByte(int v)
   return static_cast<u8>(std::clamp(v, 0, 255));
 }
 
-// The byte of an 8-bit axis (0..255, resting at 128), if `v` came from one. Box controllers (B0XX,
-// HayBox) send exact GameCube stick bytes: over DInput as an 8-bit HID axis, which the OS scales to
-// SDL's int16 as 257 * byte - 32768 (IOKit and DirectInput both map 0..255 linearly), and over
-// XInput as 257 * (byte - 128) + 128 (HayBox): both 128 above a multiple of 257. The helper sends
-// int16 / 32767 (/ 32768 below zero); a negated axis (SDL's XInput Y, an axis inverted in the
-// Controls panel) lands on 129 instead. On that lattice floor((s + 32768) / 257) is the byte the
-// device sent (the mirrored byte when negated), where 128 + lround(127 * v) comes out one unit
-// short of every leftward and downward push. Analog sticks (16-bit, centred on 0) are off the
-// lattice but for one value in 257, which then moves by at most one unit.
 std::optional<int> EightBitAxis(float v)
 {
   for (const double scale : {32767.0, 32768.0})
   {
     const double s = static_cast<double>(v) * scale;
     const double whole = std::round(s);
-    // A float holds the helper's value to within 0.002 of an int16 step.
     if (std::abs(s - whole) > 0.004)
       continue;
     const int i = static_cast<int>(whole);
     const int m = ((i % 257) + 257) % 257;
     if (m == 128 || m == 129)
-      return (i + 32768) / 257;  // i + 32768 >= 0: floor
+      return (i + 32768) / 257;
   }
   return std::nullopt;
 }
 
-// -1..1 to a GameCube axis byte around `centre`; `invert` for Y (the pad's down is the GC's -).
-// Never 0: a full push is 1..255 either way, as before.
 u8 AxisByte(float v, bool invert)
 {
   if (!std::isfinite(v))
@@ -261,16 +245,8 @@ u8 AxisByte(float v, bool invert)
                    static_cast<int>(std::lround(s * GCPadStatus::MAIN_STICK_RADIUS)));
 }
 
-// A standard pad's C-stick inside this radius (of a full push, both axes together) reads as
-// centred. Brawl takes a new C-stick attack only once the C-stick is back at neutral: resting 5
-// units (4%) off centre, every C-stick smash and aerial after the first is ignored (4 units off is
-// still neutral), and analog sticks often rest that far off. The adapter's controllers get their
-// rest as their origin (the app's helper); a standard pad has none, hence this (a little under the
-// 0.265 XInput recommends for a right stick). Outside it nothing is rescaled: flicks and a box
-// controller's exact C-stick values reach the game as before. Only the local player's bytes change.
 constexpr float C_STICK_DEAD_ZONE = 0.2f;
 
-// W3C standard gamepad button indices.
 enum StandardButton
 {
   SOUTH = 0,
@@ -288,11 +264,8 @@ enum StandardButton
   DPAD_RIGHT = 15,
 };
 
-// A trigger's digital L/R (shield, air dodge) from half its travel, as in Dolphin. A GameCube
-// trigger clicks only at the end, but most pads' triggers are shorter, softer and never pulled all
-// the way.
 constexpr float TRIGGER_CLICK = 0.5f;
-}  // namespace
+}
 
 bool SafeJson(std::string_view text)
 {
@@ -378,7 +351,6 @@ GCPadStatus NeutralPad()
 
 GCPadStatus MapAdapterPort(const AdapterPort& port)
 {
-  // Rebuild the port's 9 wire bytes (only byte 2's low nibble is used).
   const std::array<u8, 9> wire{port.wireless ? u8(0x20) : u8(0x10),
                                static_cast<u8>(port.buttons & 0xFF),
                                static_cast<u8>((port.buttons >> 8) & 0x0F),
@@ -427,7 +399,6 @@ GCPadStatus MapStandardPad(const StandardPad& pad)
   if (held(DPAD_RIGHT))
     status.button |= PAD_BUTTON_RIGHT;
   const auto trigger = [&pad](int i) {
-    // A digital trigger reports 0 or 1; an analog one its travel.
     const float v = std::max(pad.buttons[i], pad.pressed[i] && pad.buttons[i] == 0 ? 1.0f : 0.0f);
     return std::clamp(v, 0.0f, 1.0f);
   };
@@ -463,7 +434,6 @@ std::optional<LocalChoice> ChooseLocalPad(const Snapshot& snapshot, double age_m
     }
     if (best)
     {
-      // Age of the last adapter report: helper clock until the snapshot, our clock after.
       const double report_age = snapshot.sent_at - snapshot.received_at + age_ms;
       const bool raw_stale = snapshot.received_at <= 0 || !(report_age <= STALE_MS);
       if (stale || raw_stale)
@@ -531,4 +501,4 @@ std::array<std::optional<LocalChoice>, MAX_LOCAL> ChooseLocalPads(const Snapshot
   }
   return choices;
 }
-}  // namespace Orca::UX
+}

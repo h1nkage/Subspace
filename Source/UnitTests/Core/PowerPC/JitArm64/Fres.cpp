@@ -75,9 +75,6 @@ TEST(JitArm64, Fres)
   }
 }
 
-// Orca: the same in the guest's non-IEEE mode (FPCR.FZ, plus FPCR.AH on CPUs with FEAT_AFP; also
-// run with ORCA_TEST_NO_AFP=1). FZ without AH reads denormal inputs as zero; AH makes the default
-// NaN negative.
 TEST(JitArm64, FresNonIEEE)
 {
   Core::DeclareAsCPUThread();

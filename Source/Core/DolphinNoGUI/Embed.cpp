@@ -29,7 +29,6 @@ namespace Embed
 {
 namespace
 {
-// Never destroyed: the reader thread may still be blocked on stdin while the process exits.
 struct Inbox
 {
   std::mutex mutex;
@@ -60,7 +59,7 @@ bool ParseInt(const char* text, int* out)
   *out = static_cast<int>(value);
   return true;
 }
-}  // namespace
+}
 
 std::optional<Rect> ParseRect(const std::string& text, bool clamp_size)
 {
@@ -145,7 +144,6 @@ std::optional<Options> TakeArguments(std::vector<char*>* argv, std::string* erro
     }
     else if (std::strcmp(arg, "--rect") == 0)
     {
-      // Either four arguments or one "X,Y,W,H".
       Rect r;
       if (ParseInt(next(1), &r.x) && ParseInt(next(2), &r.y) && ParseInt(next(3), &r.w) &&
           ParseInt(next(4), &r.h))
@@ -239,13 +237,8 @@ void Out(const std::string& line)
 
 void StartReading()
 {
-  // Read the raw file descriptor, not stdin: a thread blocked in a FILE read holds that FILE's
-  // lock, and fflush(nullptr) at shutdown or exit would then hang forever.
   std::thread([] {
-    // 64 KB reads: a controller snapshot on the stdio bridge is a few KB, and many can queue up.
     Orca::Bridge::LineSplitter splitter(Orca::Bridge::MAX_LINE);
-    // Never freed, like the inbox: this thread may still be blocked on stdin when the process
-    // exits.
     auto* const buffer = new char[64 * 1024];
     u64 dropped = 0;
     while (true)
@@ -259,7 +252,6 @@ void StartReading()
 #endif
       if (got <= 0)
         break;
-      // Bridge lines are handled here, on this thread; the commands wait for the frame loop.
       std::vector<std::string> lines =
           Orca::Bridge::Route(splitter.Feed(std::string_view(buffer, static_cast<size_t>(got))));
       if (splitter.Dropped() != dropped)
@@ -280,12 +272,10 @@ void StartReading()
       }
       if (quit)
       {
-        // Nothing more is read, so no reply can come.
         Orca::Bridge::Close();
         return;
       }
     }
-    // The app closed the pipe or died, so there is nobody left to show the game to.
     Orca::Bridge::Close();
     Inbox& inbox = GetInbox();
     std::lock_guard lock(inbox.mutex);
@@ -301,4 +291,4 @@ std::vector<std::string> TakeCommands()
   lines.swap(inbox.lines);
   return lines;
 }
-}  // namespace Embed
+}

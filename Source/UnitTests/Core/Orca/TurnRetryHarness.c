@@ -5,7 +5,6 @@
 
 #include "stun.h"
 
-// The C STUN API has parameter names that are C++ keywords.
 int OrcaTestTurnStaleNonceReply(void* data, int size, void* reply, int capacity)
 {
   stun_message_t request = {0};

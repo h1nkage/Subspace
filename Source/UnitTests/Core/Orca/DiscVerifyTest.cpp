@@ -41,7 +41,6 @@ std::optional<std::string> Take(std::vector<std::string> args, std::vector<std::
   return path;
 }
 
-// Runs the verifier on `path` and returns what it printed.
 std::string RunOn(const std::string& path, int* code)
 {
   std::FILE* const out = std::tmpfile();
@@ -56,7 +55,7 @@ std::string RunOn(const std::string& path, int* code)
   std::fclose(out);
   return text;
 }
-}  // namespace
+}
 
 TEST(OrcaDiscVerify, NoProblemsIsOk)
 {
@@ -65,7 +64,6 @@ TEST(OrcaDiscVerify, NoProblemsIsOk)
   EXPECT_EQ(Orca::DiscVerify::ExitCode(0), 0);
 }
 
-// What a known-good scrubbed Brawl Rev 2 .wbfs reports: all Low, so it is ok.
 TEST(OrcaDiscVerify, GoodScrubbedBrawlIsOk)
 {
   std::vector<Problem> problems = {
@@ -114,9 +112,6 @@ TEST(OrcaDiscVerify, MediumOrHighIsDamaged)
             "orca verify damaged 1");
 }
 
-// Dolphin's Medium problems that only concern Brawl's Masterpiece partitions, as
-// DiscIO/VolumeVerifier.cpp words them: CheckPartitions, CheckPartition and Finish, with
-// GetPartitionName's "<id> (Masterpiece)". Orca and Project+ never read those partitions.
 const std::vector<Problem> MASTERPIECE_ONLY = {
     {Severity::Medium, "The Masterpiece partitions are missing."},
     {Severity::Medium, "The HBAE (Masterpiece) partition does not seem to contain valid data."},
@@ -216,7 +211,6 @@ TEST(OrcaDiscVerify, TakesTheFlagAndItsPath)
   EXPECT_EQ(kept, (std::vector<std::string>{"Orca", "-u", "/u"}));
 }
 
-// Without the flag nothing changes, so a normal boot is unaffected.
 TEST(OrcaDiscVerify, NoFlagKeepsEverything)
 {
   std::vector<std::string> kept;
@@ -253,7 +247,6 @@ TEST(OrcaDiscVerify, NonDiscIsUnreadable)
   EXPECT_EQ(code, 1);
 }
 
-// A blank GameCube image opens but has no file system: the whole check runs and finds it damaged.
 TEST(OrcaDiscVerify, BlankGameCubeImageIsDamaged)
 {
   const std::string dir = File::CreateTempDir();
@@ -274,9 +267,6 @@ TEST(OrcaDiscVerify, BlankGameCubeImageIsDamaged)
   EXPECT_TRUE(text.substr(last + 1).starts_with("orca verify damaged ")) << text;
 }
 
-// A verify that was killed leaves its NAND folder; the next one removes it, and only it: not a
-// verify that is still running, not a name without a pid, not a file, not a symlink, not another
-// program's temp folder.
 TEST(OrcaDiscVerify, ClearsTheNandsOfKilledVerifies)
 {
   const std::string dir = File::CreateTempDir();
@@ -331,7 +321,6 @@ TEST(OrcaDiscVerify, ThisProcessIsAliveAndANandIsItsOwn)
   EXPECT_TRUE(File::IsDirectory(nand));
   const std::string name = std::filesystem::path(nand).filename().string();
   EXPECT_TRUE(name.starts_with(fmt::format("orca-verify-nand-{}-", pid))) << name;
-  // A second verify while this one runs leaves this one's folder.
   const std::string second = Orca::DiscVerify::MakeNand();
   EXPECT_TRUE(File::IsDirectory(nand));
   EXPECT_NE(second, nand);

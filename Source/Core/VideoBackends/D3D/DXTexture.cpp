@@ -37,8 +37,6 @@ DXTexture::~DXTexture()
 
 std::unique_ptr<DXTexture> DXTexture::Create(const TextureConfig& config, std::string_view name)
 {
-  // Orca: nothing new on a lost device while the run stops (D3DCommon/DeviceLost.h); the texture
-  // cache takes a texture it couldn't make as it always has.
   if (D3DCommon::IsDeviceLost())
     return nullptr;
 
@@ -60,7 +58,6 @@ std::unique_ptr<DXTexture> DXTexture::Create(const TextureConfig& config, std::s
   HRESULT hr = D3D::device->CreateTexture2D(&desc, nullptr, &d3d_texture);
   if (FAILED(hr))
   {
-    // Orca: where a lost device most often shows first (a 16x16 texture as a match starts).
     char what[64];
     std::snprintf(what, sizeof(what), "a %ux%ux%u texture", config.width, config.height,
                   config.layers);
@@ -257,7 +254,6 @@ std::unique_ptr<DXStagingTexture> DXStagingTexture::Create(StagingTextureType ty
 
   ComPtr<ID3D11Texture2D> texture;
   HRESULT hr = D3D::device->CreateTexture2D(&desc, nullptr, &texture);
-  // Orca: an assert ends a release build (0x80000003); a lost device stops the run instead.
   ASSERT_MSG(VIDEO, SUCCEEDED(hr) || D3DCommon::CheckDeviceLost(hr, "a staging texture"),
              "Failed to create staging texture: {}", DX11HRWrap(hr));
   if (FAILED(hr))

@@ -32,19 +32,16 @@ using Rollback::InputGate::ALL;
 using Rollback::InputGate::Mask;
 using Rollback::InputGate::Masks;
 
-// Character select memory (see CharOrder.h).
 constexpr u32 SCENE_MANAGER = 0x805A0060;
 constexpr u32 MANAGER_SCENE = 0x04;
 constexpr u32 SCENE_SELCHAR_TASK = 0x400;
 constexpr u32 TASK_AREAS = 0x44;
 constexpr u32 AREA_KIND = 0x1B4;
 constexpr u32 AREA_CHARACTER = 0x1B8;
-// u8: 1 while the token is in hand, 0 once placed (the next byte is 1 while it is flying).
 constexpr u32 AREA_IN_HAND = 0x1F8;
 constexpr u32 AREA_FLYING = 0x1F9;
 constexpr u32 KIND_HUMAN = 1;
 
-// State offsets at kArea.
 constexpr u32 AT_MAGIC = 0x0;
 constexpr u32 AT_GAME = 0x4;
 constexpr u32 AT_STEP = 0x5;
@@ -65,7 +62,6 @@ std::string Clock(int frames)
   return fmt::format("{}:{:02}", seconds / 60, seconds % 60);
 }
 
-// ORCA_TEST_CHAR_ORDER's set view, parsed once.
 const SetView& TestSet()
 {
   static const SetView set = [] {
@@ -88,14 +84,13 @@ const SetView& TestSet()
   return set;
 }
 
-}  // namespace
+}
 
 std::string Line(const SetView& set, const CssView& css, const State& state,
                  const std::vector<Events::PortInfo>& ports)
 {
   if (!Active(set, css, state))
     return {};
-  // Port names (default "P<n>") and the local port (-1 in a harness run).
   std::array<std::string, 2> names{"P1", "P2"};
   int local = -1;
   for (const Events::PortInfo& p : ports)
@@ -109,7 +104,6 @@ std::string Line(const SetView& set, const CssView& css, const State& state,
   }
   if (state.step == Step::Done)
   {
-    // Only while a token is still in hand (the game waits for it).
     for (int port = 0; port < 2; ++port)
     {
       if (css.ports[port].placed)
@@ -123,20 +117,17 @@ std::string Line(const SetView& set, const CssView& css, const State& state,
   const std::string left = Clock(set.pick_frames - state.elapsed);
   const int first = state.first & 1;
   const int second = 1 - first;
-  // The first pick's time is up with its token in hand: it is going down.
   if (state.step == Step::First && TimedOut(set, state) && !css.ports[first].Down())
   {
     if (first == local)
       return "Time's up: your token goes on a character";
     return fmt::format("Waiting for {} to put the token down", names[first]);
   }
-  // The current picker's next action: pick with A, then press Start.
   const auto todo = [&css](int port) {
     return css.ports[port].Down() ? "Start locks it in · B to change" : "A on a character, then Start";
   };
   if (state.step == Step::First && set.order == Order::Free && local == second)
   {
-    // Free: the winner, during the loser's turn.
     if (state.locked & (1 << local))
       return fmt::format("You're locked in · Waiting for {} · {}", names[first], left);
     return fmt::format("{} picks first · {} · Start locks yours in any time", names[first], left);
@@ -147,7 +138,6 @@ std::string Line(const SetView& set, const CssView& css, const State& state,
       return fmt::format("Your pick · {} · {}", todo(first), left);
     return fmt::format("{} picks first · {}", names[first], left);
   }
-  // Second picker's turn; the first has locked in.
   if (local == second)
     return fmt::format("{} locked in · Your pick: {} · {}", names[first], todo(second), left);
   if (local == first)
@@ -162,8 +152,6 @@ static_assert(kArea == FreeSpace::kMatchBlock.begin + 0x200);
 
 namespace
 {
-// A set's turn time, from the ruleset its block names (a set names a builtin; none only in a
-// build whose ruleset files don't load, OrcaRulesets.BuiltinsAreTheOldTables: no set then).
 SetView WithTimer(SetView set)
 {
   const Ranked::Ruleset* rules = Rulesets::ByBlock(static_cast<u8>(set.ruleset));
@@ -172,11 +160,10 @@ SetView WithTimer(SetView set)
   set.pick_frames = static_cast<u16>(rules->order_pick_seconds * 60);
   return set;
 }
-}  // namespace
+}
 
 SetView ReadSet(const GuestMemory& memory)
 {
-  // Test override.
   if (TestSet().ruleset != Ruleset::None)
     return WithTimer(TestSet());
   const GuestMemory& m = memory;
@@ -234,7 +221,6 @@ CssView ReadCss(const GuestMemory& m)
       p.hand_x = hand.x;
       p.hand_y = hand.y;
     }
-    // Raw buttons from the latch (zero when the latch isn't running).
     const u32 raw = Queue::RAW + 2 * i, prev = Queue::RAW_PREV + 2 * i;
     if (m.Valid(raw + 1) && m.Valid(prev + 1))
     {
@@ -324,10 +310,10 @@ int WriteState(GuestMemory& m, const State& s)
 
 namespace
 {
-std::atomic<int> s_picker{-1};  // for CurrentPicker()
+std::atomic<int> s_picker{-1};
 std::mutex s_ribbon_lock;
-std::string s_ribbon;  // for CurrentPickerRibbon()
-}  // namespace
+std::string s_ribbon;
+}
 
 std::string PickerRibbon(int picker, const std::vector<Events::PortInfo>& ports)
 {
@@ -376,7 +362,6 @@ int CurrentPicker()
 void Frame(const Core::CPUThreadGuard& guard, int frame, bool resimulating,
            const std::vector<Events::PortInfo>& ports)
 {
-  // No ruleset, no character order: nothing to read or write, and nothing left on screen.
   if (Rules::ProfileRuleset() == Rules::Ruleset::None)
   {
     if (!resimulating)
@@ -395,7 +380,6 @@ void Frame(const Core::CPUThreadGuard& guard, int frame, bool resimulating,
   const State after = Advance(set, css, before, frame);
   if (after != before)
     WriteState(m, after);
-  // A token still in hand long after both turns: that player is the ranked no-show.
   const int no_show = TestActive() ? -1 : NoShow(set, css, after);
   const bool new_no_show = no_show >= 0 && m.Valid(MatchBlock::CSS_NO_SHOW) &&
                            m.Read8(MatchBlock::CSS_NO_SHOW) == 0;
@@ -476,4 +460,4 @@ bool ParseTestSpec(const std::string& spec, SetView* out)
   *out = set;
   return true;
 }
-}  // namespace Orca::UX::CharOrder
+}

@@ -81,9 +81,6 @@ void VideoCommon_DoState(PointerWrap& p)
     p.SetVerifyMode();
   }
 
-  // Orca: on a load, draw any buffered vertices first, while the old registers are still in
-  // place. Flushed after the restore, they would be drawn with the snapshot's matrices and TEV
-  // state and show up as garbage triangles. See ORCA.md, "Rollback and snapshots".
   if (p.IsReadMode())
     g_vertex_manager->Flush();
 
@@ -134,8 +131,6 @@ void VideoCommon_DoState(PointerWrap& p)
   system.GetGeometryShaderManager().DoState(p);
   p.DoMarker("GeometryShaderManager");
 
-  // Orca: always saved, even for rollback: it holds emulated GX state (z slope, cached
-  // normal/tangent/binormal). Its flush on load is a no-op after the flush above.
   g_vertex_manager->DoState(p);
   p.DoMarker("VertexManager");
 
@@ -169,9 +164,6 @@ void VideoCommon_DoState(PointerWrap& p)
     VertexLoaderManager::MarkAllDirty();
   }
 
-  // Orca: a full save submits GPU work through its EFB readback, but a rollback snapshot skips
-  // that. Submit encoded work here (no wait): some backends (Metal) otherwise submit only on
-  // present, and re-run frames present nothing.
   if (s_rollback_snapshot && !p.IsMeasureMode())
     g_gfx->Flush();
 }

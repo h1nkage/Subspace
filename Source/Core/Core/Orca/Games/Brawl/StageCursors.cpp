@@ -18,7 +18,6 @@ namespace Orca::UX::StageCursors
 {
 namespace
 {
-// The shared bytes.
 enum Shared : u32
 {
   S_TAG = 0,
@@ -27,7 +26,6 @@ enum Shared : u32
   S_PAGE_TURN = 3,
   S_PAGE_FRAMES = 4,
 };
-// A cursor's bytes.
 enum Cursor_ : u32
 {
   C_X = 0,
@@ -45,55 +43,34 @@ constexpr Rect R(float x0, float y0, float x1, float y1)
   return Rect{U(x0), U(y0), U(x1), U(y1)};
 }
 
-// ---- Brawl rev 2 (empty save), probed ----
-// Cursor range is x -30..30, y -19.5..19.5 (the game clamps to it). Rectangles come from sweeping
-// the game's cursor in 0.5 steps and recording which stage it hovers, padded by a quarter unit.
-// Stable casual Supernova 2025 indices: BF, PS1, LC, SV, YI, FD, Delfino.
-// Ranked Supernova 2026 uses the same indices and adds Frigate in kBrawlRankedTiles below.
 constexpr std::array<Tile, 7> kBrawlTiles{{
-    {0, 0, R(-4.75f, 13.25f, 1.25f, 19.25f)},  // Battlefield, page 0 slot 0 (item 0x02)
-    {1, 1, R(18.25f, -12.75f, 26.25f, -4.75f)},  // Pokemon Stadium, Melee page slot 9 (0x0B)
-    {2, 0, R(8.75f, 1.75f, 14.75f, 7.75f)},    // Lylat Cruise, slot 13
-    {3, 0, R(20.25f, -4.25f, 26.25f, 2.25f)},  // Smashville, slot 20
-    {4, 0, R(-4.25f, 1.75f, 1.75f, 7.75f)},    // Yoshi's Island, slot 11
-    {5, 0, R(1.75f, 13.25f, 7.25f, 19.25f)},   // Final Destination, slot 1
-    {6, 0, R(7.75f, 13.25f, 13.75f, 19.25f)},  // Delfino Plaza, slot 2
+    {0, 0, R(-4.75f, 13.25f, 1.25f, 19.25f)},
+    {1, 1, R(18.25f, -12.75f, 26.25f, -4.75f)},
+    {2, 0, R(8.75f, 1.75f, 14.75f, 7.75f)},
+    {3, 0, R(20.25f, -4.25f, 26.25f, 2.25f)},
+    {4, 0, R(-4.25f, 1.75f, 1.75f, 7.75f)},
+    {5, 0, R(1.75f, 13.25f, 7.25f, 19.25f)},
+    {6, 0, R(7.75f, 13.25f, 13.75f, 19.25f)},
 }};
 
 constexpr std::array<Tile, 8> kBrawlRankedTiles{{
     kBrawlTiles[0], kBrawlTiles[1], kBrawlTiles[2], kBrawlTiles[3],
     kBrawlTiles[4], kBrawlTiles[5], kBrawlTiles[6],
-    {7, 0, R(24.25f, 7.25f, 29.75f, 13.25f)},  // Frigate Orpheon, slot 10
+    {7, 0, R(24.25f, 7.25f, 29.75f, 13.25f)},
 }};
 
-// ---- Project+ v3.2, 2024 Proposed preset, page 0 (probed the same way) ----
-// Cursor range is x -31..31, y -23.5..20.5. Nine tiles in two rows under the preview: positions
-// 0-3 on top (GHZ, BC, FH, DL), 4-8 below (ToT, SV, BF, PS2, LM). Hovered item = position + 2.
-// Stage indices are the Project+ ruleset's (Rulesets/pplus-2024.json): BF, PS2, SV, LM, ToT, GHZ, BC, FH, DL.
 constexpr std::array<Tile, 9> kPPlusTiles{{
-    {5, 0, R(-15.25f, -11.25f, -8.25f, -3.25f)},   // Green Hill Zone, position 0
-    {6, 0, R(-6.75f, -11.25f, 0.75f, -3.25f)},     // Bowser's Castle, 1
-    {7, 0, R(1.75f, -11.25f, 9.25f, -3.25f)},      // Frigate Husk, 2
-    {8, 0, R(10.25f, -11.25f, 17.75f, -3.25f)},    // Dream Land, 3
-    {4, 0, R(-19.75f, -17.75f, -12.25f, -11.25f)}, // Temple of Time, 4
-    {2, 0, R(-11.25f, -17.75f, -3.75f, -11.25f)},  // Smashville, 5
-    {0, 0, R(-2.75f, -17.75f, 4.75f, -11.25f)},    // Battlefield, 6
-    {1, 0, R(5.75f, -17.75f, 13.25f, -11.25f)},    // Pokemon Stadium 2, 7
-    {3, 0, R(14.25f, -17.75f, 21.75f, -11.25f)},   // Luigi's Mansion, 8
+    {5, 0, R(-15.25f, -11.25f, -8.25f, -3.25f)},
+    {6, 0, R(-6.75f, -11.25f, 0.75f, -3.25f)},
+    {7, 0, R(1.75f, -11.25f, 9.25f, -3.25f)},
+    {8, 0, R(10.25f, -11.25f, 17.75f, -3.25f)},
+    {4, 0, R(-19.75f, -17.75f, -12.25f, -11.25f)},
+    {2, 0, R(-11.25f, -17.75f, -3.75f, -11.25f)},
+    {0, 0, R(-2.75f, -17.75f, 4.75f, -11.25f)},
+    {1, 0, R(5.75f, -17.75f, 13.25f, -11.25f)},
+    {3, 0, R(14.25f, -17.75f, 21.75f, -11.25f)},
 }};
 
-// The Random buttons (hovered item 0x36) were not swept like the tiles: they are measured from
-// screenshots of each stage select at 1280x720 through the picture map below, padded out to the
-// next quarter unit. Brawl's grey bar's outline is x -4.9..15.0, y -20.7..-17.4: its rectangle
-// stops where the page button's starts (the sweep found the page button from 15.5), and the cursor
-// stops at -19.5 inside the bar. Project+'s slanted green button is x -16.0..4.0 at its widest,
-// y -22.6..-19.3: its rectangle takes the middle of the slanted right edge (Project+'s flows have
-// no page button) and runs down past the cursor's range, -23.5, which is just under the button.
-// Neither touches a tile. A sweep under ORCA_UX_PROBE would confirm both.
-
-// Maps cursor units to the picture for the overlay, the same in both games. Measured at 1280x720
-// (picture 1250 x 720 between bars at x 15 and 1265): cursor (0, 0) is at (639.8, 358.4), one unit
-// is 15.18 px across and 14.42 px down.
 void Map(Layout* l)
 {
   l->u0 = (639.8f - 15.0f) / 1250.0f;
@@ -107,15 +84,12 @@ Layout MakeBrawl()
   Layout l;
   l.game = GAME_BRAWL;
   l.bounds = R(-30.0f, -19.5f, 30.0f, 19.5f);
-  // Matches the game's own cursor speed at full tilt.
   l.speed = U(1.6f);
   l.tiles = kBrawlTiles;
   l.pages = true;
   l.page_button = R(15.25f, -19.75f, 30.25f, -17.25f);
   l.random_button = R(-5.25f, -21.0f, 15.25f, -17.25f);
   l.random_art = R(-4.9f, -20.7f, 15.0f, -17.4f);
-  // Just above the Random bar (-17.25), either side of the game's own cursor start (3.5, -17.5),
-  // below every legal tile: on nothing, so an A mashed into the stage select names nothing.
   l.start = {Point{U(-2.0f), U(-16.5f)}, Point{U(9.0f), U(-16.5f)}};
   Map(&l);
   return l;
@@ -131,8 +105,6 @@ Layout MakePPlus()
   l.pages = false;
   l.random_button = R(-16.25f, -23.75f, 3.0f, -19.0f);
   l.random_art = R(-16.0f, -22.6f, 4.0f, -19.3f);
-  // Between the lower row of tiles (-17.75) and the Random button (-19.0): on nothing, so an A
-  // mashed into the stage select names nothing.
   l.start = {Point{U(-6.0f), U(-18.5f)}, Point{U(6.0f), U(-18.5f)}};
   Map(&l);
   return l;
@@ -152,8 +124,6 @@ void Put16(GuestMemory& m, u32 a, u16 v, int* changed)
   Put8(m, a + 1, static_cast<u8>(v), changed);
 }
 
-// The bytes are mapped and hold Orca's block. Check the magic: before the game loads sora_scene
-// this memory belongs to something else.
 bool Mapped(const GuestMemory& m)
 {
   return m.Valid(MatchBlock::MAGIC) && m.Read32(MatchBlock::MAGIC) == MatchBlock::MAGIC_VALUE &&
@@ -161,8 +131,6 @@ bool Mapped(const GuestMemory& m)
          m.Valid(CURSORS + CURSORS_SIZE - 1);
 }
 
-// Stick deflection to speed. Full tilt is 100 of 128, about where a GameCube stick's gate stops.
-// Integer math, truncated toward zero.
 int Velocity(u8 axis, const Layout& l)
 {
   int d = static_cast<int>(axis) - 128;
@@ -173,11 +141,9 @@ int Velocity(u8 axis, const Layout& l)
 }
 
 std::mutex s_view_lock;
-// The overlay draws the view from the frame before the last, because the picture on screen is one
-// frame old. Otherwise the drawn cursor would run a frame ahead of the game's own crosshair.
 View s_view;
 View s_next;
-}  // namespace
+}
 
 u8 ButtonsOf(u16 pad)
 {
@@ -302,7 +268,6 @@ int Write(GuestMemory& m, const State& s)
     Put8(m, c + C_NOW, s.cursors[p].now, &changed);
     Put8(m, c + C_SEEN, s.cursors[p].seen, &changed);
   }
-  // Tag last, so a reader never sees it over stale bytes.
   Put8(m, SHARED + S_TAG, TAG_ON, &changed);
   return changed;
 }
@@ -323,8 +288,6 @@ State Start(const Layout& l)
   {
     s.cursors[p].x = l.start[p].x;
     s.cursors[p].y = l.start[p].y;
-    // Held until the latch reads them up. `now` too: the flow may take presses in this same frame,
-    // before any latch, and that must not clear `seen`.
     s.cursors[p].now = HELD_ALL;
     s.cursors[p].seen = HELD_ALL;
   }
@@ -365,7 +328,6 @@ int Latch(GuestMemory& m, const std::array<std::optional<GCPadStatus>, 4>& raw)
     c.x = static_cast<s16>(x);
     c.y = static_cast<s16>(y);
   }
-  // The game's own cursor follows whichever one moved. If both moved, it keeps its current one.
   if (moved[0] != moved[1])
     s->follower = moved[0] ? 0 : 1;
   return Write(m, *s);
@@ -382,7 +344,6 @@ void LatchFrame(const Core::CPUThreadGuard& guard,
 
 namespace
 {
-// The player's name in capitals (ASCII letters only).
 std::string UpperName(const View& v, int port)
 {
   std::string out = v.players[port].name.empty() ? fmt::format("P{}", port + 1) :
@@ -394,7 +355,7 @@ std::string UpperName(const View& v, int port)
   }
   return out;
 }
-}  // namespace
+}
 
 TurnCue TurnText(const View& v, int port)
 {
@@ -408,8 +369,6 @@ TurnCue TurnText(const View& v, int port)
   cue.local = p.local;
   const std::string name = UpperName(v, port);
   const std::string them = UpperName(v, 1 - port);
-  // Both pick at once (casual): whoever hasn't named a stage or Random acts. A local player who
-  // has waits.
   if (v.both)
   {
     if (!Ranked::Named(p.proposal))
@@ -501,4 +460,4 @@ View Current()
   std::lock_guard lk(s_view_lock);
   return s_view;
 }
-}  // namespace Orca::UX::StageCursors
+}

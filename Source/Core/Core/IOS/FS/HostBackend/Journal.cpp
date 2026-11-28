@@ -1,11 +1,6 @@
 // Copyright 2026 YouGame
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Orca rollback: an undo journal of NAND changes. A rollback snapshot can't afford to copy the NAND
-// (Brawl's /tmp alone is about 37 MB), and most frames change none of it, so each snapshot records
-// a journal mark and every change after it is journaled with what it destroyed. Loading the
-// snapshot undoes those changes newest first, which leaves the NAND exactly as it was at the mark.
-
 #include "Core/IOS/FS/HostBackend/FS.h"
 
 #include <algorithm>
@@ -19,7 +14,6 @@ namespace IOS::HLE::FS
 {
 namespace
 {
-// Appends a directory's contents, parents before children. False if a file could not be read.
 bool CollectTree(const File::FSTEntry& entry, std::vector<std::string>* paths,
                  std::vector<std::string>* contents)
 {
@@ -54,7 +48,7 @@ void RemoveHostPath(const std::string& host_path)
   else if (File::Exists(host_path))
     File::Delete(host_path);
 }
-}  // namespace
+}
 
 u64 HostFileSystem::JournalMark()
 {
@@ -90,9 +84,6 @@ void HostFileSystem::JournalUndo(u64 mark)
     JournalForget(m_journal.back());
     m_journal.pop_back();
   }
-  // Changes from here on are relative to the restored FST. Numbering restarts at the mark (every
-  // snapshot with a later mark was taken after the load point and is discarded), so a re-run
-  // records the same marks as the first run.
   m_journal_has_fst = false;
   m_journal_next_seq = mark;
 }
@@ -231,8 +222,6 @@ void HostFileSystem::JournalWritten(const std::string& host_path, File::IOFile& 
   entry.old_size = file.GetSize();
   if (offset < entry.old_size)
   {
-    // Raw stdio, like ReadBytesFromFile: a failure must not mark the shared IOFile bad, which would
-    // fail every later write through it.
     entry.old_bytes.resize(std::min(count, entry.old_size - offset));
     std::FILE* const handle = file.GetHandle();
     if (std::fseek(handle, static_cast<long>(offset), SEEK_SET) != 0 ||
@@ -271,7 +260,6 @@ void HostFileSystem::JournalAccount(JournalEntry& entry)
   const u64 bytes = JournalEntryBytes(entry);
   if (m_journal_bytes + bytes > JOURNAL_MAX_BYTES)
   {
-    // Not undoable: keep the entry's order but not its bytes.
     ERROR_LOG_FMT(IOS_FS, "NAND journal: over {} bytes of changes since the oldest snapshot",
                   JOURNAL_MAX_BYTES);
     entry.old_bytes = {};
@@ -280,7 +268,6 @@ void HostFileSystem::JournalAccount(JournalEntry& entry)
     return;
   }
   m_journal_bytes += bytes;
-  // A log line for each new 8 MiB of peak, so runs show what a game keeps journaled.
   if (m_journal_bytes >= m_journal_peak_logged + (u64{8} << 20))
   {
     m_journal_peak_logged = m_journal_bytes;
@@ -292,4 +279,4 @@ void HostFileSystem::JournalForget(const JournalEntry& entry)
 {
   m_journal_bytes -= std::min(m_journal_bytes, JournalEntryBytes(entry));
 }
-}  // namespace IOS::HLE::FS
+}

@@ -80,6 +80,7 @@ public:
   // new could be launched.
   bool StartOrcaRoom(std::string* error);
   bool OrcaRoomRunning() const;
+  void SendOrcaDelay(u32 frames, s32 at);
   void StopOrcaRoom();
 
   u16 GetPort() const;

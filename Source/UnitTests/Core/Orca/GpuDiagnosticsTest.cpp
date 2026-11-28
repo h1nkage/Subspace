@@ -16,7 +16,7 @@ namespace
 namespace Diag = Orca::GpuDiagnostics;
 constexpr u64 MB = 1024 * 1024;
 using namespace std::chrono_literals;
-}  // namespace
+}
 
 TEST(OrcaGpuDiagnostics, MemoryIncludesSystemProcessAndJob)
 {
@@ -172,17 +172,17 @@ TEST(OrcaGpuDiagnostics, PeriodicSamplesShareLimitButBootErrorAndLossAreForced)
     }
     return false;
   };
-  EXPECT_TRUE(sample(0s));  // periodic
+  EXPECT_TRUE(sample(0s));
   EXPECT_FALSE(sample(0s));
-  EXPECT_TRUE(sample(0s, true));  // boot immediately after periodic
-  EXPECT_TRUE(sample(0s, true));  // second boot
-  EXPECT_TRUE(sample(0s, true));  // error
-  EXPECT_TRUE(sample(0s, true));  // loss
+  EXPECT_TRUE(sample(0s, true));
+  EXPECT_TRUE(sample(0s, true));
+  EXPECT_TRUE(sample(0s, true));
+  EXPECT_TRUE(sample(0s, true));
   EXPECT_FALSE(sample(1s));
   EXPECT_FALSE(sample(59s));
   EXPECT_TRUE(sample(60s));
   EXPECT_FALSE(sample(60s));
-  EXPECT_TRUE(sample(61s, true));  // error resets the periodic deadline
+  EXPECT_TRUE(sample(61s, true));
   EXPECT_FALSE(sample(120s));
   EXPECT_TRUE(sample(121s));
   EXPECT_EQ(samples, 8);

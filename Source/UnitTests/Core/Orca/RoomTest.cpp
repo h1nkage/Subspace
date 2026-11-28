@@ -83,7 +83,6 @@ void SetEnv(const char* name, const char* value)
 #endif
 }
 
-// Sets a variable for one scope, then puts back what was there.
 class ScopedEnv
 {
 public:
@@ -149,7 +148,7 @@ Packet Frames(int seat, int first, int count)
   packet.current_frame = first + count;
   return packet;
 }
-}  // namespace
+}
 
 TEST(OrcaRoom, PacketRoundTrips)
 {
@@ -158,7 +157,6 @@ TEST(OrcaRoom, PacketRoundTrips)
   ASSERT_TRUE(DecodePacket(EncodePacket(sent), &got));
   ExpectSame(sent, got);
 
-  // Without a checksum, re-simulation count or advantage, and with no pads.
   Packet bare;
   bare.current_frame = 5;
   ASSERT_TRUE(DecodePacket(EncodePacket(bare), &got));
@@ -177,7 +175,6 @@ TEST(OrcaRoom, PacketRoundTrips)
   EXPECT_EQ(text.find("\"j\""), std::string::npos);
   EXPECT_EQ(text.find("\"sp\""), std::string::npos);
 
-  // A lead of zero, a quiet window and an instant relay still travel.
   bare.resimulated = 0;
   bare.advantage = 0;
   bare.rtt = 0;
@@ -190,7 +187,6 @@ TEST(OrcaRoom, PacketRoundTrips)
 
 TEST(OrcaRoom, LegacyPacketGoldens)
 {
-  // Captured with the unmodified 0.3.77 encoder (55238506e8).
   EXPECT_EQ(EncodePacket(Packet{}), R"golden({"a":[-1,-1,-1,-1],"c":0,"f":0,"k":"p","p":"","s":0})golden");
   EXPECT_EQ(EncodePacket(Sample()), R"golden({"a":[130,-1,-1,-1],"c":121,"f":120,"h":"fedcba9876543210","j":5,"k":"p","l":64,"n":3,"p":"00ff807f0001a00f01ff807f0001a10f02ff807f0001a20f","r":42,"s":1,"sp":[1,2,2,3],"v":-17,"x":60})golden");
   Packet host = Frames(0, 20, 2);
@@ -208,8 +204,6 @@ TEST(OrcaRoom, LegacyPacketGoldens)
   EXPECT_EQ(EncodePacket(host), R"golden({"a":[-1,-1,-1,-1],"c":22,"ds":[[3,10,19,17,"11000000000000001200000000000000"]],"f":20,"ha":12,"hf":0,"hp":[[1,"0000000000000000000000000000000000000000000000000000000000000000"]],"ht":1,"k":"p","lv":true,"p":"14000000000000001500000000000000","q":7,"ro":[[0,-1,0],[30,-1,20],[-1,-1,-1],[10,19,0]],"s":0,"sg":[20,30],"va":3})golden");
 }
 
-// The host's port values travel in the room's "nm" and "kf" messages: names, the frame each
-// applies from, and a player's own controls; a joiner reads back exactly what the host holds.
 namespace
 {
 using RK = RoomTestStep::Kind;
@@ -247,11 +241,10 @@ RoomOptions TraceOptions(bool joining = true)
   options.joining = joining;
   return options;
 }
-}  // namespace
+}
 
 namespace
 {
-// Public opt-in is room metadata on welcome only; other messages keep the normal roster shape.
 std::string QueueRoster(const char* type, const char* queue, const std::string& recovery = "true",
                         bool joining = true)
 {
@@ -280,7 +273,7 @@ RoomOptions QueueTraceOptions(bool joining = true)
   options.friends_room = false;
   return options;
 }
-}  // namespace
+}
 
 TEST(OrcaRoomTraceDeathTest, ReportStepsFailLoudlyWhenTheQueueIsFull)
 {
@@ -328,14 +321,13 @@ TEST(OrcaRoomPingRange, FriendsAndTournamentJoinsKeepTheirBytes)
       EXPECT_TRUE(trace.back().sent.empty());
     }
     auto options = TraceOptions(joining);
-    options.recovery_enabled = false;  // No random private recovery identity in this wire golden.
+    options.recovery_enabled = false;
     const auto friends = TraceRoomForTest(options, {
         {RK::Message, 0, RosterMessage("welcome", joining)},
         {RK::Tick, 1000},
     });
     EXPECT_TRUE(friends[0].sent.empty());
-    // Captured from 0.3.83 with one seat: no capability fields in the peer hello.
-    ASSERT_EQ(friends[1].sent.size(), 2u);  // Normal timestamped ping, then hello.
+    ASSERT_EQ(friends[1].sent.size(), 2u);
     EXPECT_EQ(friends[1].sent[1], fmt::format(
         R"({{"d":{{"c":"test","dl":1,"h":{},"k":"hello","r":false}},"t":"msg","to":"peer"}})",
         !joining));
@@ -349,7 +341,6 @@ TEST(OrcaRoomPingRange, ProbeEchoIsImmediateAndPreservesTheReceivedNonce)
   {
     const auto trace = TraceRoomForTest(QueueTraceOptions(), {
         {RK::Message, 0, QueueRoster("welcome", queue)},
-        // A room match's start is still character select, before game 1's fight.
         {RK::Message, 0, QueueRoster("start", queue)},
         {RK::SocketMessage, 0, R"({"t":"probe","n":"b3fdc99d-64e1-4c92-9967-d81e6e873073"})"},
         {RK::SocketMessage, 1000, R"({"t":"probe","n":"quote\"slash\\"})"},
@@ -402,7 +393,7 @@ TEST(OrcaRoomPingRange, AgentDelayHoldsBothProbeAndAckForTheRoundTrip)
     SCOPED_TRACE(queue);
     const auto trace = TraceRoomForTest(QueueTraceOptions(), {
         {RK::Message, 0, QueueRoster("welcome", queue)},
-        {RK::FlushHeld, 1000},  // Clear the delayed join before measuring the probe.
+        {RK::FlushHeld, 1000},
         {RK::SocketMessage, 1100, R"({"t":"probe","n":"delayed"})"},
         {RK::FlushHeld, 2099}, {RK::FlushHeld, 2100},
         {RK::FlushHeld, 3099}, {RK::FlushHeld, 3100}, {RK::FlushHeld, 4100},
@@ -498,7 +489,6 @@ TEST(OrcaRoomPingRange, EchoStopsAtTheFirstFightAndStaysOffOnRejoin)
           {RK::Message, 0, welcome},
           {RK::Message, 0, R"({"t":"probe","n":"before"})"},
           {result ? RK::ReportGame : RK::GameStart, 1, "1", 120},
-          // No Tick: the frame thread's report must close the echo path immediately.
           {RK::Message, 1000, R"({"t":"probe","n":"late"})"},
           {RK::SocketClose, 2000}, {RK::Message, 3000, welcome},
           {RK::Message, 4000, R"({"t":"probe","n":"rejoin"})"},
@@ -1063,8 +1053,6 @@ TEST(OrcaRoomRecovery, MissingOrInvalidHoldKeepsNinetySecondsAndLegacyIgnoresFie
 
 TEST(OrcaRoomRecovery, CrossedHoldsKeepEachPlayersDeadline)
 {
-  // Both orderings: the peer's earlier hold, and the review's returning player whose
-  // almost-expired hold crosses a peer that dropped much later.
   for (const bool peer_first : {true, false})
   {
     const int peer_drop = peer_first ? 0 : 85000;
@@ -1190,7 +1178,6 @@ TEST(OrcaRoomRecovery, PresentPeerRejoinKeepsTheOriginalInputStall)
           {RK::Message, 0, welcome}, {RK::Message, 0, PeerHello()},
           {RK::Message, 0, WithHold(QueueRoster("away", "ranked"), "90000")},
           {RK::InputSilence, 0, "", 0}, {RK::SocketClose, 85000},
-          // Peer returns at t=86 while self is offline; WELCOME sees it present before inputs.
           {RK::Message, rejoin, self_remaining ? WithHold(welcome, "64000") : welcome},
           {RK::InputSilence, rejoin + 1, "", 0}, {RK::Tick, rejoin + 3},
       };
@@ -1206,7 +1193,7 @@ TEST(OrcaRoomRecovery, PresentPeerRejoinKeepsTheOriginalInputStall)
         EXPECT_TRUE(pending[i].events.empty());
       }
       ASSERT_TRUE(pending[6].input_held.has_value());
-      EXPECT_TRUE(*pending[6].input_held);  // Original silence timestamp, not rejoin time.
+      EXPECT_TRUE(*pending[6].input_held);
       for (const bool verdict : {false, true})
       {
         auto ended = steps;
@@ -1308,7 +1295,6 @@ TEST(OrcaRoomRecovery, RejoinRefreshesAPeerThatReturnedAndDroppedWhileSelfWasOff
           {RK::Message, 0, QueueRoster("welcome", "ranked")}, {RK::Message, 0, PeerHello()},
           {RK::Message, 0, WithHold(QueueRoster("away", "ranked"), "90000")},
           {RK::SocketClose, 85000},
-          // Self misses the peer's back at t=86 and second away at t=110 (deadline t=114).
           {RK::Message, 111000, self_remaining ? WithHold(welcome.serialize(), "64000") : welcome.serialize()},
           {RK::Tick, 111003}, {RK::InputSilence, 111004, "", 0},
           {RK::Message, 111010, WithHold(QueueRoster("away", "ranked"), "2990")},
@@ -1327,7 +1313,7 @@ TEST(OrcaRoomRecovery, RejoinRefreshesAPeerThatReturnedAndDroppedWhileSelfWasOff
         EXPECT_TRUE(trace[i].session_recovering);
         EXPECT_TRUE(trace[i].events.empty());
       }
-      EXPECT_EQ(trace[6].public_deadline, deadline);  // Input silence uses the refreshed peer hold.
+      EXPECT_EQ(trace[6].public_deadline, deadline);
       const auto current = std::chrono::steady_clock::time_point{} + std::chrono::seconds(114);
       EXPECT_EQ(trace[7].public_deadline, current);
       EXPECT_EQ(trace[7].host_away_until, current);
@@ -1361,7 +1347,7 @@ TEST(OrcaRoomRecovery, RankedFinalRetriesAndReplaysUntilItsReceipt)
   }
   ASSERT_EQ(finals.size(), 2u);
   EXPECT_EQ(finals[0], finals[1]);
-  EXPECT_EQ(results, 3u);  // Two games, one final.
+  EXPECT_EQ(results, 3u);
 }
 
 TEST(OrcaRoom, SceneRankedWinsWithStartFramesFinishThroughTheTally)
@@ -1541,7 +1527,6 @@ TEST(OrcaRoomRecovery, PublicManualRetryWithoutOptInKeepsLegacyResetAndResume)
       EXPECT_EQ(trace[1].events[0].kind, PeerEvent::Kind::Arrived);
       ASSERT_EQ(trace[2].packets.size(), 1u);
       EXPECT_FALSE(trace[0].recovery);
-      // Base 343a655173 resets the announced peer and starts a fresh resume handshake.
       ASSERT_EQ(trace[4].events.size(), 1u);
       const auto& left = trace[4].events[0];
       EXPECT_EQ(left.kind, PeerEvent::Kind::Left);
@@ -1656,7 +1641,6 @@ TEST(OrcaRoomRecovery, BothDropAndRejoinAClosingMatchAcceptsCompletedVerdict)
         ASSERT_TRUE(picojson::parse(welcome, initial).empty());
         auto& closing = welcome.get<picojson::object>();
         closing["matchId"] = picojson::value();
-        // Settling has cleared the gameplay roster; the original match's verdict follows it.
         closing["host"] = picojson::value();
         closing["players"] = picojson::value(picojson::array{});
         closing["participants"] = picojson::value(picojson::array{});
@@ -1678,7 +1662,7 @@ TEST(OrcaRoomRecovery, BothDropAndRejoinAClosingMatchAcceptsCompletedVerdict)
         }
         steps.push_back({RK::InputSilence, 2399, "", 0});
         steps.push_back({RK::Message, 2400, verdict});
-        steps.push_back({RK::Message, 2401, verdict});  // A replay cannot publish it twice.
+        steps.push_back({RK::Message, 2401, verdict});
         steps.push_back({RK::SocketClose, 2500, "match closed", 4004});
         const auto trace = TraceRoomForTest(QueueTraceOptions(joining), steps);
         EXPECT_TRUE(trace[3].reconnect_started);
@@ -1738,7 +1722,6 @@ TEST(OrcaRoomRecovery, ClearedRejoinWithoutAFinishEndsNormallyAtHoldOrVerdictDea
             {RK::InputSilence, 1, "", 0},
             {RK::Message, returned, welcome.serialize()},
         };
-        // A roster refresh cannot restart the verdict wait or begin another match.
         closing["t"] = picojson::value("lobby");
         steps.push_back({RK::Message, deadline - 2, welcome.serialize()});
         steps.push_back({RK::Tick, deadline - 1});
@@ -2041,12 +2024,12 @@ TEST(OrcaRoomResilience, WaitingJoinerRequestsResumeOnBackAndReceivesAKeyframe)
     }
     return picojson::value();
   };
-  EXPECT_TRUE(hello(trace[5]).is<picojson::null>()); // no rejoin before back
+  EXPECT_TRUE(hello(trace[5]).is<picojson::null>());
   EXPECT_TRUE(hello(trace[7]).get("resume").evaluate_as_boolean());
   EXPECT_FALSE(hello(trace[7]).get("r").evaluate_as_boolean());
   ASSERT_EQ(trace[8].events.size(), 1u);
   EXPECT_EQ(trace[8].events[0].kind, PeerEvent::Kind::Arrived);
-  EXPECT_TRUE(hello(trace[9]).is<picojson::null>()); // next resume respects its backoff
+  EXPECT_TRUE(hello(trace[9]).is<picojson::null>());
   ASSERT_EQ(trace[10].events.size(), 1u);
   EXPECT_EQ(trace[10].events[0].kind, PeerEvent::Kind::Keyframe);
   EXPECT_EQ(trace[10].events[0].keyframe.id, "replay-300-01234567");
@@ -2077,7 +2060,6 @@ TEST(OrcaRoomResilience, JoinerWaitsForBackThenUsesFreshDropInBeforeTheHoldExpir
   HostRoomWait wait;
   ASSERT_TRUE(wait.Start(start + 10s, host.Deadline()));
   EXPECT_FALSE(wait.Expired(start + 89s));
-  // A suspended session must greet again and take a keyframe, rather than reuse its old state.
   EXPECT_FALSE(host.Back(start + 89s, true));
   wait.Back();
   EXPECT_FALSE(wait.until);
@@ -2102,10 +2084,8 @@ TEST(OrcaRoom, PortValuesRoundTrip)
   picojson::value parsed;
   ASSERT_TRUE(picojson::parse(parsed, text).empty());
   EXPECT_EQ(NamesFromJson(parsed.get<picojson::object>()), sent);
-  // A port with no controls has no fourth element, matching the older message format.
   EXPECT_NE(text.find("[0,12,\"cy\"]"), std::string::npos) << text;
 
-  // Controls past MAX_CONTROLS bytes, or not hex, are none; the name stays.
   const auto read = [](const std::string& json) {
     picojson::value v;
     EXPECT_TRUE(picojson::parse(v, json).empty()) << json;
@@ -2121,10 +2101,7 @@ TEST(OrcaRoom, PortValuesRoundTrip)
   EXPECT_TRUE(got[0].controls.empty());
   EXPECT_TRUE(got[1].controls.empty());
   EXPECT_EQ(got[2].controls, (std::vector<u8>{0x0a, 0x0b}));
-  // Six elements, a bad seat: skipped.
   EXPECT_TRUE(read(R"({"nm":[[1,5,"ada","00","01",1],[9,5,"x"]]})").empty());
-  // A queue identity (UX/Queue.h) is the fifth, after the controls (empty when none); one past
-  // MAX_QUEUE bytes, or not hex, is none.
   const std::vector<u8> queue{1, 0x05, 0xFC, 0x10, 2, 0, 0, 0, 0, 0x41, 0x20, 0, 0};
   const std::vector<KeyframeInfo::Name> with_queue{{1, 40, "bo", {}, queue},
                                                    {1, 41, "bo", controls, queue}};
@@ -2138,7 +2115,6 @@ TEST(OrcaRoom, PortValuesRoundTrip)
   ASSERT_EQ(got.size(), 1u);
   EXPECT_TRUE(got[0].queue.empty());
 
-  // The players' acknowledgement of the newest values (Packet::values_ack).
   Packet packet = Sample();
   packet.values_ack = 7;
   Packet back;
@@ -2167,15 +2143,12 @@ TEST(OrcaRoom, RejectsMalformedPackets)
   EXPECT_FALSE(DecodePacket(with("\"f\":120", "\"f\":-1"), &got));
   EXPECT_FALSE(DecodePacket(with("\"f\":120", "\"f\":1e300"), &got));
   EXPECT_FALSE(DecodePacket(with("\"c\":121", "\"c\":\"121\""), &got));
-  // Pads: odd length, not hex, not whole pads.
   EXPECT_FALSE(DecodePacket(with("\"p\":\"00", "\"p\":\"0"), &got));
   EXPECT_FALSE(DecodePacket(with("\"p\":\"00", "\"p\":\"zz"), &got));
   EXPECT_FALSE(DecodePacket(with("\"p\":\"00", "\"p\":\"0000"), &got));
   EXPECT_FALSE(DecodePacket(with("[130,-1,-1,-1]", "[130,-1,-1]"), &got));
   EXPECT_FALSE(DecodePacket(with("[130,-1,-1,-1]", "[130,-2,-1,-1]"), &got));
   EXPECT_FALSE(DecodePacket(with("\"h\":\"fedcba9876543210\"", "\"h\":\"fedcba98\""), &got));
-  // Bad telemetry must never refuse a packet, since that would end the match: out-of-range values
-  // are clamped, fractions truncated, non-numbers ignored (an exponent reads as null).
   const auto telemetry = [&](const std::string& from, const std::string& to) {
     Packet out;
     EXPECT_TRUE(DecodePacket(with(from, to), &out)) << to;
@@ -2206,23 +2179,17 @@ TEST(OrcaRoom, RejectsMalformedPackets)
   EXPECT_EQ(telemetry("[1,2,2,3]", "[1,\"2\",2,3]").spared, std::nullopt);
   EXPECT_EQ(telemetry("\"sp\":[1,2,2,3]", "\"sp\":7").spared, std::nullopt);
 
-  // What would crash the JSON parser: deep nesting, and numbers that overflow a double.
   EXPECT_FALSE(DecodePacket(std::string(5000, '[') + std::string(5000, ']'), &got));
   EXPECT_FALSE(DecodePacket(with("\"c\":121", "\"c\":1e999"), &got));
   EXPECT_FALSE(DecodePacket(with("\"c\":121", "\"c\":" + std::string(400, '9')), &got));
-  // Words with an e inside strings, and true/false, are fine.
   EXPECT_TRUE(DecodePacket(with("\"k\":\"p\"", "\"e\":\"eEe\",\"t\":true,\"u\":false,\"k\":\"p\""), &got));
 
-  // More pads than a packet may carry.
   Packet big = Frames(0, 0, MAX_PADS_IN_PACKET + 1);
   EXPECT_FALSE(DecodePacket(EncodePacket(big), &got));
   big.pads.pop_back();
   EXPECT_TRUE(DecodePacket(EncodePacket(big), &got));
 }
 
-// A ranked game's start for the room (rooms/src/game-lobby.ts gameStart, ORCA.md "Matchmaking and
-// results"): exactly the room's message, only in a ranked queue room with its match current and the
-// set still open.
 TEST(OrcaRoom, GameStartIsTheRoomsMessage)
 {
   const std::string match = "6f1c2b9e-0d3a-4c55-9a7e-1b2c3d4e5f60";
@@ -2236,13 +2203,9 @@ TEST(OrcaRoom, GameStartIsTheRoomsMessage)
   EXPECT_EQ(o.size(), 3u);
   EXPECT_EQ(o.at("t").get<std::string>(), "game-start");
   EXPECT_EQ(o.at("matchId").get<std::string>(), match);
-  // The room's game id rule: 1-64 letters, digits, _ or -.
   EXPECT_EQ(o.at("id").get<std::string>(), "g4210");
-  // A match id is a JSON string whatever it holds.
   ASSERT_TRUE(picojson::parse(v, GameStartMessage("ranked", "a\"b", false, 1)).empty());
   EXPECT_EQ(v.get<picojson::object>().at("matchId").get<std::string>(), "a\"b");
-  // None outside a ranked queue room, without a room match, once the set is decided, or without a
-  // fight frame.
   EXPECT_EQ(GameStartMessage("casual", match, false, 4210), "");
   EXPECT_EQ(GameStartMessage("private", match, false, 4210), "");
   EXPECT_EQ(GameStartMessage("ranked", "", false, 4210), "");
@@ -2250,8 +2213,6 @@ TEST(OrcaRoom, GameStartIsTheRoomsMessage)
   EXPECT_EQ(GameStartMessage("ranked", match, false, -1), "");
 }
 
-// A host's `drop` in a ranked set still being decided keeps the joiner in the room to report the
-// match void and wait for the verdict; anywhere else the joiner's room ends as before.
 TEST(OrcaRoom, ADropMidSetKeepsTheRoom)
 {
   EXPECT_TRUE(DropKeepsRoom("ranked", true, false));
@@ -2261,31 +2222,22 @@ TEST(OrcaRoom, ADropMidSetKeepsTheRoom)
   EXPECT_FALSE(DropKeepsRoom("private", true, false));
 }
 
-// A player whose room link dropped mid set comes back on a fresh room in the same match: the games
-// it knew of come back with it (a joiner's keyframe may then hold that many, OnlineRules
-// SetFitsJoin), while a match it never played starts from none. Only the most it knew counts: a
-// fresh room's lower count never lowers it.
 TEST(OrcaRoom, AReconnectKeepsTheGamesItKnew)
 {
   const std::string match = "6f1c2b9e-0d3a-4c55-9a7e-reconnect01";
   EXPECT_EQ(RememberKnownSetGames(match, 0), 0);
   EXPECT_EQ(RememberKnownSetGames(match, 1), 1);
   EXPECT_EQ(RememberKnownSetGames(match, 2), 2);
-  // The fresh room after the drop knows nothing yet.
   EXPECT_EQ(RememberKnownSetGames(match, 0), 2);
   EXPECT_EQ(RememberKnownSetGames(match, 1), 2);
-  // Another match starts from what it saw.
   EXPECT_EQ(RememberKnownSetGames("another-match-0002", 0), 0);
-  // No match: nothing kept.
   EXPECT_EQ(RememberKnownSetGames("", 3), 3);
   EXPECT_EQ(RememberKnownSetGames("", 0), 0);
-  // A few matches are kept, the oldest go first.
   for (int i = 0; i < 20; ++i)
     RememberKnownSetGames(fmt::format("filler-{}", i), 1);
   EXPECT_EQ(RememberKnownSetGames(match, 0), 0);
 }
 
-// The void a room's match hears is exactly the room's `finish` (rooms/src/game-lobby.ts).
 TEST(OrcaRoom, FinishIsTheRoomsMessage)
 {
   EXPECT_EQ(FinishMessage("m1", ""), "{\"t\":\"finish\",\"matchId\":\"m1\",\"void\":true}");
@@ -2295,24 +2247,17 @@ TEST(OrcaRoom, FinishIsTheRoomsMessage)
   EXPECT_EQ(v.get<picojson::object>().at("matchId").get<std::string>(), "a\"b");
 }
 
-// A keep-alive goes only when the emulation thread asked since the last one, and at most every
-// KEEP_ALIVE_EVERY: a game whose emulation froze stops sending them.
 TEST(OrcaRoom, KeepAliveOnlyWhileTheGameRuns)
 {
   const RoomClock::time_point t0 = RoomClock::now();
   EXPECT_FALSE(KeepAliveDue(t0, std::nullopt, std::nullopt));
   EXPECT_TRUE(KeepAliveDue(t0, t0, std::nullopt));
-  // Asked again right after one went: wait for the interval.
   EXPECT_FALSE(
       KeepAliveDue(t0 + std::chrono::milliseconds(500), t0 + std::chrono::milliseconds(400), t0));
   EXPECT_TRUE(KeepAliveDue(t0 + KEEP_ALIVE_EVERY, t0 + std::chrono::milliseconds(1900), t0));
-  // Nothing asked since the last one (the emulation thread stopped): none, however long.
   EXPECT_FALSE(KeepAliveDue(t0 + std::chrono::seconds(60), t0, t0));
 }
 
-// A value the parser can't take (another player's, echoed in a server message such as the welcome)
-// costs only that value: the rest of the message is still read, so a welcome still names this
-// player and its room. Nothing deep or huge reaches picojson.
 TEST(OrcaRoom, AnUnreadableValueCostsOnlyThatValue)
 {
   const std::string head =
@@ -2335,17 +2280,14 @@ TEST(OrcaRoom, AnUnreadableValueCostsOnlyThatValue)
     EXPECT_EQ(o.at("room").get<picojson::object>().at("code").get<std::string>(), "abc123");
     EXPECT_EQ(o.at("n").get<double>(), 3);
     const picojson::object& state = o.at("state").get<picojson::object>();
-    // A number goes whole; a deep value keeps its first levels, and what is past them goes.
     if (bad != deep_array && bad != deep_object)
       EXPECT_TRUE(state.at("x").is<picojson::null>());
     EXPECT_EQ(state.at("y").get<double>(), 2);
   }
-  // Strings are left alone, escapes and brackets inside them included.
   picojson::value v;
   ASSERT_TRUE(ParseRoomJson(R"({"s":"1e999 [[[ \" }","d":-12.5,"t":true,"f":false,"z":null})", &v));
   EXPECT_EQ(v.get<picojson::object>().at("s").get<std::string>(), "1e999 [[[ \" }");
   EXPECT_EQ(v.get<picojson::object>().at("d").get<double>(), -12.5);
-  // What never closes is still refused.
   EXPECT_FALSE(ParseRoomJson(R"({"s":"open)", &v));
   EXPECT_FALSE(ParseRoomJson(std::string(40, '[') + "1", &v));
 }
@@ -2353,12 +2295,10 @@ TEST(OrcaRoom, AnUnreadableValueCostsOnlyThatValue)
 TEST(OrcaRoom, CoalescingKeepsEarlierInputsAndChecksum)
 {
   std::optional<Packet> pending;
-  Packet first = Frames(0, 10, 3);  // frames 10-12
+  Packet first = Frames(0, 10, 3);
   first.checksum_frame = 0;
   first.checksum = 42;
   CoalescePacket(&pending, first);
-  // The next one starts later (frames 12-14; the peer acknowledged up to 11 meanwhile, as far as
-  // the sender knows) and carries no checksum.
   CoalescePacket(&pending, Frames(0, 12, 3));
   ASSERT_TRUE(pending);
   EXPECT_EQ(pending->first_frame, 10);
@@ -2368,22 +2308,18 @@ TEST(OrcaRoom, CoalescingKeepsEarlierInputsAndChecksum)
   EXPECT_EQ(pending->checksum_frame, 0);
   EXPECT_EQ(pending->checksum, 42u);
 
-  // A packet that starts at or before the pending one simply replaces it.
   CoalescePacket(&pending, Frames(0, 8, 9));
   EXPECT_EQ(pending->first_frame, 8);
   EXPECT_EQ(pending->pads.size(), 9u);
   EXPECT_EQ(pending->checksum_frame, 0);
 
-  // Never more than a packet may carry: the newest inputs win.
   pending = Frames(0, 0, 40);
-  CoalescePacket(&pending, Frames(0, 30, 40));  // frames 30-69
+  CoalescePacket(&pending, Frames(0, 30, 40));
   EXPECT_EQ(pending->pads.size(), static_cast<size_t>(MAX_PADS_IN_PACKET));
   EXPECT_EQ(pending->first_frame, 70 - MAX_PADS_IN_PACKET);
   EXPECT_EQ(pending->pads.front()[0], 70 - MAX_PADS_IN_PACKET);
 }
 
-// The service's remote switch for direct links: the ticket reply's top-level `direct`, off only when
-// it is false; a site that sends none (or something else) leaves them on.
 TEST(OrcaRoom, TicketSwitchesDirectLinks)
 {
   const auto reply = [](const char* text) {
@@ -2401,7 +2337,6 @@ TEST(OrcaRoom, TicketSwitchesDirectLinks)
 
 TEST(OrcaRoom, RefusesToStartOutsideTheApp)
 {
-  // No bridge and no dev game: the room ends at once with a reason, without touching the network.
   if (std::getenv("SUBSPACE_BRIDGE") || std::getenv("ORCA_TEST_DEV_GAME"))
     GTEST_SKIP() << "a bridge or dev game is configured";
   RelayRoom room({});
@@ -2412,7 +2347,6 @@ TEST(OrcaRoom, RefusesToStartOutsideTheApp)
   EXPECT_FALSE(room.Status().empty());
 }
 
-// Waits until `room` reports another player arrived; returns its event.
 std::optional<PeerEvent> WaitArrived(RelayRoom& room)
 {
   for (int i = 0; i < 1500 && room.GetState() != RoomState::Ended; ++i)
@@ -2427,9 +2361,6 @@ std::optional<PeerEvent> WaitArrived(RelayRoom& room)
   return std::nullopt;
 }
 
-// A host and a joiner in one dev room on the real rooms Worker: each sees the other arrive on its
-// seat, a packet and a keyframe offer cross, a forged packet is dropped, and the host sees the
-// joiner leave while its own room stays. ORCA_LIVE_TEST=1 (ORCA_SITE picks another site).
 TEST(OrcaLive, TwoRoomsPlayEachOther)
 {
   const char* live = std::getenv("ORCA_LIVE_TEST");
@@ -2443,7 +2374,6 @@ TEST(OrcaLive, TwoRoomsPlayEachOther)
   options.compatibility = "orca-live-test";
   options.player_name = "Orca A";
   RelayRoom a(options);
-  // The first in is the host; give it a head start so the seats are predictable.
   for (int i = 0; i < 500 && a.GetState() == RoomState::Connecting; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   ASSERT_EQ(a.GetState(), RoomState::Waiting) << a.Status();
@@ -2488,7 +2418,6 @@ TEST(OrcaLive, TwoRoomsPlayEachOther)
   Packet sent = Sample();
   sent.seat = a.Seat();
   a.Send(sent);
-  // Through the relay, and over a direct link too once one is up (DirectLink): the same packet.
   std::vector<Packet> got;
   for (int i = 0; i < 500 && got.size() < 2 && (got.empty() || i < 100); ++i)
   {
@@ -2500,7 +2429,6 @@ TEST(OrcaLive, TwoRoomsPlayEachOther)
   ASSERT_LE(got.size(), 2u);
   for (const Packet& packet : got)
     ExpectSame(sent, packet);
-  // A's seat speaking as B's is dropped, on either path.
   Packet forged = Sample();
   forged.seat = b.Seat();
   a.Send(forged);
@@ -2509,7 +2437,6 @@ TEST(OrcaLive, TwoRoomsPlayEachOther)
     EXPECT_NE(packet.seat, b.Seat());
   EXPECT_TRUE(b.Connected());
 
-  // The joiner leaves; the host's room stays, and says who left.
   b.Leave();
   std::optional<PeerEvent> left;
   for (int i = 0; i < 500 && !left; ++i)
@@ -2527,9 +2454,6 @@ TEST(OrcaLive, TwoRoomsPlayEachOther)
   EXPECT_GE(a.RoundTripMs(), 0);
 }
 
-// Two Orcas in one dev room open a direct link that beats the relay; blocking it falls back to the
-// relay and unblocking restores it. A third Orca with ORCA_DIRECT=0 never links (its room reports
-// the relay). ORCA_LIVE_TEST=1.
 TEST(OrcaLive, DirectLinkBetweenTwoRooms)
 {
   const char* live = std::getenv("ORCA_LIVE_TEST");
@@ -2563,7 +2487,6 @@ TEST(OrcaLive, DirectLinkBetweenTwoRooms)
               b.Direct().line.c_str(), a.RoundTripMs());
   EXPECT_LE(a.Direct().rtt_ms, 20);
 
-  // The direct copy first, the relay's after.
   Packet sent = Frames(a.Seat(), 100, 4);
   sent.sequence = 1;
   const auto start = std::chrono::steady_clock::now();
@@ -2593,7 +2516,6 @@ TEST(OrcaLive, DirectLinkBetweenTwoRooms)
               second_ms);
   EXPECT_LT(*first_ms, std::max(5.0, second_ms / 2));
 
-  // Datagrams blocked: both see the relay again; lifted: the link is back.
   a.TestDirect("off");
   EXPECT_TRUE(wait_for([&] { return a.Direct().transport == 0 && b.Direct().transport == 0; },
                        3000));
@@ -2602,9 +2524,6 @@ TEST(OrcaLive, DirectLinkBetweenTwoRooms)
                        10000))
       << a.Direct().line << " / " << b.Direct().line;
 
-  // The player's switch ("direct off" from an app with the "direct" cap): both rooms of this
-  // process go back to the relay at once, and come back when it is on again. Without the cap it
-  // counts for nothing.
   Orca::Status::SetAppCaps("");
   Orca::Online::SetDirectWanted(false);
   std::this_thread::sleep_for(std::chrono::milliseconds(600));
@@ -2618,7 +2537,6 @@ TEST(OrcaLive, DirectLinkBetweenTwoRooms)
       << a.Direct().line << " / " << b.Direct().line;
   Orca::Status::SetAppCaps("");
 
-  // A third Orca without direct links: the others link to each other, never to it.
   {
     const ScopedEnv off("ORCA_DIRECT", "0");
     options.player_name = "Orca C";
@@ -2634,8 +2552,6 @@ TEST(OrcaLive, DirectLinkBetweenTwoRooms)
   a.Leave();
 }
 
-// A friend arriving is visible before the emulator thread takes it (what ends a solo pause, which
-// takes no events while paused), and no longer once taken. ORCA_LIVE_TEST=1.
 TEST(OrcaLive, ArrivalIsPendingUntilTaken)
 {
   const char* live = std::getenv("ORCA_LIVE_TEST");
@@ -2663,8 +2579,6 @@ TEST(OrcaLive, ArrivalIsPendingUntilTaken)
   EXPECT_FALSE(a.ArrivalPending());
 }
 
-// A joiner hears its host leave the room as a pending event (OnlineMatch ends a stall on its host's
-// inputs on it, rather than wait out the silence limit), and not before.
 TEST(OrcaLive, HostLeavingIsPendingUntilTaken)
 {
   const char* live = std::getenv("ORCA_LIVE_TEST");
@@ -2687,7 +2601,6 @@ TEST(OrcaLive, HostLeavingIsPendingUntilTaken)
   ASSERT_TRUE(host) << b.Status();
   EXPECT_TRUE(host->host);
   EXPECT_FALSE(b.HostLeftPending());
-  // The host leaves: its room thread says goodbye on the way out.
   a.reset();
   for (int i = 0; i < 1000 && !b.HostLeftPending(); ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -2699,8 +2612,6 @@ TEST(OrcaLive, HostLeavingIsPendingUntilTaken)
   EXPECT_FALSE(b.HostLeftPending());
 }
 
-// The test network delay: one side holds every message 100 ms each way, the other sets the variable
-// to 0 (both are then test processes, so their keys match). The delayed side's round trip shows it.
 TEST(OrcaLive, TestNetworkDelayHoldsMessages)
 {
   const char* live = std::getenv("ORCA_LIVE_TEST");
@@ -2728,7 +2639,6 @@ TEST(OrcaLive, TestNetworkDelayHoldsMessages)
   ASSERT_TRUE(a.Connected()) << a.Status();
   ASSERT_TRUE(b.Connected()) << b.Status();
 
-  // A packet from b reaches a's inbox no sooner than a's inbound delay.
   const auto sent_at = std::chrono::steady_clock::now();
   Packet sent = Sample();
   sent.seat = b.Seat();
@@ -2742,17 +2652,12 @@ TEST(OrcaLive, TestNetworkDelayHoldsMessages)
   }
   ASSERT_EQ(got.size(), 1u);
   EXPECT_GE(std::chrono::steady_clock::now() - sent_at, std::chrono::milliseconds(100));
-  // Pings go out held and pongs come back held: the round trip includes both delays.
   for (int i = 0; i < 300 && a.RoundTripMs() < 0; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   EXPECT_GE(a.RoundTripMs(), 200);
   EXPECT_LT(b.RoundTripMs(), 200);
 }
 
-// Under the desktop app: one room goes through the app's bridge (SUBSPACE_BRIDGE, SUBSPACE_TOKEN,
-// SUBSPACE_GAME, pointed at Tools/orca/fake_bridge.py), the other uses a dev ticket. The bridged
-// side mirrors the room to the page, and the page's Leave ends it. ORCA_LIVE_TEST=1 and
-// ORCA_TEST_BRIDGE_ROOM=<the fake bridge's room code>.
 TEST(OrcaLive, BridgeMirrorsTheRoomAndTakesLeave)
 {
   const char* live = std::getenv("ORCA_LIVE_TEST");
@@ -2762,22 +2667,18 @@ TEST(OrcaLive, BridgeMirrorsTheRoomAndTakesLeave)
   RoomOptions options;
   options.compatibility = "orca-live-test";
   options.mode = "orca-test";
-  // The app's invite names the room (hello.room).
   RelayRoom a(options);
   for (int i = 0; i < 1000 && a.GetState() == RoomState::Connecting; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   ASSERT_EQ(a.GetState(), RoomState::Waiting) << a.Status();
   EXPECT_EQ(a.Code(), room);
 
-  // The friend joins without the app. (Not as a host: a hosting Orca that finds someone else
-  // hosting its room gives it up.)
   const std::string bridge = std::getenv("SUBSPACE_BRIDGE");
   SetEnv("SUBSPACE_BRIDGE", nullptr);
   SetEnv("ORCA_TEST_DEV_GAME", "orca-bridge-test");
   options.room_code = room;
   options.joining = true;
   RelayRoom b(options);
-  // The room reads its environment on its own thread: restore it once b has its ticket.
   for (int i = 0; i < 1000 && b.Code().empty() && b.GetState() != RoomState::Ended; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   SetEnv("ORCA_TEST_DEV_GAME", nullptr);
@@ -2787,8 +2688,6 @@ TEST(OrcaLive, BridgeMirrorsTheRoomAndTakesLeave)
   ASSERT_TRUE(a.Connected()) << a.Status();
   ASSERT_TRUE(b.Connected()) << b.Status();
 
-  // The fake bridge sends the page's Leave two seconds after the room reads "ready". Without the
-  // app's "caps leave" (none here), it ends the room.
   for (int i = 0; i < 1000 && a.GetState() != RoomState::Ended; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   EXPECT_EQ(a.GetState(), RoomState::Ended);
@@ -2798,8 +2697,6 @@ TEST(OrcaLive, BridgeMirrorsTheRoomAndTakesLeave)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   EXPECT_FALSE(b.Connected()) << b.Status();
 
-  // The page's last word on the room is the room with nobody in it (Orca left it), so a later
-  // invite into it isn't taken for one Orca is already in. FAKE_LOG: the bridge's log, if given.
   a.Leave();
   if (const char* log = std::getenv("FAKE_LOG"))
   {
@@ -2818,7 +2715,6 @@ TEST(OrcaLive, BridgeMirrorsTheRoomAndTakesLeave)
 
 TEST(OrcaRoom, RefusalsSayWhy)
 {
-  // WebSocket::Connect's error carries the upgrade's HTTP status.
   EXPECT_NE(RefusalReason("WebSocket connect failed: ... (HTTP 403)").find("differs"),
             std::string::npos);
   EXPECT_EQ(RefusalReason("WebSocket connect failed: ... (HTTP 403) lobby_mismatch"),
@@ -2830,7 +2726,6 @@ TEST(OrcaRoom, RefusalsSayWhy)
             "Could not reach the room service");
 }
 
-// Two Orcas whose compatibility keys differ never share a room: the second is told why.
 TEST(OrcaLive, DifferentKeysAreRefusedWithAReason)
 {
   const char* live = std::getenv("ORCA_LIVE_TEST");
@@ -2866,16 +2761,10 @@ TEST(OrcaRoom, RefusalsHaveAppCodes)
     EXPECT_EQ(RefusalCode("WebSocket connect failed: ... (HTTP 403) " + reason), "room_mismatch");
   EXPECT_EQ(RefusalCode("WebSocket connect failed: ... (HTTP 409)"), "room_full");
   EXPECT_EQ(RefusalCode("WebSocket connect failed: ... (HTTP 0)"), "network");
-  // Only the rooms Worker's host_gone code means the friend left; other 410s (a closed
-  // tournament match, a bare 410) keep their old handling.
   EXPECT_EQ(RefusalCode("WebSocket connect failed: ... (HTTP 410) host_gone"), "host_gone");
   EXPECT_NE(RefusalCode("WebSocket connect failed: ... (HTTP 410)"), "host_gone");
 }
 
-// A desync is reported as one on both sides, never as a friend who left. Under drop-in play:
-// a joiner that leaves on a desync says so in its bye, and the host's room reports the joiner's
-// departure with that reason; a host that unplugs a joiner for a desync tells it, and the joiner's
-// room ends with the desync code; a host that leaves on a desync says so to whoever is left.
 TEST(OrcaLive, DesyncIsReportedOnBothSides)
 {
   const char* live = std::getenv("ORCA_LIVE_TEST");
@@ -2904,7 +2793,6 @@ TEST(OrcaLive, DesyncIsReportedOnBothSides)
     return std::nullopt;
   };
 
-  // 1. The joiner leaves on a desync.
   {
     RelayRoom joiner(options);
     ASSERT_TRUE(WaitArrived(host));
@@ -2914,7 +2802,6 @@ TEST(OrcaLive, DesyncIsReportedOnBothSides)
     EXPECT_EQ(left_reason(), std::optional<std::string>("desync"));
     EXPECT_EQ(joiner.ErrorCode(), "");
   }
-  // A plain leave carries no reason.
   {
     RelayRoom joiner(options);
     ASSERT_TRUE(WaitArrived(host));
@@ -2922,7 +2809,6 @@ TEST(OrcaLive, DesyncIsReportedOnBothSides)
     joiner.Leave();
     EXPECT_EQ(left_reason(), std::optional<std::string>(""));
   }
-  // 2. The host unplugs the joiner for a desync.
   {
     RelayRoom joiner(options);
     ASSERT_TRUE(WaitArrived(host));
@@ -2935,7 +2821,6 @@ TEST(OrcaLive, DesyncIsReportedOnBothSides)
     joiner.Leave();
     left_reason();
   }
-  // 3. The host leaves on a desync: the joiner hears the reason with the host's departure.
   {
     RelayRoom joiner(options);
     ASSERT_TRUE(WaitArrived(host));
@@ -2960,9 +2845,6 @@ TEST(OrcaLive, DesyncIsReportedOnBothSides)
   SetEnv("ORCA_TEST_DEV_GAME", nullptr);
 }
 
-// A queue-room host whose game never carried the room's header leaves with "mismatch"
-// (OnlineMatch's FailHeaderWait), and the waiting joiner hears that reason. A joiner's own
-// "mismatch" bye (LeaveOnMismatch) is just a plain leave to the host.
 TEST(OrcaLive, AHostsMismatchReachesItsJoiner)
 {
   const char* live = std::getenv("ORCA_LIVE_TEST");
@@ -2979,7 +2861,6 @@ TEST(OrcaLive, AHostsMismatchReachesItsJoiner)
   ASSERT_EQ(host.GetState(), RoomState::Waiting) << host.Status();
   options.joining = true;
 
-  // 1. The joiner leaves on a mismatch: the host hears a plain leave.
   {
     RelayRoom joiner(options);
     ASSERT_TRUE(WaitArrived(host));
@@ -2998,7 +2879,6 @@ TEST(OrcaLive, AHostsMismatchReachesItsJoiner)
     }
     EXPECT_EQ(reason, std::optional<std::string>(""));
   }
-  // 2. The host leaves on a mismatch: the joiner hears the reason with the host's departure.
   {
     RelayRoom joiner(options);
     ASSERT_TRUE(WaitArrived(host));
@@ -3023,9 +2903,6 @@ TEST(OrcaLive, AHostsMismatchReachesItsJoiner)
   SetEnv("ORCA_TEST_DEV_GAME", nullptr);
 }
 
-// A player the room re-seats on a new socket ("back": its old one died without the room noticing)
-// is another run of Orca: the host unplugs the old one and greets the new one, which can then get
-// its own keyframe. A joiner whose host is there doesn't give up on it.
 TEST(OrcaLive, ReturningPlayerIsGreetedAgain)
 {
   const char* live = std::getenv("ORCA_LIVE_TEST");
@@ -3049,7 +2926,6 @@ TEST(OrcaLive, ReturningPlayerIsGreetedAgain)
   ASSERT_TRUE(arrived) << host.Status();
   EXPECT_EQ(arrived->seat, 1);
 
-  // The same player from a new socket: the room replaces the old one and says "back".
   RelayRoom second(options);
   for (int i = 0; i < 1000 && second.Code().empty() && second.GetState() != RoomState::Ended; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -3069,15 +2945,11 @@ TEST(OrcaLive, ReturningPlayerIsGreetedAgain)
   EXPECT_EQ(seen[0], PeerEvent::Kind::Left);
   EXPECT_EQ(seen[1], PeerEvent::Kind::Arrived);
   EXPECT_TRUE(second.Connected()) << second.Status();
-  // Its host said hello: it waits as long as the keyframe takes.
   std::this_thread::sleep_for(std::chrono::seconds(9));
   EXPECT_TRUE(second.Connected()) << second.Status();
   EXPECT_TRUE(host.Connected()) << host.Status();
 }
 
-// A friend who reaches the room before its host (an invite sent before the host's game got there)
-// holds the room's first seat. The host's room ends ("taken": its game opens another), and the
-// friend, with nobody's game to join, gives up soon after its welcome instead of waiting minutes.
 TEST(OrcaLive, HostSecondInItsRoomGivesItUp)
 {
   const char* live = std::getenv("ORCA_LIVE_TEST");
@@ -3110,8 +2982,6 @@ TEST(OrcaLive, HostSecondInItsRoomGivesItUp)
   EXPECT_LT(std::chrono::steady_clock::now() - welcomed, std::chrono::seconds(12));
 }
 
-// A host whose connection dropped comes back into its own room, and its seat: the same player id
-// on a new socket inside the server's hold (what a reopened room does after a dropped connection).
 TEST(OrcaLive, HostComesBackToItsRoom)
 {
   const char* live = std::getenv("ORCA_LIVE_TEST");
@@ -3129,7 +2999,6 @@ TEST(OrcaLive, HostComesBackToItsRoom)
   for (int i = 0; i < 500 && first->GetState() == RoomState::Connecting; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   ASSERT_EQ(first->GetState(), RoomState::Waiting) << first->Status();
-  // A friend was in the game, and leaves once its host is gone.
   SetEnv("ORCA_TEST_PLAYER", nullptr);
   options.joining = true;
   auto friend_room = std::make_unique<RelayRoom>(options);
@@ -3138,7 +3007,6 @@ TEST(OrcaLive, HostComesBackToItsRoom)
   SetEnv("ORCA_TEST_PLAYER", player.c_str());
   ScopedEnv drop("ORCA_TEST_ROOM_DROP", "1");
   first->TestDropConnection();
-  // Background recovery retains this room object and its seat, without a goodbye.
   std::this_thread::sleep_for(std::chrono::seconds(5));
   EXPECT_EQ(first->GetState(), RoomState::Waiting) << first->Status();
   EXPECT_TRUE(first->ErrorCode().empty());
@@ -3149,8 +3017,6 @@ TEST(OrcaLive, HostComesBackToItsRoom)
   SetEnv("ORCA_TEST_DEV_GAME", nullptr);
 }
 
-// A room waiting for a friend stays open as long as the friend takes: half a minute with only
-// pings. Guards against an idle socket being dropped after a few seconds (seen on Windows).
 TEST(OrcaLive, WaitingRoomStaysOpen)
 {
   const char* live = std::getenv("ORCA_LIVE_TEST");
@@ -3173,7 +3039,6 @@ TEST(OrcaLive, WaitingRoomStaysOpen)
   }
   EXPECT_GE(a.RoundTripMs(), 0);
 }
-
 
 TEST(OrcaRoomResilience, RuntimeRestartsAndReceiveFailuresAreReconnectable)
 {
@@ -3231,7 +3096,6 @@ TEST(OrcaRoomResilience, SeatInUseRetriesWithBoundedExponentialBackoff)
   EXPECT_EQ(trace[7].reconnect_at, at(3000));
   EXPECT_EQ(trace[9].reconnect_at, at(5000));
   EXPECT_EQ(trace[11].reconnect_at, at(9000));
-  // A held seat's retries run to 12 s after the drop (the server's live-seat window is 10 s).
   EXPECT_EQ(trace[13].reconnect_at, at(13000));
   EXPECT_EQ(trace[13].reconnect_attempts, 5u);
   ASSERT_FALSE(trace[4].notices.empty());
@@ -3273,7 +3137,6 @@ TEST(OrcaRoomResilience, InitialSeatRetriesCoverTheLiveSeatWindowBeforeSoftFailu
   EXPECT_EQ(trace.back().error_code, "network");
   EXPECT_EQ(trace.back().status, "Your seat in that room is still held by your last connection. "
                                  "Try again in a few seconds.");
-  // A seat released after 10 s succeeds on the next attempt, before the refusal deadline.
   steps.resize(11);
   steps.push_back({RK::Message, 11500, RosterMessage("welcome")});
   const auto recovered = TraceRoomForTest(TraceOptions(), steps);
@@ -3301,8 +3164,6 @@ TEST(OrcaRoomResilience, HostGoneAfterServerCloseEndsWithoutRetrying)
 
 TEST(OrcaRoomResilience, ServerCloseRefusalsKeepTheirExistingRetryWindows)
 {
-  // A held seat gets 12 s (the server's live-seat window is 10 s), then ends; a 503 (a rooms
-  // isolate restarting until the site answers) is never final: it falls back to the room hold.
   for (const auto& refusal : {"WebSocket upgrade failed (HTTP 409) seat in use",
                               "WebSocket upgrade failed (HTTP 503)"})
   {
@@ -3335,7 +3196,6 @@ TEST(OrcaRoomResilience, ServerCloseRefusalsKeepTheirExistingRetryWindows)
       EXPECT_TRUE(later.back().reconnecting);
     }
   }
-  // Other refusals remain final; no retry window for a genuinely full room or a 403.
   for (const auto& refusal : {"WebSocket upgrade failed (HTTP 409) room full",
                               "WebSocket upgrade failed (HTTP 403) host_older"})
   {
@@ -3353,9 +3213,6 @@ TEST(OrcaRoomResilience, ServerClose503RefusalsKeepFriendsUntilTheRoomHoldExpire
   constexpr int closed_ms = 1000;
   constexpr int deadline_ms =
       closed_ms + std::chrono::duration_cast<std::chrono::milliseconds>(ROOM_HOLD).count();
-  // Midpoint jitter: immediate, 500 ms, 1 s, 2 s, 4 s, the 10 s restart boundary,
-  // then one attempt per 4 s backoff. Refused upgrades do not spend the rolling budget
-  // of six *successful connections*, so they must keep retrying throughout the hold.
   std::vector<int> attempts{1000, 1500, 2500, 4500, 8500, 11000};
   for (int ms = 15000; ms < deadline_ms; ms += 4000)
     attempts.push_back(ms);
@@ -3370,7 +3227,7 @@ TEST(OrcaRoomResilience, ServerClose503RefusalsKeepFriendsUntilTheRoomHoldExpire
     if (next < attempts.size() && ms == attempts[next])
     {
       steps.push_back({RK::ConnectFailure, ms, "WebSocket upgrade failed (HTTP 503)"});
-      steps.push_back({RK::PollReconnect, ms});  // Polling again cannot bypass the backoff.
+      steps.push_back({RK::PollReconnect, ms});
       ++next;
     }
   }
@@ -3471,7 +3328,6 @@ TEST(OrcaRoomResilience, LegacyHelloStillInteroperatesAfterBackWithLiveInputs)
   EXPECT_EQ(trace[6].packets.size(), 1u);
 }
 
-
 TEST(OrcaRoomResilience, RecoveryWelcomeClearsAMissedBackAndHonorsARealLeave)
 {
   const auto trace = TraceRoomForTest(TraceOptions(), {
@@ -3505,7 +3361,6 @@ TEST(OrcaRoomResilience, RecoveryWelcomeDoesNotClearAPeerStillAway)
   EXPECT_EQ(trace[6].events[0].reason, "room-hold-expired");
 }
 
-
 TEST(OrcaRoomResilience, OldSessionStalledNoticeCrossingBackKeepsTheRoom)
 {
   const auto trace = TraceRoomForTest(TraceOptions(), {
@@ -3518,7 +3373,6 @@ TEST(OrcaRoomResilience, OldSessionStalledNoticeCrossingBackKeepsTheRoom)
   ASSERT_EQ(trace.back().events.size(), 1u);
   EXPECT_EQ(trace.back().events[0].reason, "room-away-silent");
 }
-
 
 namespace
 {
@@ -3610,7 +3464,7 @@ protected:
   std::vector<std::unique_ptr<ScopedEnv>> vars;
 };
 
-}  // namespace
+}
 
 TEST(OrcaRoom, ReopenDiscardsQueueExpiredAndTakenCodesAcrossRetries)
 {
@@ -3619,7 +3473,6 @@ TEST(OrcaRoom, ReopenDiscardsQueueExpiredAndTakenCodesAcrossRetries)
   {
     const std::string retained = RoomReopenCode("oldqueue", queue, true, false);
     EXPECT_TRUE(retained.empty());
-    // A failed fresh-room upgrade has no queue welcome; it must not revive the old queue code.
     EXPECT_TRUE(RoomReopenCode(retained, "private", true, false).empty());
   }
   EXPECT_EQ(RoomReopenCode("friends1", "private", true, false), "friends1");
@@ -3643,7 +3496,6 @@ TEST_F(OrcaRoomRuntime, NetworkEndedRoomsReopenWithFreshQueueCodesAndRetainFrien
     room->TestDropConnection();
     ASSERT_TRUE(Wait([&] { return room->GetState() == RoomState::Ended; }));
     ASSERT_EQ(room->ErrorCode(), "network");
-    // Use the welcome's queue even after the socket and room ended, as KeepRoomOpen does.
     const std::string reopen = Rollback::OnlineMatch::RoomReopenCode(
         room->Code(), room->Queue(), true, false);
     if (queue == "private")
@@ -3651,7 +3503,6 @@ TEST_F(OrcaRoomRuntime, NetworkEndedRoomsReopenWithFreshQueueCodesAndRetainFrien
     else
     {
       EXPECT_TRUE(reopen.empty());
-      // A private-mode retry of the queue code would be refused on every attempt.
       Action(old_code, R"({"refuse":{"code":"lobby_mismatch"},"refuse_status":403})");
     }
     room.reset();
@@ -3683,7 +3534,6 @@ TEST_F(OrcaRoomRuntime, RecoveredSocketUsesTheRealGoodbyeTeardown)
   room->SetLeaveReason("desync");
   Action(code, R"({"message":{"t":"msg","from":"peer","d":{"k":"drop","r":"desync"}}})");
   ASSERT_TRUE(Wait([&] { return room->GetState() == RoomState::Ended; }));
-  // Observe Run's teardown before Leave() could turn it into a user quit.
   ASSERT_TRUE(Wait([&] { return Sent(code, "leave"); }));
   EXPECT_TRUE(Sent(code, "msg", "bye"));
   EXPECT_EQ(room->ErrorCode(), "desync");
@@ -3773,7 +3623,7 @@ TEST_F(OrcaRoomRuntime, CloudflareColoKeepsOnlyTheValidatedHeaderSuffix)
     Action(code, R"({"close":1013})");
     ASSERT_TRUE(Wait([&] { socket.ReceiveText(10ms); return !socket.IsOpen(); }));
     EXPECT_EQ(socket.LossClass(), "eof");
-    EXPECT_EQ(socket.EdgeColo(), cases[i].second);  // retained after cleanup
+    EXPECT_EQ(socket.EdgeColo(), cases[i].second);
   }
 }
 
@@ -3826,7 +3676,6 @@ TEST_F(OrcaRoomRuntime, ReconnectRefreshesOnlyAfterTheCachedTicketIsRefused)
 
 TEST_F(OrcaRoomRuntime, RealSeatInUseBodyRetriesWithoutMintingAnotherTicket)
 {
-  // origin/main:rooms/src/index.ts's seatInUse refusal, including its sentence and code.
   const std::string refusal =
       R"({"error":"This seat is in use. Join again in a moment.","code":"seat_in_use"})";
   for (const bool initial : {false, true})
@@ -3874,7 +3723,6 @@ TEST_F(OrcaRoomRuntime, UnstableRefusalBodiesEndWithoutHeldSeatRetriesOrTicketRe
     {
       if (!initial && !recovery)
         continue;
-      // Only the recognized code determines this policy, even with unrelated body text.
       for (const char* body : {R"({"error":"room unstable","code":"room_unstable"})",
                                R"({"error":"This seat is in use.","code":"room_unstable"})"})
       {
@@ -3948,7 +3796,6 @@ TEST_F(OrcaRoomRuntime, HostGoneRefusalsEndOnceWithTheExistingHostLeftState)
       EXPECT_EQ(Request("/state/" + code).get("tickets").get<double>(), 1);
       if (!recovery)
         continue;
-      // A refusal during recovery is also final, including inside the old restart grace.
       room = Open(code);
       ASSERT_TRUE(Wait([&] { return room->Seat() == 1 && room->RoundTripMs() >= 0; }));
       Action(code, fmt::format(R"({{"refuse":{},"refuse_status":{},"close":1013}})", body, status));
@@ -4047,7 +3894,7 @@ TEST_F(OrcaRoomRuntime, WelcomeDoesNotResetTheReconnectBudget)
   room->TestDropConnection();
   ASSERT_TRUE(Wait([&] { return room->GetState() == RoomState::Ended; }));
   EXPECT_EQ(room->ErrorCode(), "network");
-  room->Leave();  // final teardown must not make a new connection for leave
+  room->Leave();
   EXPECT_EQ(Connections(code), 7);
   EXPECT_FALSE(Sent(code, "leave"));
 }
@@ -4147,7 +3994,6 @@ TEST_F(OrcaRoomRuntime, ResumeRetriesUntilAKeyframeArrives)
         resumes += m.get("d").get("resume").evaluate_as_boolean();
     return resumes >= 3;
   }));
-  // A host's hello does not acknowledge the resync; only the keyframe does.
   Action(code, R"({"message":{"t":"msg","from":"peer","d":{"k":"hello","c":"test","h":true,"r":true}}})");
   KeyframeInfo keyframe;
   keyframe.id = "replay-300-01234567";
@@ -4184,7 +4030,6 @@ TEST(OrcaRoomResilience, ReconnectBudgetRollsAfterFiveMinutesAndJitterIsBounded)
   EXPECT_EQ(RoomReconnect::Jitter(500ms, 0), 350ms);
   EXPECT_EQ(RoomReconnect::Jitter(500ms, 60), 650ms);
 }
-
 
 namespace
 {
@@ -4261,7 +4106,6 @@ protected:
     vars.push_back(std::make_unique<ScopedEnv>("ORCA_DIRECT", "1"));
     vars.push_back(std::make_unique<ScopedEnv>("ORCA_DIRECT_LOOPBACK", "1"));
     vars.push_back(std::make_unique<ScopedEnv>("ORCA_DIRECT_STUN", "0"));
-    // Queue rooms retain their ordinary two-player budget cases in every instantiation.
     room_players = queue == "private" ? GetParam() : 0;
     room_code = code;
     local_seat = joining ? 1 : 0;
@@ -4314,7 +4158,6 @@ protected:
           if (extra_direct[slot] && target == fmt::format("peer{}", slot))
             extra_direct[slot]->OnSignal("me", data.get<picojson::object>());
       }
-      // Link setup must not leave game inputs in flight when the session is constructed.
       direct.Send(EncodePacket(NeutralPacket(0, 0)));
       room->Receive();
       return room->Direct().transport == 1;
@@ -4443,8 +4286,6 @@ protected:
       const auto packet = EncodePacket(recovered);
       if (peer_away)
         Action(room_code, fmt::format(R"({{"message":{}}})", PresenceRoster("back")));
-      // Repeated UDP packets, as the session does, until StepSession has received them.
-      // Peer-away cases restore through the room, keeping back and its inputs in socket order.
       while (!restored.load())
       {
         if (peer_away)
@@ -4460,8 +4301,6 @@ protected:
     {
       result = Boundary(begin + duration + 5s, &polls);
       outage_excused |= last_excused;
-      // Another friend's shorter wait may finish first. Consume this returning peer's entire
-      // prefix before advancing next_input, so the fixture cannot skip a range between outages.
       if (result.kind == StepKind::Ended ||
           (polls > 0 && (room_players != 4 || session->ConfirmedFrame() >= next_input + 15)))
         break;
@@ -4497,7 +4336,6 @@ protected:
       ASSERT_EQ(StallFor(100ms).kind, StepKind::Run) << session->Error() << ": " << session->Describe();
     EXPECT_EQ(budget.Recoveries(), 0);
     EXPECT_EQ(hold_calls, 0);
-    // The room socket stays down when the actual UDP link returns, just as in staging.
     ASSERT_EQ(StallFor(duration, true).kind, StepKind::Run);
     EXPECT_TRUE(last_excused);
     EXPECT_EQ(budget.Recoveries(), 1);
@@ -4509,13 +4347,12 @@ protected:
     EXPECT_TRUE(session->Error().empty());
     EXPECT_FALSE(session->Idle());
     EXPECT_EQ(StallFor(200ms).kind, StepKind::Run);
-    // A short stall while the room is still recovering spends no second excuse.
     EXPECT_EQ(budget.Recoveries(), 1);
     EXPECT_FALSE(Sent(room_code, "leave"));
     EXPECT_FALSE(Sent(room_code, "msg", "drop"));
   }
 };
-}  // namespace
+}
 
 TEST_F(OrcaRoomRuntime, HealthyRealSessionHashesMatchWithRecoveryDisabled)
 {
@@ -4653,7 +4490,6 @@ TEST_F(OrcaRoomRuntime, MissingInputBuffersRequestDropInInTheSameRoom)
   EXPECT_FALSE(Sent(code, "leave"));
 }
 
-
 TEST_F(OrcaRoomRuntime, ANewResumeRequestCanResetAHostThatAlreadyResumedOnce)
 {
   const std::string code = "hostres4";
@@ -4677,7 +4513,6 @@ TEST_F(OrcaRoomRuntime, ANewResumeRequestCanResetAHostThatAlreadyResumedOnce)
   peer.seat = 1;
   Action(code, InjectPacket(peer));
   ASSERT_TRUE(Wait([&] { return !room->Receive().empty(); }));
-  // The old keyframe offer and a live-session packet must not suppress this new request.
   resume("second");
   ASSERT_TRUE(Wait([&] {
     for (const auto& e : room->TakePeerEvents())
@@ -4697,13 +4532,12 @@ TEST_F(OrcaRoomRuntime, UnreportedSilenceHasABoundedHoldAndRealLeaveInterruptsIt
   room->TakePeerEvents();
   const auto now = RoomClock::now();
   ASSERT_TRUE(room->HoldInputSilence(now - 89s, now));
-  EXPECT_FALSE(room->HoldInputSilence(now, now + 2s)); // a retry cannot restart the hold
+  EXPECT_FALSE(room->HoldInputSilence(now, now + 2s));
   Action(code, fmt::format(R"({{"message":{}}})", RosterMessage("leave", true, false)));
   ASSERT_TRUE(Wait([&] { return room->HostLeftPending(); }));
   EXPECT_FALSE(room->HoldInputSilence(now, now));
   EXPECT_FALSE(room->HostAwayDeadline());
 }
-
 
 TEST_F(OrcaRoomRuntime, PrivateWelcomeOverridesAnInitialQueueHint)
 {
@@ -4850,7 +4684,7 @@ TEST_F(OrcaRoomRuntime, QueueSilentDropKeepsTheSocketUnreadThroughLeave)
     ASSERT_TRUE(Wait([&] { return room->Seat() == 1 && room->RoundTripMs() >= 0; }));
     room->TestDropConnection();
     ASSERT_TRUE(Wait([&] { return room->GetState() == RoomState::Ended; }));
-    room->Leave();  // joins Run; Online's retained shared_ptr keeps this socket alive
+    room->Leave();
     EXPECT_EQ(Connections(code), 1);
     EXPECT_FALSE(Sent(code, "leave"));
     EXPECT_FALSE(Sent(code, "msg", "bye"));
@@ -4960,7 +4794,6 @@ TEST_F(OrcaRoomRuntime, UpgradeFailurePathsNeverLogTicketUrls)
     ASSERT_TRUE(Wait([&] { return timed->Seat() == 1 && timed->RoundTripMs() >= 0; }));
     Action("logtime4", R"({"upgrade_delay":5})");
     timed->TestDropConnection();
-    // Allow the first capped upgrade to fail and the next one to reach the fixture.
     RoomReconnect upgrades;
     upgrades.attempts = 1;
     const auto now = RoomClock::now();
@@ -4992,8 +4825,6 @@ TEST_F(OrcaRoomRuntime, UpgradeFailurePathsNeverLogTicketUrls)
     EXPECT_EQ(line.find("ticket="), std::string::npos);
     EXPECT_EQ(line.find("loopback-fixture"), std::string::npos);
     saw_failure |= line.find("WebSocket connect failed") != std::string::npos;
-    // The site keeps the class word, errno and colos only right after "<kind> self", before any
-    // free text (close-reason=, last-error=).
     const auto front = [&](std::string_view kind, std::string_view colo) {
       const std::string head = fmt::format("{} self eof errno=", kind);
       const size_t at = line.find(head);
@@ -5062,7 +4893,6 @@ TEST_F(OrcaRoomRuntime, QuickBackAndSameIdJoinGrantHoldBeforeAnyStall)
     const std::string code = std::string("quick") + event;
     auto room = Open(code, R"({"joining":false})", false);
     ASSERT_TRUE(Wait([&] { return room->Seat() == 0 && room->RoundTripMs() >= 0; }));
-    // A shared session: the friend's inputs reached us before its room socket blipped.
     Packet played = NeutralFrames(6000, 16);
     played.seat = 1;
     Action(code, InjectPacket(played));
@@ -5070,9 +4900,8 @@ TEST_F(OrcaRoomRuntime, QuickBackAndSameIdJoinGrantHoldBeforeAnyStall)
     room->TakePeerEvents();
     Action(code, fmt::format(R"({{"message":{}}})", RosterMessage(event, false)));
     std::this_thread::sleep_for(100ms);
-    EXPECT_TRUE(room->TakePeerEvents().empty()); // no ResetPeer/Left or replacement arrival
+    EXPECT_TRUE(room->TakePeerEvents().empty());
     const auto now = RoomClock::now();
-    // Back, not this poll, started the hold. A new hold here would expire a second later.
     EXPECT_FALSE(room->HoldInputSilence(now + 1s, now + ROOM_HOLD + 500ms));
     EXPECT_EQ(room->Seat(), 0);
     EXPECT_EQ(room->Code(), code);
@@ -5082,8 +4911,6 @@ TEST_F(OrcaRoomRuntime, QuickBackAndSameIdJoinGrantHoldBeforeAnyStall)
 
 TEST_F(OrcaRoomRuntime, BackWithoutASharedSessionGrantsNoHold)
 {
-  // A friend's room socket blips while no session runs between us (the host in a single-player
-  // mode, a joiner still waiting): no hold, so nothing expires and resets it 90 s later.
   for (const char* event : {"back", "join"})
   {
     const std::string code = std::string("idle") + event;
@@ -5092,8 +4919,6 @@ TEST_F(OrcaRoomRuntime, BackWithoutASharedSessionGrantsNoHold)
     room->TakePeerEvents();
     Action(code, fmt::format(R"({{"message":{}}})", RosterMessage(event, false)));
     std::this_thread::sleep_for(100ms);
-    // With no session the back is train-0343's plain re-handshake; what matters is that no hold
-    // is left to expire and reset the friend later.
     room->TakePeerEvents();
     EXPECT_FALSE(room->InputHoldFor("peer"));
     EXPECT_EQ(room->Code(), code);
@@ -5121,7 +4946,6 @@ TEST_F(OrcaRoomRuntime, HostNoWordTimeoutKeepsQuickBackUntilInputsReturn)
     return step.kind == StepKind::Stall;
   }));
   room->TakePeerEvents();
-  // This verdict arrives before the first HoldInputSilence call, with no direct packets.
   Action(code, fmt::format(R"({{"message":{}}})", RosterMessage("back", false)));
   std::this_thread::sleep_for(100ms);
   ASSERT_TRUE(room->TakePeerEvents().empty());
@@ -5185,7 +5009,7 @@ TEST_F(OrcaRoomRuntime, BlackoutFailsUpgradesSilentlyThenRecovers)
   const auto dark = Request("/state/" + code);
   EXPECT_EQ(dark.get("connects").get<double>(), 1);
   EXPECT_EQ(dark.get("tickets").get<double>(), 1);
-  EXPECT_EQ(dark.get("closes").get<double>(), 0); // no close frame, no phantom upgrade
+  EXPECT_EQ(dark.get("closes").get<double>(), 0);
   EXPECT_FALSE(Sent(code, "leave"));
   ASSERT_TRUE(Wait([&] { return Connections(code) == 2 && room->RoundTripMs() >= 0; }, 6s));
   std::this_thread::sleep_for(100ms);
@@ -5287,7 +5111,6 @@ TEST_F(OrcaRoomRuntime, LaunchJoinHostGoneBeforeCapsEndsAtTheBoundary)
     EXPECT_EQ(result.has_port, soft);
     if (soft)
       EXPECT_FALSE(result.joining);
-    // The stopped headless CPU must not advance a frame or touch a port after End().
     EXPECT_EQ(result.frame, -1);
     EXPECT_EQ(Connections(code), 1);
     Orca::Online::Shutdown();
@@ -5310,7 +5133,6 @@ TEST_F(OrcaRoomRuntime, LaunchJoinWithoutAssignedSeatFallsBackToPortOne)
   ASSERT_EQ(Orca::Online::Joining(), true);
   ASSERT_EQ(Orca::Online::RoomErrorCode(), "host_gone");
   ASSERT_EQ(Orca::Online::Seat(), -1);
-  // Boundary -> FailJoin -> BecomeSolo(own_boot) -> Reseat, using the unassigned room seat.
   const auto result = Rollback::OnlineMatch::PumpLaunchJoinBoundaryForTest();
   EXPECT_FALSE(result.finished);
   EXPECT_FALSE(result.joining);
@@ -5363,7 +5185,6 @@ TEST_F(OrcaRoomRuntime, FriendsReopenJoinsTheFriendWhoReturnedFirst)
     Orca::Status::SetAppCaps("");
   });
   const std::string code = "friends359";
-  // The friend rejoined during the old host's reopen delay and is now the room's host.
   Request("/configure/" + code,
           fmt::format(R"({{"joining":true,"compatibility":"{}"}})",
                       Orca::Online::CompatibilityKey()));
@@ -5408,7 +5229,6 @@ TEST_F(OrcaRoomRuntime, FriendsAutomaticReopenWithoutAHostFallsBackWithEitherCap
     const std::string code = soft ? "rsoft359" : "return359";
     const std::string fresh = soft ? "freshsoft359" : "fresh359";
     const ScopedEnv fresh_room("ORCA_TEST_ROOM", fresh.c_str());
-    // The friend holds the room's host seat, but its Orca is also waiting to join a host.
     Request("/configure/" + code,
             fmt::format(R"({{"joining":true,"host":false,"compatibility":"{}"}})",
                         Orca::Online::CompatibilityKey()));
@@ -5494,7 +5314,7 @@ TEST(OrcaRoomResilience, LongLivedRejoinsNeitherCountNorResetShortLivedHistory)
 {
   RoomRejoinFlaps flaps;
   const auto start = RoomClock::time_point{};
-  EXPECT_FALSE(flaps.Lost(start));  // The initial socket isn't a rejoin.
+  EXPECT_FALSE(flaps.Lost(start));
   for (const auto seconds : {1, 2, 3})
   {
     flaps.Rejoined(start + std::chrono::seconds(seconds));
@@ -5601,7 +5421,6 @@ TEST_F(OrcaRoomRuntime, ReconnectUsesFreshTicketsAfterLongRoomsAndKeepsRecentSea
     ASSERT_EQ(uses.size(), 2u);
     EXPECT_EQ(uses[0].get<double>(), 1);
     EXPECT_EQ(uses[1].get<double>(), ticket);
-    // A successful mint records its age too: the next drop keeps that new seat ticket.
     room->RoundTripMs(&before);
     room->TestDropConnection();
     ASSERT_TRUE(Wait([&] {
@@ -5660,7 +5479,6 @@ TEST_F(OrcaRoomRuntime, ReconnectAllowsASlowUpgradeWithoutBlockingLeave)
   Action(code, R"({"upgrade_delay":20})");
   room->TestDropConnection();
   ASSERT_TRUE(Wait([&] { return Connections(code) == 3; }));
-  // The in-flight reconnect keeps its delay; the separate best-effort leave can finish.
   Action(code, R"({"upgrade_delay":0})");
   const auto start = RoomClock::now();
   room->Leave();
@@ -5765,7 +5583,7 @@ TEST_F(OrcaRoomRuntime, KeepRoomOpenReplacesUnstableCodesAndPreservesItsGiveUpBu
                                          std::min<unsigned>(10, static_cast<unsigned>((i + 1) / 2)));
     const unsigned reopens = time_limit ? 1 : 10;
     for (unsigned i = 0; i <= reopens; ++i)
-      EXPECT_EQ(Connections(room_code(i)), 5);  // No old code was opened again.
+      EXPECT_EQ(Connections(room_code(i)), 5);
     EXPECT_EQ(Connections(room_code(reopens + 1)), 0);
     std::rewind(out);
     std::string lines;
@@ -5781,7 +5599,7 @@ TEST_F(OrcaRoomRuntime, KeepRoomOpenReplacesUnstableCodesAndPreservesItsGiveUpBu
     unsigned errors = 0;
     for (size_t at = 0; (at = lines.find(network, at)) != std::string::npos; at += network.size())
       ++errors;
-    EXPECT_EQ(errors, reopens + 1);  // One per replacement, then the final give-up.
+    EXPECT_EQ(errors, reopens + 1);
     EXPECT_EQ(lines.find("orca error room-unstable"), std::string::npos);
     const std::string give_up = "orca state no-room\n";
     const auto at = lines.find(give_up);
@@ -5856,15 +5674,12 @@ TEST_F(OrcaRoomRuntime, KeepRoomOpenHealthyReplacementEndsTheUnstableEpisode)
         }
         if (step == 4)
         {
-          // An ordinary final room loss after thirty minutes of healthy replacement hosting.
           Action(code, R"({"close":4003})");
           ASSERT_TRUE(Wait([] { return Orca::Online::RoomEnded(); }));
           EXPECT_EQ(Orca::Online::RoomErrorCode(), "network");
         }
         ++step;
       });
-  // The replacement keeps attempt 1 until exactly five healthy minutes have elapsed.
-  // The later ordinary loss starts at attempt 1 again, rather than giving up immediately.
   EXPECT_EQ(attempts, (std::vector<unsigned>{1, 1, 1, 0, 0, 0, 1, 0}));
   EXPECT_EQ(Connections("oldhealth370"), 1);
   EXPECT_EQ(Connections(code), 2);
@@ -5987,7 +5802,6 @@ TEST_F(OrcaRoomRuntime, CompletedRecoveryEndsEitherSessionAwayFromItsNextFrame)
     config.local_seat = joining ? 1 : 0;
     config.start_frame = 10;
     auto session = std::make_unique<Session>(config, game, *room);
-    // Rejoin can finish while the session is at a different frame from the emulation boundary.
     EXPECT_EQ(Rollback::OnlineMatch::PumpFriendsHostBoundaryForTest(
                   session, 10, {joining ? 0 : 1}, [] {}, [] { return std::vector<int>{}; }, joining), 11);
     EXPECT_EQ(session, nullptr);
@@ -5999,8 +5813,6 @@ TEST_F(OrcaRoomRuntime, RankedRecordingUsesTheMatchedRoomAndAgreedCapability)
 {
   FriendsHeadlessCore core;
   const ScopedEnv session("ORCA_SESSION", "1");
-  // Use the commands the queue driver actually sends, so its capability agreement exercises the
-  // same recording decision as the app. No subprocess, account or external service is involved.
   std::string driver;
   const auto root = std::filesystem::path(__FILE__).parent_path() / "../../../..";
   ASSERT_TRUE(File::ReadFileToString((root / "Tools/orca/queue-e2e.mjs").string(), driver));
@@ -6034,7 +5846,6 @@ TEST_F(OrcaRoomRuntime, RankedRecordingUsesTheMatchedRoomAndAgreedCapability)
       Orca::Online::StartRoom(solo, false);
       ASSERT_TRUE(Wait([&] { return Orca::Online::Seat() == 0; }));
       ASSERT_EQ(Orca::Online::RoomQueue(), "private");
-      // HostInPlay/JoinInPlay replace the solo/search room with this matched room.
       Orca::Online::ShutdownInBackground();
       Orca::Online::StartRoom(code, joining, false);
       ASSERT_TRUE(Wait([&] { return Orca::Online::Seat() == (joining ? 1 : 0); }));
@@ -6104,7 +5915,6 @@ TEST_F(OrcaRoomRuntime, RankedRecordingUsesTheMatchedRoomAndAgreedCapability)
 
 TEST_F(OrcaRoomRuntime, ReturningFriendUsesActualHostCurrentMatchKeyframe)
 {
-  // Core RAM represents the running match. The origin/menu has a different checksum.
   FriendsHeadlessCore core;
   constexpr int origin = 1524;
   constexpr int current = 6000;
@@ -6122,7 +5932,6 @@ TEST_F(OrcaRoomRuntime, ReturningFriendUsesActualHostCurrentMatchKeyframe)
     ack.seat = 0;
     ack.ack[1] = current - 1;
     room->Send(ack);
-    // A shared session: the friend's inputs up to our stalled frame reached us first.
     Packet played = NeutralFrames(current - 16, 16);
     played.seat = 1;
     Action(code, InjectPacket(played));
@@ -6130,7 +5939,6 @@ TEST_F(OrcaRoomRuntime, ReturningFriendUsesActualHostCurrentMatchKeyframe)
     Action(code, fmt::format(R"({{"message":{}}})", RosterMessage("back", false)));
     std::this_thread::sleep_for(100ms);
     ASSERT_TRUE(room->TakePeerEvents().empty());
-    // The returning inputs cannot cover our stalled frame: use the real Receive->Tick resync.
     Packet gap = NeutralFrames(current + 1000, 16);
     gap.seat = 1;
     Action(code, InjectPacket(gap));
@@ -6138,11 +5946,10 @@ TEST_F(OrcaRoomRuntime, ReturningFriendUsesActualHostCurrentMatchKeyframe)
       room->Receive();
       return Sent(code, "msg", "drop");
     }));
-    // Tick's fresh hello reaches the real handshake, which announces a recovering arrival.
     ASSERT_TRUE(Wait([&] { return room->ArrivalPending(); }));
     ReplayArchive replay;
     replay.first_frame = origin;
-    replay.origin_hash = 0x1234; // menu's checksum, deliberately not the running match
+    replay.origin_hash = 0x1234;
     replay.frames.resize(current - origin + 1);
     const auto ports = std::make_shared<const std::vector<Orca::Events::PortInfo>>(
         std::vector<Orca::Events::PortInfo>{{0, "Me", false, {}, {}},
@@ -6185,7 +5992,7 @@ TEST_F(OrcaRoomRuntime, ReturningFriendUsesActualHostCurrentMatchKeyframe)
       checked = true;
     }
     EXPECT_TRUE(checked);
-    EXPECT_EQ(core.system.GetMemory().GetRAM()[0], 0x42); // match state never restored to menu
+    EXPECT_EQ(core.system.GetMemory().GetRAM()[0], 0x42);
     EXPECT_EQ(room->Code(), code);
     EXPECT_EQ(room->GetState(), RoomState::Waiting);
   }
@@ -6244,7 +6051,6 @@ TEST_P(OrcaRoomStallRuntime, FourthRecoveredOutageInTenMinutesCounts)
   ASSERT_EQ(StallFor(200ms).kind, StepKind::Run);
   for (int outage = 0; outage < 3; ++outage)
   {
-    // A recovered outage worth an excuse is at least MIN_EXCUSED_STALL long.
     ASSERT_EQ(StallFor(2100ms, false, true).kind, StepKind::Run)
         << "outage " << outage + 1 << ": " << session->Error() << ": " << session->Describe();
     EXPECT_TRUE(last_excused);
@@ -6264,12 +6070,9 @@ TEST_P(OrcaRoomStallRuntime, RollbackSplitsOneOutageWithoutSpendingAnotherRecove
   ASSERT_EQ(StallFor(100ms).kind, StepKind::Run) << session->Error() << ": " << session->Describe();
   Action(room_code, fmt::format(R"({{"message":{}}})", PresenceRoster("away")));
   ASSERT_TRUE(Wait([&] { return room->RoomRecovering(RoomClock::now()); }));
-  // Frame 20 changes a prediction, but frames 16..19 are still missing: Rollback returns
-  // while the original stall is alive, and several replay steps precede its next stall poll.
   Packet partial = NeutralPacket(20, 1);
   partial.pads[0][0] = 1;
   std::atomic<bool> partial_done{false};
-  // The two halves together last past MIN_EXCUSED_STALL, as a real outage does.
   std::thread partial_sender([&] {
     std::this_thread::sleep_for(1200ms);
     while (!partial_done)
@@ -6291,7 +6094,6 @@ TEST_P(OrcaRoomStallRuntime, RollbackSplitsOneOutageWithoutSpendingAnotherRecove
   ASSERT_EQ(step.kind, StepKind::Rollback) << session->Error();
   EXPECT_TRUE(session->InputStalled());
   EXPECT_EQ(budget.Recoveries(), 0);
-  // The room back and the rest of the inputs arrive after the rollback has returned.
   Action(room_code, fmt::format(R"({{"message":{}}})", PresenceRoster("back")));
   Packet remaining = NeutralPacket(16, 16);
   remaining.pads[4][0] = 1;
@@ -6338,7 +6140,6 @@ TEST_P(OrcaRoomStallRuntime, CasualStallsKeepTheBudgetAndSilenceLimit)
   EXPECT_EQ(budget.Recoveries(), 0);
   EXPECT_GE(budget.Stalled(RoomClock::now()), 15s);
 }
-
 
 TEST(OrcaDoublesAdmission, WindowFillsEarlyAndLateArrivalsWaitForMenus)
 {
@@ -6460,14 +6261,12 @@ TEST_F(OrcaRoomRuntime, BatchEnvelopeDeliversOnlyThisRecipientsPacket)
   ASSERT_EQ(got.size(), 1u);
   EXPECT_EQ(got[0].first_frame, 100);
   EXPECT_EQ(got[0].pads, mine.pads);
-  // Duplicate recipient entries are rejected as a whole.
   Action(code, fmt::format(
       R"({{"message":{{"t":"msg","from":"peer","d":{{"k":"bp","p":[[1,{}],[1,{}]]}}}}}})",
       EncodePacket(mine), EncodePacket(other)));
   std::this_thread::sleep_for(100ms);
   EXPECT_TRUE(room->Receive().empty());
 }
-
 
 TEST_F(OrcaRoomRuntime, ThreePeersKeepIndependentAwayBackAndResumeHolds)
 {
@@ -6525,7 +6324,6 @@ TEST_F(OrcaRoomRuntime, ThirdRetainedPeerGetsCurrentMatchCaptureWithTwoOthersSea
   ASSERT_TRUE(Wait([&] { return Sent(code, "msg", "kf"); }));
 }
 
-
 TEST_F(OrcaRoomRuntime, LateFriendsAreHeldByTheActualHostDuringAFight)
 {
   FriendsHeadlessCore core;
@@ -6547,7 +6345,6 @@ TEST_F(OrcaRoomRuntime, LateFriendsAreHeldByTheActualHostDuringAFight)
   EXPECT_FALSE(Sent(code, "msg", "kf"));
   EXPECT_EQ(room->Code(), code);
 }
-
 
 TEST_F(OrcaRoomRuntime, SimultaneousRecoveriesShareHostOwnedCapture)
 {
@@ -6594,7 +6391,6 @@ TEST_F(OrcaRoomRuntime, SimultaneousRecoveriesShareHostOwnedCapture)
   EXPECT_EQ(recipients, (std::set<std::string>{"peer2", "peer3"}));
 }
 
-// Fixed wire fixtures from 3bfe032623 (0.3.44); doubles is absent in every input.
 TEST(OrcaLegacy044, PacketAndKeyframeOfferGolden)
 {
   EXPECT_EQ(EncodePacket(Sample()),
@@ -6709,8 +6505,6 @@ TEST(OrcaDoublesTransport, BroadcastHistoryReachesANewRecipientDuringTheSwitch)
 TEST_F(OrcaRoomRuntime, HostCommandCapturesForPrivateRoomsWithoutQueueReady)
 {
   FriendsHeadlessCore core;
-  // `host <code>` is also used for tournaments: the ticket flag doesn't change WELCOME's queue.
-  // No queue2 pick/ready identity is needed to join the host's current character select.
   const ScopedEnv session("ORCA_SESSION", "1");
   Orca::Status::SetAppCaps("join host queue2");
   Common::ScopeGuard clear_caps([] { Orca::Status::SetAppCaps(""); });
@@ -6719,7 +6513,6 @@ TEST_F(OrcaRoomRuntime, HostCommandCapturesForPrivateRoomsWithoutQueueReady)
   for (bool tournament : {false, true})
   {
     SCOPED_TRACE(tournament);
-    // Field trace: origin at 230, character select at 313, first notice at running frame 1178.
     for (int current : {313, 1179})
     {
       const std::string code = fmt::format("host{}{}", tournament ? "t" : "p", current);
@@ -6743,7 +6536,6 @@ TEST_F(OrcaRoomRuntime, HostCommandCapturesForPrivateRoomsWithoutQueueReady)
       }
       else
       {
-        // A long private history follows the existing friends policy, rather than holding forever.
         EXPECT_TRUE(result.fresh_start);
       }
     }
@@ -6808,7 +6600,7 @@ TEST_F(OrcaRoomRuntime, PrivateTournamentTicketBeginsAndReportsTheMatch)
   report.kind = GameReport::Kind::Win;
   report.winner_seat = 0;
   report.detail = "{}";
-  room->ReportGame(report);  // Held until the room assigns the match.
+  room->ReportGame(report);
   Action(code, R"({"message":{"t":"start","matchId":"t1","participants":[{"id":"me","connectionId":"me","slot":0},{"id":"peer","connectionId":"peer","slot":1}]}})");
   ASSERT_TRUE(Wait([&] { return Sent(code, "finish"); }));
   const auto state = Request("/state/" + code);
@@ -7126,7 +6918,7 @@ Packet CoFrames(int first, int count)
                {3, Frames(3, first + 40, count).pads}};
   return packet;
 }
-}  // namespace
+}
 
 TEST(OrcaRoom, CoalesceKeepsEverySeatsEarlierFrames)
 {
@@ -7218,12 +7010,10 @@ std::string CoRoster(const char* type, bool joining, bool mine, bool theirs,
     std::reverse(participants.begin(), participants.end());
   return value.serialize();
 }
-}  // namespace
+}
 
 namespace
 {
-// These transport cases start with an established group. Create it through the real page
-// command before their first observation, so a first-welcome cleanup is a separate case.
 std::vector<RoomTestSnapshot> TraceEstablishedCoRoomForTest(
     const RoomOptions& options, std::vector<RoomTestStep> steps)
 {
@@ -7258,7 +7048,7 @@ std::vector<RoomTestSnapshot> TraceEstablishedCoRoomForTest(
   trace.erase(trace.begin(), trace.begin() + 2);
   return trace;
 }
-}  // namespace
+}
 
 TEST(OrcaRoom, CoRosterKeepsLeadSeatsAndLinks)
 {
@@ -7407,7 +7197,6 @@ TEST_F(OrcaRoomRuntime, FreshTicketReusesTheOriginalLobby)
     const std::string lobby = R"({"version":1,"minPlayers":2,"maxLocalPlayers":1,"compatibility":"original-lobby"})";
     auto room = Open(code, fmt::format(R"({{"queue":"{}","lobby":{}}})", queue, lobby));
     ASSERT_TRUE(Wait([&] { return room->Seat() == 1; }));
-    // Later metadata must not replace the room's original lobby.
     picojson::value welcome;
     ASSERT_TRUE(picojson::parse(welcome, RosterMessage("welcome")).empty());
     auto& message = welcome.get<picojson::object>();
@@ -7515,7 +7304,6 @@ TEST(OrcaRoom, HostGroupsFollowCurrentRoomOwnershipOnRelayAndDirect)
     EXPECT_EQ(trace[2].packets.size(), 1u);
     EXPECT_TRUE(trace[3].packets.empty());
     EXPECT_TRUE(trace[4].packets.empty());
-    // The host's scheduled unplug can outlive the participant's presence in the room.
     EXPECT_EQ(trace[6].packets.size(), 1u);
   }
 }
@@ -7626,7 +7414,6 @@ TEST_F(OrcaRoomRuntime, CoSeatArrivalUsesOneGroupAndOneKeyframeOffer)
     EXPECT_EQ(offers, 1);
   }
 }
-
 
 TEST_F(OrcaRoomRuntime, HostSchedulesOwnCoSeatLeaveAhead)
 {
@@ -7834,7 +7621,7 @@ std::string CoPageWelcome(bool joining, const char* queue, bool doubles, bool mi
       {"queue", picojson::value(queue)}, {"doubles", picojson::value(doubles)}});
   return value.serialize();
 }
-}  // namespace
+}
 
 TEST(OrcaRoom, CoPageMirrorRequiresFriendsDoublesAndAgreedCap)
 {
@@ -7890,9 +7677,9 @@ TEST(OrcaRoom, PageMirrorSerializesOnlyAfterItsInputsChange)
   for (const size_t index : {102u, 103u, 104u, 105u, 106u, 108u, 109u})
     EXPECT_EQ(trace[index].published_mirror, picojson::value(trace[index].mirror).serialize()) << index;
   EXPECT_EQ(trace[102].mirror_serializations, 2u);
-  EXPECT_EQ(trace[103].mirror_serializations, 3u);  // The first hello makes ready true.
+  EXPECT_EQ(trace[103].mirror_serializations, 3u);
   EXPECT_EQ(trace[104].mirror_serializations, 3u);
-  EXPECT_EQ(trace[105].mirror_serializations, 4u);  // Roster and revision.
+  EXPECT_EQ(trace[105].mirror_serializations, 4u);
   EXPECT_EQ(trace[108].mirror_serializations, 5u);
   EXPECT_EQ(trace[109].mirror_serializations, 5u);
 }
@@ -8181,7 +7968,6 @@ TEST(OrcaRoom, CoJoinerTimeoutCancelsBeforeSendingHelloOrLeaves)
       EXPECT_FALSE(HasRoomKind(trace.back(), "hello"));
     }
   }
-  // No response at all cannot prove whether the add was accepted: leave at the cleanup bound.
   const auto missing = TraceRoomForTest(TraceOptions(true), {
       {RK::Message, 0, CoPageWelcome(true, "private", true)}, {RK::PageEvent, 1, CO_PAGE_ADD},
       {RK::Message, 2, PeerHello(true)}, {RK::Tick, 10001}, {RK::Tick, 20001}});
@@ -8301,7 +8087,6 @@ TEST(OrcaRoom, CoStartupNeverAddsWithoutAPageCommand)
     const auto event = picojson::value(picojson::object{{"push", picojson::value(picojson::object{
         {"type", picojson::value("controllers")}, {"snapshot", picojson::value(snapshot)}})}});
     EXPECT_TRUE(Orca::Bridge::Route({"br " + event.serialize()}).empty());
-    // Adapter ports always carry seats, even when the page never requested Player 2.
     snapshot["owned"] = picojson::value(true);
     picojson::array ports;
     for (int port = 0; port < 4; ++port)
@@ -8455,7 +8240,6 @@ TEST_F(OrcaRoomRuntime, LocalRosterCountSurvivesMissingDevicesAndIgnoresStraySea
   FriendsHeadlessCore core;
   const ScopedEnv stdio("SUBSPACE_STDIO", "1");
   const ScopedEnv virtual_only("ORCA_VIRTUAL_PAD_ONLY", "1");
-  // Open() uses the loopback dev ticket, so start the controller stream separately.
   const ScopedEnv ticket_stdio("SUBSPACE_STDIO", "0");
   Orca::UX::StartControllerStreamFromStdio();
   const Common::ScopeGuard cleanup([] {
@@ -8561,11 +8345,11 @@ TEST(OrcaRoom, SoloHostDoesNotPlugALocalSeatDuringAddCleanup)
       [&](RelayRoom& room) {
         frames.push_back(Rollback::OnlineMatch::PumpSoloRoomForTest(core.system, room));
       });
-  ASSERT_EQ(trace[3].co_seats, (std::vector<int>{2}));  // Raw roster, still being cancelled.
+  ASSERT_EQ(trace[3].co_seats, (std::vector<int>{2}));
   ASSERT_EQ(frames.size(), 8u);
   for (size_t frame = 0; frame < 7; ++frame)
     EXPECT_EQ(frames[frame][2], UNPLUGGED_PAD) << frame;
-  EXPECT_EQ(frames[7][2], Pad{});  // A later, completed Add really plugs it.
+  EXPECT_EQ(frames[7][2], Pad{});
 }
 
 TEST(OrcaRoom, CoPageStatusDistinguishesFullFromNotReady)
@@ -8600,7 +8384,6 @@ TEST(OrcaRoom, JoinerPageAddAfterTheWelcomeTickIsAMidSessionAdd)
   EXPECT_EQ(trace[2].notices, (std::vector<std::string>{
       "Room: Add local player isn't available here (in-match)"}));
   EXPECT_TRUE(trace[3].co_seats.empty());
-  // The page must send Add with or before joining; after hello it needs P5.
 }
 
 TEST(OrcaRoom, QueueDoublesWelcomeAndRankedRefusal)
@@ -8628,7 +8411,6 @@ TEST(OrcaRoom, QueueDoublesWelcomeAndRankedRefusal)
         {
           picojson::value message;
           ASSERT_TRUE(picojson::parse(message, wire).empty());
-          // A forced trace tick may ping; the refused room never sends gameplay or results.
           EXPECT_EQ(message.get("t").to_str(), "ping");
         }
       EXPECT_TRUE(picojson::value(trace.back().mirror).get("participants").get<picojson::array>().empty());
@@ -9008,7 +8790,6 @@ TEST(OrcaRoomRankedDoubles, NativeJointWinnersMustMatchExactlyOneAssignedPair)
         EXPECT_EQ(detail.get("c").serialize(), "[10,11,12,13]");
         EXPECT_EQ(detail.get("s").serialize(), "[0,1,2,3]");
         EXPECT_TRUE(detail.get("lg").is<picojson::null>());
-        // A native winner pair that differs from the room's partition is never a win.
         result.winning_ports ^= 15;
         EXPECT_EQ(FromGameResult(result, teams).why, "teams");
         result.winning_ports ^= 15;
@@ -9030,7 +8811,6 @@ TEST(OrcaRoomRankedDoubles, DrawsVoidsAndTwoPortResultsDoNotClaimATeamWin)
   EXPECT_EQ(report.detail.find("\"tw\""), std::string::npos);
   result.players = 2;
   EXPECT_EQ(FromGameResult(result, teams).why, "ports");
-  // The ordinary singles report keeps its existing shape and SetBlock metadata.
   result.kind = Result::Kind::Win;
   result.winner_port = 1;
   result.from_set_block = true;
@@ -9094,7 +8874,6 @@ TEST(OrcaRoomRankedDoubles, ADesyncFinalIsVoidAndKeepsItsReasonOnTheVerdict)
   ASSERT_FALSE(trace.back().results.empty());
   EXPECT_NE(trace.back().results.back().find("\"why\":\"desync\""), std::string::npos);
 }
-
 
 namespace
 {
@@ -9163,7 +8942,6 @@ TEST(OrcaRoomRankedDoubles, InvalidArrivalsRefuseOnceAndSeenSeatsKeepTheirTeam)
     if (bad == 6) ps[2].get<picojson::object>()["id"] = picojson::value(std::string(129, 'x'));
     const auto trace = TraceRoomForTest(TraceOptions(false), {
         {RK::Message, 0, RankedArrival("welcome", 2)},
-        // Removing a seat must not forget its earlier team.
         {RK::Message, 1, RankedArrival("lobby", 1)},
         {RK::Message, 2, value.serialize()}, {RK::Message, 3, value.serialize()}});
     EXPECT_NE(trace[0].state, RoomState::Ended);

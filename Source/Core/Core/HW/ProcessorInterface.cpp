@@ -291,7 +291,6 @@ void ProcessorInterfaceManager::IOSNotifyPowerButtonCallback(Core::System& syste
 
 void ProcessorInterfaceManager::ResetButton_Tap()
 {
-  // Orca: a reset on one player's machine only would desync the match.
   if (Orca::SessionActive())
     return;
   if (!Core::IsRunning(m_system))
@@ -307,7 +306,6 @@ void ProcessorInterfaceManager::ResetButton_Tap()
 
 void ProcessorInterfaceManager::PowerButton_Tap()
 {
-  // Orca: like the reset button, the power button would reach only this player's game.
   if (Orca::SessionActive())
     return;
   if (!Core::IsRunning(m_system))

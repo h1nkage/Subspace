@@ -58,7 +58,7 @@ void CollectOffsets(const DiscIO::FileInfo& directory, const std::string& parent
       offsets->emplace(path, child.GetOffset());
   }
 }
-}  // namespace
+}
 
 struct StandardBlob::State
 {
@@ -131,8 +131,6 @@ StandardBlob::Create(const std::string& image, const DiscLayout::Layout& layout,
                            state->zero_blocks.end());
   if (!state->zero_blocks.empty() && state->layout.erased_hashes.empty())
   {
-    // Version 2 layouts did not retain missing subtrees. An input with the same H3
-    // can supply them, including for an identity rebuild of an older layout.
     const auto hashes = DiscLayout::ReadErasedHashes(*source, layout, error);
     if (!hashes)
       return nullptr;
@@ -199,8 +197,6 @@ StandardBlob::Create(const std::string& image, const DiscLayout::Layout& layout,
   const auto aes = Common::AES::CreateContextDecrypt(state->key.data());
   if (!aes->CryptIvZero(zero.data(), state->decrypted_zero.data(), zero.size()))
     return fail("cannot initialize physical-zero gap regeneration");
-  // Read the certificate range explicitly: a failed cached certificate read looks like an empty
-  // chain.
   const auto cert_size = source->ReadSwapped<u32>(partition.offset + 0x2ac, DiscIO::PARTITION_NONE);
   const auto cert_offset =
       source->ReadSwappedAndShifted(partition.offset + 0x2b0, DiscIO::PARTITION_NONE);
@@ -336,8 +332,6 @@ bool StandardBlob::ReadWiiDecrypted(u64 offset, u64 size, u8* buffer, u64 partit
     {
       if (gap->physical_zero)
       {
-        // Zero ciphertext and a zero header IV produce the same AES block throughout
-        // every 0x7c00-byte payload. The pattern stays in memory and is never serialized.
         for (u64 start = std::max(offset, gap->offset); start < end; ++start)
           buffer[start - offset] = m_state->decrypted_zero[start % m_state->decrypted_zero.size()];
       }
@@ -413,4 +407,4 @@ bool StandardBlob::Read(u64 offset, u64 size, u8* buffer)
   }
   return true;
 }
-}  // namespace Orca
+}

@@ -56,8 +56,6 @@ void SDIOSlot0Device::RefreshConfig()
 void SDIOSlot0Device::DoState(PointerWrap& p)
 {
   Device::DoState(p);
-  // Orca: a rollback load keeps the session's card open rather than reopening it by path (the path
-  // is the verified image, and the file must not be swapped mid-session).
   if (p.IsReadMode() && !(Orca::SessionActive() && m_card.IsOpen()))
   {
     OpenInternal();
@@ -91,9 +89,6 @@ void SDIOSlot0Device::EventNotify()
 void SDIOSlot0Device::OpenInternal()
 {
   const std::string filename = File::GetUserPath(F_WIISDCARDIMAGE_IDX);
-  // Orca: a session without a card opens none (not the player's own); a session's card is a
-  // verified image it must never change (writes are refused), and a missing one is an error, not a
-  // reason to make a blank card.
   if (Orca::SessionActive() && !Config::Get(Config::MAIN_WII_SD_CARD))
     return;
   if (Orca::SessionActive() && !Config::Get(Config::MAIN_ALLOW_SD_WRITES))

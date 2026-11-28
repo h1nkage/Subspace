@@ -37,21 +37,15 @@ namespace B = MatchBlock;
 
 constexpr u32 GAME_GLOBAL = 0x805A00E0;
 constexpr u32 GLOBAL_MODE_MELEE = 0x08;
-// Read-only native-input probes: notes/doubles-teams-proof/address-evidence.md.
 constexpr u32 GLOBAL_SELECT = 0x10;
-constexpr u32 SELECT_TEAM_MODE = 0x33;  // 0 off, 1..3 P+ Team battle modes
+constexpr u32 SELECT_TEAM_MODE = 0x33;
 constexpr u32 SELECT_PLAYERS = 0xB8;
 constexpr u32 SELECT_PLAYER_TEAM = 0x0B;
 constexpr u32 GLOBAL_SET_RULE = 0x1C;
-// gmGlobalModeMelee player init data: 4 x 0x5C from +0x98 (+0x00 character, +0x01 type: 0 human,
-// 1 CPU, 3 none).
 constexpr u32 MELEE_PLAYERS = 0x98;
 constexpr u32 MELEE_PLAYER_SIZE = 0x5C;
 constexpr u8 PLAYER_HUMAN = 0;
 
-// gmSetRule (BrawlHeaders gm_set_rule.h): +0x02 rule in the low 3 bits (0 time, 1 stock), +0x04
-// stocks, +0x05 handicap, +0x06 damage ratio x10, +0x07 stage choice (0 Choose, 1 Random), +0x08
-// stock match time limit in minutes, +0x09 team attack, +0x0A pause.
 constexpr u32 RULE_MODE = 0x02;
 constexpr u32 RULE_STOCKS = 0x04;
 constexpr u32 RULE_HANDICAP = 0x05;
@@ -61,11 +55,9 @@ constexpr u32 RULE_STOCK_MINUTES = 0x08;
 constexpr u32 RULE_TEAM_ATTACK = 0x09;
 constexpr u32 RULE_PAUSE = 0x0A;
 constexpr u32 RULE_SAVED_FROM = 0x02;
-constexpr u32 RULE_SAVED_SIZE = 10;  // +0x02..+0x0B
+constexpr u32 RULE_SAVED_SIZE = 10;
 constexpr u8 STAGE_CHOOSE = 0;
 
-// gmGlobalRecord menu data (0x9017B640 + 0x810, both games): +0x00 item frequency (u8, 0 None),
-// +0x08 item switch (64 bits), +0x20 Random Stage Switch Melee page, +0x24 its Brawl page.
 constexpr u32 MENU_DATA = 0x9017BE50;
 constexpr u32 MENU_ITEM_FREQUENCY = MENU_DATA + 0x00;
 constexpr u32 MENU_ITEM_SWITCH_HI = MENU_DATA + 0x08;
@@ -73,14 +65,10 @@ constexpr u32 MENU_ITEM_SWITCH_LO = MENU_DATA + 0x0C;
 constexpr u32 MENU_STAGES_MELEE = MENU_DATA + 0x20;
 constexpr u32 MENU_STAGES_BRAWL = MENU_DATA + 0x24;
 
-// Project+'s stage switch data (Net-Random.asm RSS_EXDATA) and strike table (STAGE_STRIKE_TABLE,
-// 6 bytes per page, 5 pages).
 constexpr u32 PPLUS_RSS = 0x8042C4E8;
 constexpr u32 PPLUS_STRIKES = 0x8042C822;
 constexpr u32 PPLUS_STRIKES_SIZE = 0x1E;
 
-// The 2024 Proposed stage list, from Project+'s preset 3 (pf/stage/switch/Switch03.rss): random
-// masks, hazards off and page layouts. Page 0 holds the nine legal stages, all in the random set.
 constexpr std::array<u8, B::SAVED_RSS_SIZE> PPLUS_2024_RSS{
     0x00, 0x00, 0x00, 0x03, 0x01, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -95,16 +83,13 @@ constexpr std::array<u8, B::SAVED_RSS_SIZE> PPLUS_2024_RSS{
     0x3A, 0x2C, 0x1B, 0x1E, 0x30, 0x2B, 0x00, 0x00,
 };
 
-// Character select player areas and hands (see OnlineRules.h).
 constexpr u32 SCENE_MANAGER = 0x805A0060;
 constexpr u32 MANAGER_SCENE = 0x04;
 constexpr u32 SCENE_SELCHAR_TASK = 0x400;
 constexpr u32 TASK_AREAS = 0x44;
-constexpr u32 TASK_TEAM_BATTLE = 0x5C8;  // u8, 0 off / 1 on
-constexpr u32 AREA_TEAM = 0x1C0;        // u32, 0 red / 1 blue / 2 green
+constexpr u32 TASK_TEAM_BATTLE = 0x5C8;
+constexpr u32 AREA_TEAM = 0x1C0;
 constexpr u32 AREA_HAND = 0x1A8;
-// Area fields: +0x1B4 kind (1 human), +0x1B8 character under the hand or the token's, +0x1F8 u8 1
-// while the token is in the hand, +0x1F9 u8 1 while it is moving.
 constexpr u32 AREA_KIND = 0x1B4;
 constexpr u32 AREA_KIND_HUMAN = 1;
 constexpr u32 AREA_CHARACTER = 0x1B8;
@@ -128,8 +113,6 @@ bool Pointer(const GuestMemory& m, u32 p)
   return p % 4 == 0 && m.Valid(p);
 }
 
-// Whether port `port` (0 or 1) held `button` on the previous frame, from the queue's raw-button
-// latch (Queue.h RAW). Other ports always return false.
 bool RawHeld(const GuestMemory& m, int port, u16 button)
 {
   if (port < 0 || port > 1 || !m.Valid(Queue::RAW + 2 * static_cast<u32>(port) + 1))
@@ -148,7 +131,6 @@ u32 GlobalField(const GuestMemory& m, u32 field)
   return Pointer(m, p) ? p : 0;
 }
 
-// Writes only what differs, counting the bytes changed.
 struct Writer
 {
   GuestMemory& m;
@@ -182,7 +164,6 @@ bool BlockMapped(const GuestMemory& m)
   return m.Valid(B::BASE) && m.Valid(B::BASE + B::SIZE - 1);
 }
 
-// Current picks from the match's init data.
 std::array<PlayerPick, 4> Picks(const GuestMemory& m)
 {
   std::array<PlayerPick, 4> out{};
@@ -216,21 +197,17 @@ void ForceRules(Writer& w, const Header& h, const Ranked::Ruleset& rules)
   if (rule && w.m.Valid(rule + RULE_PAUSE))
   {
     w.U8(rule + RULE_MODE, static_cast<u8>((w.m.Read8(rule + RULE_MODE) & 0xF8) | 1));
-    // A ranked set with a tiebreak game (Brawl) owns its stocks and time
-    // (RankedSet::WriteSetRules), written earlier this frame; otherwise the ruleset's, every game.
     const bool set_rules = h.mode == Mode::Ranked && rules.SetWritesGameRules();
     if (!set_rules)
       w.U8(rule + RULE_STOCKS, rules.stocks);
     w.U8(rule + RULE_HANDICAP, 0);
     w.U8(rule + RULE_RATIO, 10);
-    // Both modes use the stage select: casual's preferred-stage turns, ranked's strikes and picks.
     w.U8(rule + RULE_STAGE_CHOICE, STAGE_CHOOSE);
     if (!set_rules)
       w.U8(rule + RULE_STOCK_MINUTES, rules.minutes);
     w.U8(rule + RULE_TEAM_ATTACK, 1);
     w.U8(rule + RULE_PAUSE, 0);
   }
-  // No items.
   w.U8(MENU_ITEM_FREQUENCY, 0);
   w.U32(MENU_ITEM_SWITCH_HI, 0);
   w.U32(MENU_ITEM_SWITCH_LO, 0);
@@ -240,8 +217,6 @@ void ForceStages(Writer& w, const Header& h, const std::string& scene)
 {
   if (h.ruleset == Ruleset::Brawl)
   {
-    // Follow picks on the character select and on the way to the fight (Random resolves as the
-    // character select ends). The list is frozen during the fight.
     if (scene != SCENE_CSS && scene != SCENE_SSS && scene != SCENE_BETWEEN)
       return;
     const std::array<PlayerPick, 4> ports = Picks(w.m);
@@ -254,26 +229,19 @@ void ForceStages(Writer& w, const Header& h, const std::string& scene)
   }
   if (h.ruleset == Ruleset::PPlus && scene == SCENE_CSS)
   {
-    // Write before the stage select builds its pages from it.
     for (u32 i = 0; i < B::SAVED_RSS_SIZE; ++i)
       w.U8(PPLUS_RSS + i, PPLUS_2024_RSS[i]);
-    // Casual reads strike marks as preferred stages, so clear any left over.
     if (h.mode == Mode::Casual)
       w.Zero(PPLUS_STRIKES, PPLUS_STRIKES_SIZE);
   }
 }
 
-// dnet.cmnu's default for every cheat and gameplay line (each line's value word, at line + 8), with
-// Code Menu Activation OFF. Not here: the Character Select lines (they follow the fighters), and
-// the replay, tag, costume, crowd and HUD colour lines.
 constexpr std::array<CodeMenuWord, 73> CODE_MENU_DEFAULTS{{
-    // Endless Friendlies mode and stages, Alternate Stages, Autoskip Results, Activation (OFF)
     {0x804E0910, 0},
     {0x804E098C, 0},
     {0x804E09E4, 0},
     {0x804E0A38, 0},
     {CODE_MENU_ACTIVATION, CODE_MENU_OFF},
-    // Debug Mode, Hitbox and Collision Display, Stage Collisions, Camera Lock, Draw DI, FPS, HUD
     {0x804E0D3C, 0},
     {0x804E0D68, 0},
     {0x804E0DB8, 0},
@@ -282,8 +250,6 @@ constexpr std::array<CodeMenuWord, 73> CODE_MENU_DEFAULTS{{
     {0x804E0E70, 0},
     {0x804E0E9C, 0},
     {0x804E0ECC, 1},
-    // P1-P4: Infinite Shield, Select Percent (0.0), Press DPad to select percent, Disable DPad,
-    // Input Buffer, Automatic L-Cancelling, ALC Modifier (0.5), Red Flash on L-Cancel Failure
     {0x804E0F08, 0},
     {0x804E1198, 0},
     {0x804E11D0, 0},
@@ -316,13 +282,9 @@ constexpr std::array<CodeMenuWord, 73> CODE_MENU_DEFAULTS{{
     {0x804E19FC, 0},
     {0x804E1A34, 0x3F000000},
     {0x804E1A6C, 0},
-    // Random Angle, War and Big Head modes
     {0x804E1B8C, 0},
     {0x804E1BEC, 0},
     {0x804E1C18, 0},
-    // Gameplay constants (floats): hitstun, hitlag, hitlag max, electric hitlag, SDI, ASDI,
-    // walljump, shield size min, shield damage, base shield damage, shield size, shield tilt, wall
-    // bounce, knockback decay
     {0x804E1E28, 0x3ECCCCCD},
     {0x804E1E64, 0x3EAAAAAB},
     {0x804E1EA0, 0x41F00000},
@@ -337,14 +299,12 @@ constexpr std::array<CodeMenuWord, 73> CODE_MENU_DEFAULTS{{
     {0x804E20D0, 0x3F000000},
     {0x804E2110, 0x3F4CCCCD},
     {0x804E2158, 0x3D50E560},
-    // Staling, item grab toggle, jumpsquat mode, value, minimum and maximum
     {0x804E2194, 0},
     {0x804E21E0, 0},
     {0x804E2228, 0},
     {0x804E22D8, 3},
     {0x804E2318, 1},
     {0x804E2360, 0xE10},
-    // Flight Mode, its speeds and accelerations
     {0x804E23BC, 0},
     {0x804E23EC, 0x40000000},
     {0x804E2428, 0x40000000},
@@ -355,17 +315,13 @@ static_assert(std::ranges::all_of(CODE_MENU_DEFAULTS, [](const CodeMenuWord& wor
   return word.address >= CODE_MENU && word.address % 4 == 0 && word.address + 4 <= CODE_MENU_END;
 }));
 
-// Project+'s Code Menu under a locking header: off, closed, every value at its default.
 void ForceCodeMenu(Writer& w)
 {
   if (!CodeMenuPresent(w.m))
     return;
-  // Open: close it as its own Start does, giving the game its pause word back.
   if (w.m.Read32(CODE_MENU_STATE) == CODE_MENU_OPEN)
     w.U32(CODE_MENU_GAME_PAUSE, w.m.Read32(CODE_MENU_SAVED_PAUSE));
-  // Every other state too: 1 opens without the activation check, 3 swaps characters.
   w.U32(CODE_MENU_STATE, 0);
-  // One read per word: CodeMenuPresent checked the range is mapped.
   for (const CodeMenuWord& word : CODE_MENU_DEFAULTS)
   {
     if (w.m.Read32(word.address) != word.value)
@@ -373,11 +329,6 @@ void ForceCodeMenu(Writer& w)
   }
 }
 
-// gmSelCharData, the character select's record: each port's slot at +0x0A + 4 x port, its
-// character at OnlineSeats::RECORD_PLAYERS + port x RECORD_PLAYER_SIZE. Project+'s character select
-// writes Giga Bowser or Wario-Man there as it ends, when the player holds shield (L; R is a costume
-// button) on a Bowser or Wario pick. On the way to the fight the record's characters are copied
-// into the init data again.
 constexpr u32 RECORD_SLOTS = 0x0A;
 constexpr u32 RECORD_SLOT_SIZE = 4;
 constexpr u8 SLOT_BOWSER = 0x0C;
@@ -385,14 +336,11 @@ constexpr u8 SLOT_WARIO = 0x15;
 constexpr u8 SLOT_GIGA_BOWSER = 0x38;
 constexpr u8 SLOT_WARIO_MAN = 0x36;
 
-// `v` with `from` replaced by `to`.
 u8 Swap(u8 v, u8 from, u8 to)
 {
   return v == from ? to : v;
 }
 
-// Project+'s banned fighters become Bowser and Wario, from the character select until the fight
-// loads: in the match's init data and in the record the init data is copied from.
 void ForceLegalFighters(Writer& w, const std::string& scene)
 {
   if (scene != SCENE_CSS && scene != SCENE_SSS && scene != SCENE_BETWEEN)
@@ -425,8 +373,6 @@ void ForceLegalFighters(Writer& w, const std::string& scene)
   }
 }
 
-// Ranked character select no-ready timer (MatchBlock CSS_TIMER, CSS_NO_SHOW). Elapsed time is the
-// frame number minus CSS_TIMER_START, never an incremented counter, so rollback re-runs agree.
 void ReadyTimer(Writer& w, const Header& h, const Ranked::Ruleset& rules, const std::string& scene,
                 int frame)
 {
@@ -445,7 +391,6 @@ void ReadyTimer(Writer& w, const Header& h, const Ranked::Ruleset& rules, const 
   }
   if (h.mode != Mode::Ranked || (w.m.Read8(B::FOUGHT) & 1) || w.m.Read8(B::CSS_NO_SHOW) != 0)
     return;
-  // Ports 1 and 2, the queue match's players, must both be plugged in.
   if ((w.m.Read8(B::PLUGGED) & 3) != 3)
   {
     stop();
@@ -467,7 +412,6 @@ void ReadyTimer(Writer& w, const Header& h, const Ranked::Ruleset& rules, const 
   }
   const u32 now = static_cast<u32>(frame) + 1;
   u32 start = w.m.Read32(B::CSS_TIMER_START);
-  // Not running, or a start from another frame numbering (in the future or far past): restart.
   if (start == 0 || start > now || now - start > ready_frames * 2)
   {
     start = now;
@@ -483,14 +427,12 @@ void ReadyTimer(Writer& w, const Header& h, const Ranked::Ruleset& rules, const 
   w.U16(B::CSS_TIMER, static_cast<u16>(t));
 }
 
-// ---- Session state (CPU thread) ----
 std::atomic<Mode> s_wanted{Mode::None};
 std::atomic<u8> s_wanted_flags{0};
 std::atomic<u8> s_wanted_teams{0};
 std::atomic<u64> s_generation{0};
 std::atomic<bool> s_in_place{true};
 std::atomic<bool> s_header_free{false};
-// The joiner's room, checked against the host's header (ExpectHeader).
 struct Expectation
 {
   Mode mode = Mode::None;
@@ -499,12 +441,10 @@ struct Expectation
   int known_games = -1;
 };
 std::mutex s_mutex;
-// Room code for the wanted header. Guarded by s_mutex.
 std::string s_wanted_code;
 std::optional<Expectation> s_expect;
 std::optional<std::string> s_mismatch;
 
-// No-show byte per frame until that frame is confirmed (like Results.h's tracker).
 struct NoShowTracker
 {
   std::map<int, u8> pending;
@@ -518,7 +458,7 @@ NoShowTracker& NoShows()
   static NoShowTracker t;
   return t;
 }
-}  // namespace
+}
 
 Header ReadHeader(const GuestMemory& m)
 {
@@ -548,7 +488,6 @@ Header HeaderFor(Mode mode, Ruleset ruleset, std::string_view code, u8 flags)
   h.mode = mode;
   h.ruleset = ruleset;
   h.flags = flags & (B::FLAG_SOLO | B::FLAG_QUEUE2);
-  // The queue's own character select has no room, so no coin and no hash.
   if ((h.flags & B::FLAG_SOLO) == 0)
   {
     h.coin = MatchBlock::CoinFromCode(code);
@@ -566,8 +505,6 @@ bool HeaderIs(const Header& in_memory, const Header& wanted)
 
 Ruleset ProfileRuleset()
 {
-  // The module's answer (BrawlGame.h): Brawl rev 2 plays Brawl's, Project+'s launcher on it
-  // Project+'s, while their addresses hold (in mod mode, the builtin's guard words).
   return Builtin().ProfileRuleset();
 }
 
@@ -585,8 +522,6 @@ bool CodeMenuPresent(const GuestMemory& m)
 {
   if (!m.Valid(CODE_MENU) || !m.Valid(CODE_MENU_END - 1) || !Pointer(m, CODE_MENU_GAME_PAUSE))
     return false;
-  // The page shown, within the file; the root page, as the menu itself checks; and two lines'
-  // sizes and pointers (Code Menu Activation, Flight Mode).
   const u32 page = m.Read32(CODE_MENU);
   return page >= CODE_MENU_ROOT && page < CODE_MENU_END &&
          m.Read32(CODE_MENU + 4) == CODE_MENU_ROOT && m.Read16(0x804E0C30) == 0x0058 &&
@@ -596,7 +531,6 @@ bool CodeMenuPresent(const GuestMemory& m)
 
 namespace
 {
-// A header, for the log.
 std::string Describe(const Header& h)
 {
   if (!h.present)
@@ -605,7 +539,6 @@ std::string Describe(const Header& h)
                      static_cast<int>(h.ruleset), h.flags, h.coin, h.room);
 }
 
-// Resets every track's set state after the header: stage flow, ranked set and character order.
 void FreshSet(Writer& w, Mode mode, Ruleset ruleset, u8 coin)
 {
   w.Zero(B::SET, B::SET_SIZE);
@@ -619,7 +552,7 @@ void FreshSet(Writer& w, Mode mode, Ruleset ruleset, u8 coin)
       w.m, MatchBlock::State::Fresh(static_cast<u8>(mode), static_cast<u8>(ruleset), coin));
   w.changed += SetBlock::WriteSet(w.m, SetBlock::SetState{});
 }
-}  // namespace
+}
 
 int WriteHeader(GuestMemory& m, Mode mode, Ruleset ruleset, u8 coin, u32 room, u8 queue_flags)
 {
@@ -631,7 +564,6 @@ int WriteHeader(GuestMemory& m, Mode mode, Ruleset ruleset, u8 coin, u32 room, u
   const Header now = ReadHeader(m);
   if (mode == Mode::None || ruleset == Ruleset::None)
   {
-    // No Orca header (still the game's unused code, or zeros): leave it alone.
     if (!now.present)
       return 0;
     const u8 flags = m.Read8(B::SAVED_FLAGS);
@@ -653,13 +585,10 @@ int WriteHeader(GuestMemory& m, Mode mode, Ruleset ruleset, u8 coin, u32 room, u
       for (u32 i = 0; i < B::SAVED_RSS_SIZE; ++i)
         w.U8(PPLUS_RSS + i, m.Read8(B::SAVED_RSS + i));
     }
-    // Project+'s Code Menu opens again as the player had it. Its values stay at their defaults.
     if ((flags & 4) && CodeMenuPresent(m) && m.Read8(B::SAVED_CODE_MENU) <= CODE_MENU_OFF)
       w.U32(CODE_MENU_ACTIVATION, m.Read8(B::SAVED_CODE_MENU));
     w.Zero(B::BASE, B::SIZE);
-    // Also clear the character order and ranked set beyond the first 512 bytes.
     w.Zero(B::CHAR_ORDER, B::FULL_SIZE - (B::CHAR_ORDER - B::BASE));
-    // Restore the original first word, which marks the block as free for a new header.
     w.U32(B::MAGIC, FreeSpace::kMatchBlockOriginalWord);
     return w.changed;
   }
@@ -670,13 +599,10 @@ int WriteHeader(GuestMemory& m, Mode mode, Ruleset ruleset, u8 coin, u32 room, u
   {
     return 0;
   }
-  // Write only over sora_scene's unused code (checked by its first word) or an existing header.
-  // Before the module loads, this memory belongs to something else.
   if (!now.present && m.Read32(B::MAGIC) != FreeSpace::kMatchBlockOriginalWord)
     return 0;
   if (!now.present)
   {
-    // Fresh block: zero it, then save the player's own rules for restoring later.
     w.Zero(B::BASE, B::FULL_SIZE);
     u8 flags = 0;
     if (const u32 rule = GlobalField(m, GLOBAL_SET_RULE); rule && m.Valid(rule + RULE_PAUSE))
@@ -707,7 +633,6 @@ int WriteHeader(GuestMemory& m, Mode mode, Ruleset ruleset, u8 coin, u32 room, u
     }
     w.U8(B::SAVED_FLAGS, flags);
   }
-  // Write the magic last so a reader never sees a half-written header. Then start a fresh set.
   w.U8(B::VERSION, B::VERSION_VALUE);
   w.U8(B::MODE, static_cast<u8>(mode));
   w.U8(B::RULESET, static_cast<u8>(ruleset));
@@ -724,8 +649,6 @@ int ApplyLocks(GuestMemory& m, int frame)
   const Header h = ReadHeader(m);
   if (!h.Locked())
     return 0;
-  // A locked header names a builtin ruleset (ReadHeader); none only in a build whose ruleset files
-  // don't load (OrcaRulesets.BuiltinsAreTheOldTables), which then applies no locks.
   const Ranked::Ruleset* rules = h.ruleset == Ruleset::Brawl ?
                                      &Rulesets::RulesFor(h.mode == Mode::Casual) :
                                      Rulesets::ByBlock(static_cast<u8>(h.ruleset));
@@ -751,7 +674,6 @@ Rollback::InputGate::Masks GateMasks(const GuestMemory& m)
   if (!h.Locked())
     return masks;
   const std::string scene = ReadSceneName(m);
-  // Project+'s Code Menu and debug codes open on L+R+Down: Down is dropped while both are held.
   if (h.ruleset == Ruleset::PPlus)
   {
     for (Rollback::InputGate::Mask& mask : masks)
@@ -760,21 +682,14 @@ Rollback::InputGate::Masks GateMasks(const GuestMemory& m)
   u16 buttons = 0;
   if (scene == SCENE_CSS)
   {
-    // Project+'s Code Menu opens from the character select with the D-pad.
     if (h.ruleset == Ruleset::PPlus)
       buttons |= PAD_BUTTON_UP | PAD_BUTTON_DOWN | PAD_BUTTON_LEFT | PAD_BUTTON_RIGHT;
-    // Brawl's bottom row sits lower than Project+'s.
     const float a_bottom = h.ruleset == Ruleset::Brawl ? CSS_A_BOTTOM_BRAWL : CSS_A_BOTTOM;
     for (int port = 0; port < Rollback::InputGate::PORTS; ++port)
     {
       masks[port].buttons = buttons;
-      // B only to pick the token back up; held B with the token in hand backs out to the menus.
-      // On the queue's own character select B may back out (Queue.h handles a ready player).
       if (!h.Solo() && !CssBMayUnpick(m, port))
         masks[port].buttons |= PAD_BUTTON_B;
-      // A only in the grid. On the queue's own character select, port 1 may also press BACK
-      // (CssBackTakesA) and, while not searching, its own name button and list (CssNameTakesA),
-      // each with the stick centred while A is down.
       const CssHand hand = ReadCssHand(m, port);
       const bool own_select = h.Solo() && port == 0;
       const bool list = own_select && ReadCssNameList(m, port);
@@ -798,21 +713,16 @@ Rollback::InputGate::Masks GateMasks(const GuestMemory& m)
   }
   else if (scene == SCENE_SSS)
   {
-    // No way back to the character select once the stage is being picked.
     buttons = PAD_BUTTON_B;
-    // Project+: L/R alternate stages, Z hazards, L+R+A back to the character select.
     if (h.ruleset == Ruleset::PPlus)
       buttons |= PAD_TRIGGER_L | PAD_TRIGGER_R | PAD_TRIGGER_Z;
   }
   else if (scene == SCENE_FIGHT)
   {
-    // No pause. Project+ pauses on a held Start regardless of the rule.
     buttons = PAD_BUTTON_START;
   }
   else if (scene == SCENE_RESULTS && h.mode == Mode::Ranked)
   {
-    // Ranked: after the set, holding B leaves the room (Rollback/OnlineMatch.cpp SetOverLeave).
-    // Whatever B does on this screen natively, the hold must not move the other player's game.
     buttons = PAD_BUTTON_B;
   }
   for (Rollback::InputGate::Mask& mask : masks)
@@ -823,7 +733,6 @@ Rollback::InputGate::Masks GateMasks(const GuestMemory& m)
 Rollback::InputGate::Masks SessionMasks(const GuestMemory& m)
 {
   Rollback::InputGate::Masks masks{};
-  // Z on the results screen saves a replay, which a session cannot do (see OnlineRules.h).
   if (ReadSceneName(m) == SCENE_RESULTS)
   {
     for (Rollback::InputGate::Mask& mask : masks)
@@ -885,7 +794,6 @@ bool CssHandMayPressA(const CssHand& hand, float bottom)
   case CSS_HAND_TAKING:
   case CSS_HAND_GRID_HOLDING:
   case CSS_HAND_PLACING:
-    // NaN fails both comparisons, so no A.
     return hand.y < CSS_A_TOP && hand.y > bottom;
   default:
     return false;
@@ -917,7 +825,6 @@ CssToken ReadCssToken(const GuestMemory& m, int port)
 
 bool CssBMayUnpick(const GuestMemory& m, int port)
 {
-  // The latch holds only ports 1 and 2; nobody else plays a queue match.
   if (port < 0 || port > 1 || !m.Valid(Queue::RAW + 2 * static_cast<u32>(port) + 1))
     return false;
   return CssBUnpicks(ReadCssToken(m, port), RawHeld(m, port, PAD_BUTTON_B));
@@ -930,7 +837,6 @@ u8 RoomTeamsMask(bool doubles, const std::map<int, int>& teams)
   u8 mask = 0;
   for (int port = 0; port < 4; ++port)
   {
-    // The room's teams are by seat; the game's ports follow Subspace's seat-to-port table.
     const auto it = teams.find(Orca::Online::PortSeat(port));
     if (it == teams.end() || (it->second != 0 && it->second != 1))
       return 0;
@@ -988,7 +894,6 @@ int ApplyRoomTeams(GuestMemory& m, bool* began)
     if (!Pointer(m, task) || !m.Valid(task + TASK_TEAM_BATTLE) ||
         m.Read8(task + TASK_TEAM_BATTLE) != 1)
       return w.changed;
-    // Validate all four areas before changing any native colour.
     std::array<u32, 4> areas{};
     for (u32 port = 0; port < 4; ++port)
     {
@@ -1026,7 +931,6 @@ bool SetWanted(Mode mode, u8 flags, std::string_view code, u8 teams)
     teams = 0;
   if (mode == Mode::None)
     flags = 0;
-  // Only a room's header uses a code.
   if (mode == Mode::None || (flags & B::FLAG_SOLO) != 0)
     code = {};
   bool changed = s_wanted_flags.exchange(flags) != flags;
@@ -1093,7 +997,6 @@ bool SetFitsJoin(const SetBlock::SetState& set, int known_games)
     return false;
   if (known_games > 0)
     return true;
-  // None known: the set hasn't begun.
   return set.games == 0 && set.wins == std::array<u8, 2>{0, 0} && set.done == 0 &&
          set.winner == SetBlock::NO_PORT && set.last_winner == SetBlock::NO_PORT && !set.tiebreak &&
          set.tb_streak == 0 && std::ranges::all_of(set.records, [](const SetBlock::GameRecord& r) {
@@ -1103,7 +1006,6 @@ bool SetFitsJoin(const SetBlock::SetState& set, int known_games)
 
 bool HeaderFitsRoom(const Header& h, Mode mode, Ruleset ruleset, std::string_view code, u8 flags)
 {
-  // A room's header never has FLAG_SOLO.
   return HeaderIs(h, HeaderFor(mode, ruleset, code, static_cast<u8>(flags & ~B::FLAG_SOLO)));
 }
 
@@ -1191,7 +1093,6 @@ void OnFrame(const Core::CPUThreadGuard& guard, int frame, bool resimulating, bo
   const Ruleset ruleset = ProfileRuleset();
   if (ruleset == Ruleset::None)
   {
-    // No ruleset means no header, so keyframes never wait.
     if (!resimulating)
       s_in_place = true;
     return;
@@ -1199,7 +1100,6 @@ void OnFrame(const Core::CPUThreadGuard& guard, int frame, bool resimulating, bo
   GuardMemory m(guard);
   if (Orca::Net::ReplayScope::Playing())
   {
-    // Never another game's ruleset (Net::HeadersFitRuleset refuses such a replay first).
     if (const auto& header = Orca::Net::ReplayScope::Current()->header;
         header && (header->ruleset == 0 || static_cast<Ruleset>(header->ruleset) == ruleset))
     {
@@ -1209,7 +1109,6 @@ void OnFrame(const Core::CPUThreadGuard& guard, int frame, bool resimulating, bo
     if (const auto teams = Orca::Net::ReplayScope::Current()->room_teams)
       WriteRoomTeams(m, *teams);
   }
-  // The room code (made by the server) decides game 1's first striker, so neither player chooses.
   Header wanted;
   {
     std::string code;
@@ -1219,14 +1118,10 @@ void OnFrame(const Core::CPUThreadGuard& guard, int frame, bool resimulating, bo
     }
     wanted = HeaderFor(s_wanted, ruleset, code, s_wanted_flags);
   }
-  // The test override's header depends only on the override and the synced ports, so it is safe to
-  // write on re-runs too. A real host's header changes only on frames nobody else runs.
   const std::optional<TestQueue> test = TestQueueSpec();
   if (test)
   {
     u8 flags = test->flags;
-    // ORCA_TEST_QUEUE=<mode>:solo with ORCA_TEST_QUEUE_PICK: port 2 plugging in stands for the
-    // found match, so the header switches from solo to the room's, as when the app starts hosting.
     if ((flags & B::FLAG_SOLO) && (plugged & 2) && !Orca::TestQueuePickSpec().empty())
       flags = B::FLAG_QUEUE2;
     wanted = HeaderFor(test->mode, ruleset, {}, flags);
@@ -1252,7 +1147,6 @@ void OnFrame(const Core::CPUThreadGuard& guard, int frame, bool resimulating, bo
     }
     WriteRoomTeams(m, s_wanted_teams);
   }
-  // Whether a keyframe made this frame would carry the wanted header. This hook is the only writer.
   if (!resimulating)
     s_in_place = (test.has_value() || HeaderIs(ReadHeader(m), wanted)) &&
                  ReadRoomTeams(m) == s_wanted_teams;
@@ -1272,13 +1166,11 @@ void OnFrame(const Core::CPUThreadGuard& guard, int frame, bool resimulating, bo
     NOTICE_LOG_FMT(ROLLBACK, "Orca: doubles teams pinned from the room: ports {} vs {}",
                    ports[0], ports[1]);
   }
-  // Synced ports in play, for the ready timer.
   if (ReadHeader(m).Locked() && m.Read8(B::PLUGGED) != plugged)
     m.Write8(B::PLUGGED, plugged);
   const int locked = ApplyLocks(m, frame);
   if (locked > 0 && !resimulating)
     DEBUG_LOG_FMT(ROLLBACK, "Online rules: {} bytes forced at frame {}", locked, frame);
-  // Joiner's header check, once its keyframe has loaded.
   if (!resimulating)
   {
     std::lock_guard lock(s_mutex);
@@ -1287,12 +1179,10 @@ void OnFrame(const Core::CPUThreadGuard& guard, int frame, bool resimulating, bo
       const Header h = ReadHeader(m);
       const Expectation expect = std::move(*s_expect);
       s_expect.reset();
-      // With ORCA_TEST_QUEUE on both sides, the host's header comes from the override.
       const bool ok =
           test ? h.Locked() && h.mode == test->mode && h.ruleset == ruleset :
                  HeaderFitsRoom(h, expect.mode, ruleset, expect.code, expect.flags) &&
                      ReadRoomTeams(m) == s_wanted_teams;
-      // A ranked room's set as the host's game holds it: never games this player didn't see.
       const SetBlock::SetState set = SetBlock::ReadSet(m);
       const bool set_ok =
           test || expect.mode != Mode::Ranked || SetFitsJoin(set, expect.known_games);
@@ -1322,7 +1212,6 @@ void OnFrame(const Core::CPUThreadGuard& guard, int frame, bool resimulating, bo
       }
     }
   }
-  // Record this frame's no-show byte until it is confirmed. A re-run replaces the first run's.
   NoShowTracker& t = NoShows();
   const u64 resyncs = Orca::Events::Resyncs();
   if (!t.started || t.resyncs != resyncs)
@@ -1347,4 +1236,4 @@ void OnFrame(const Core::CPUThreadGuard& guard, int frame, bool resimulating, bo
   }
 }
 
-}  // namespace Orca::UX::Rules
+}

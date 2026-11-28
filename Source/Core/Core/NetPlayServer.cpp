@@ -704,8 +704,6 @@ void NetPlayServer::AdjustPadBufferSize(unsigned int size)
 {
   std::lock_guard lkg(m_crit.game);
 
-  // Subspace: 1 to 12 (an older saved Buffer outside that included); it is the rollback input
-  // delay, and 12 is the rollback session's max_delay.
   m_target_buffer_size = std::clamp(size, 1u, 12u);
 
   // not needed on clients with host input authority
@@ -745,6 +743,13 @@ void NetPlayServer::SendAsync(sf::Packet&& packet, const PlayerId pid, const u8 
     m_async_queue.Push(AsyncQueueEntry{std::move(packet), pid, TargetMode::Only, channel_id});
   }
   Common::ENet::WakeupThread(m_server);
+}
+
+void NetPlayServer::SendOrcaDelay(u32 frames, s32 at)
+{
+  sf::Packet packet;
+  packet << MessageID::OrcaRoom << Orca::Local::Op::Delay << frames << at;
+  SendAsyncToClients(std::move(packet));
 }
 
 void NetPlayServer::SendAsyncToClients(sf::Packet&& packet, const PlayerId skip_pid,

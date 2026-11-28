@@ -47,15 +47,10 @@ namespace VideoCommon
 {
 namespace
 {
-// Orca: default limit on how long a session's boot waits for shaders before the first frame.
-// Older desktop apps kill a boot that hasn't drawn within 120 s; newer ones set
-// ORCA_SHADER_WAIT_S instead. Anything left compiles in the background, with draws falling back
-// to ubershaders or being skipped. See ORCA.md, "Match start".
 constexpr std::chrono::seconds BOOT_WAIT{60};
 
 void DrawCompileProgress(size_t completed, size_t total)
 {
-  // Orca: headless runs have no ImGui context, and ImGui asserts without one.
   if (!ImGui::GetCurrentContext())
     return;
 
@@ -125,7 +120,6 @@ void ShaderCache::InitializeShaderCache()
   CompileMissingPipelines();
   if (g_ActiveConfig.bWaitForShadersBeforeStarting)
   {
-    // Orca: in a session, the boot waits only up to a time limit.
     if (Orca::SessionActive())
       WaitForBootCompile();
     else
@@ -140,7 +134,6 @@ void ShaderCache::Reload()
 {
   WaitForAsyncCompiler();
   ClosePipelineUIDCache();
-  // Orca: recompile the EFB copy pipelines in use now rather than at their next copy.
   std::vector<TextureConversionShaderGen::TCShaderUid> efb_copy_uids;
   for (const auto& [uid, pipeline] : m_efb_copy_to_vram_pipelines)
     efb_copy_uids.push_back(uid);
@@ -607,8 +600,6 @@ void ShaderCache::ClearCaches()
 
 void ShaderCache::CompileMissingPipelines()
 {
-  // Orca: in a session, compile the UID cache's pipelines before the ubershaders. They are what
-  // the match draws and are much faster to compile, so a boot that stops waiting has them ready.
   const u32 cache_priority = Orca::SessionActive() ? COMPILE_PRIORITY_SESSION_SHADERCACHE_PIPELINE :
                                                      COMPILE_PRIORITY_SHADERCACHE_PIPELINE;
   // Queue all uids with a null pipeline for compilation.

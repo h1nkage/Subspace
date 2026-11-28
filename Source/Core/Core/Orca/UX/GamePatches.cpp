@@ -62,7 +62,6 @@ std::vector<std::string_view> Words(std::string_view line)
   return words;
 }
 
-// A word-aligned address in MEM1 or MEM2.
 bool InRam(std::optional<u32> address)
 {
   return address && (*address % 4 == 0) &&
@@ -70,8 +69,6 @@ bool InRam(std::optional<u32> address)
           (*address >= 0x90000000 && *address < 0x94000000));
 }
 
-// Parses `when <address> [& <mask>] ==|!= <value>`. Rejects a zero mask, or a value with bits
-// outside the mask.
 std::optional<PatchCondition> ParseCondition(std::span<const std::string_view> words)
 {
   if (words.size() != 4 && words.size() != 6)
@@ -100,7 +97,6 @@ std::optional<PatchCondition> ParseCondition(std::span<const std::string_view> w
   return c;
 }
 
-// One past the last line of the group starting at `start`.
 size_t GroupEnd(std::span<const GamePatch> patches, size_t start)
 {
   size_t end = start + 1;
@@ -108,20 +104,17 @@ size_t GroupEnd(std::span<const GamePatch> patches, size_t start)
     ++end;
   return end;
 }
-}  // namespace
+}
 
 std::optional<std::vector<GamePatch>> ParseGamePatches(std::string_view text, std::string* error)
 {
   std::vector<GamePatch> patches;
-  std::vector<int> lines;  // each patch's line number
+  std::vector<int> lines;
   std::set<u32> seen;
-  // The open `when` block.
   std::vector<PatchCondition> when;
   int when_line = 0;
   bool block_has_lines = false;
-  // Set after `when` or `end`: the next line always starts a new group.
   bool group_break = false;
-  // Checked at the end, once every written address is known.
   std::vector<std::pair<u32, int>> condition_lines;
   const auto fail = [error](std::string message) {
     if (error)
@@ -129,7 +122,7 @@ std::optional<std::vector<GamePatch>> ParseGamePatches(std::string_view text, st
     return std::nullopt;
   };
   int number = 0;
-  if (text.starts_with("\xEF\xBB\xBF"))  // UTF-8 BOM
+  if (text.starts_with("\xEF\xBB\xBF"))
     text.remove_prefix(3);
   while (!text.empty())
   {
@@ -178,7 +171,6 @@ std::optional<std::vector<GamePatch>> ParseGamePatches(std::string_view text, st
     const auto address = words.size() == 3 ? Hex32(words[0]) : std::nullopt;
     const auto value = words.size() == 3 ? Hex32(words[2]) : std::nullopt;
     const auto original = words.size() == 3 && words[1] != "*" ? Hex32(words[1]) : std::nullopt;
-    // Address must be word-aligned RAM; original must be `*` or hex.
     if (!InRam(address) || !value || (words[1] != "*" && !original))
       return fail(fmt::format("line {}: expected `<address> <original|*> <value>` in hex", number));
     if (!seen.insert(*address).second)
@@ -202,8 +194,6 @@ std::optional<std::vector<GamePatch>> ParseGamePatches(std::string_view text, st
                               address));
     }
   }
-  // A toggled group matches in two states, so require at least two words (to avoid matching
-  // unrelated code by chance) and at least one that changes.
   for (size_t start = 0; start < patches.size();)
   {
     const size_t end = GroupEnd(patches, start);
@@ -231,7 +221,7 @@ bool GroupApplies(std::span<const GamePatch> group, std::span<const u32> now)
 {
   if (group.empty() || group.size() != now.size())
     return false;
-  if (!group[0].original)  // a `*` line
+  if (!group[0].original)
     return now[0] != group[0].value;
   bool changes = false;
   for (size_t i = 0; i < group.size(); ++i)
@@ -262,13 +252,12 @@ Toggle ToggleGroup(std::span<const GamePatch> group, std::span<const u32> now, b
   bool originals = true, values = true, changes = false;
   for (size_t i = 0; i < group.size(); ++i)
   {
-    if (!group[i].original)  // can't happen in a parsed file
+    if (!group[i].original)
       return Toggle::Leave;
     originals &= now[i] == *group[i].original;
     values &= now[i] == group[i].value;
     changes |= group[i].value != *group[i].original;
   }
-  // A group of guards only never writes.
   if (!changes)
     return Toggle::Leave;
   if (holds && originals)
@@ -325,17 +314,13 @@ PatchPlan PlanGamePatches(std::span<const GamePatch> patches, const GuestMemory&
 
 namespace
 {
-// Reloaded when the profile changes. CPU thread only.
 const std::vector<GamePatch>& ActivePatches()
 {
   static std::string s_for;
   static std::vector<GamePatch> s_patches;
-  // e.g. RSBE01.patches for a disc, PPLUS32.patches for a launcher.
   const Orca::Profile* profile = Orca::ActiveProfile();
-  // Mod mode: the bundle's orca/patches/*.patches, in name order (keyed by its tree).
   if (profile && profile->mod)
   {
-    // Compared in place: this runs every frame, re-runs too.
     const std::string& tree = profile->mod->tree.hash;
     if (s_for.size() == 4 + tree.size() && s_for.starts_with("mod:") &&
         std::string_view(s_for).substr(4) == tree)
@@ -344,8 +329,6 @@ const std::vector<GamePatch>& ActivePatches()
     }
     s_for = "mod:" + tree;
     s_patches.clear();
-    // A flat bundle: its patches files as they were verified (Core/Orca/Bundle.cpp), in mod.json's
-    // order.
     if (profile->mod->flat)
     {
       for (const auto& [name, text] : profile->mod->flat_patches)
@@ -397,7 +380,7 @@ const std::vector<GamePatch>& ActivePatches()
   {
     s_for = game;
     s_patches.clear();
-    const std::string path = File::GetSysDirectory() + "Orca/" + game + ".patches";
+    const std::string path = File::GetSysDirectory() + "Subspace/" + game + ".patches";
     std::string text;
     if (!game.empty() && File::ReadFileToString(path, text))
     {
@@ -425,7 +408,6 @@ void Apply(const Core::CPUThreadGuard& guard, bool toggled)
     return;
   GuardMemory memory(guard);
   const PatchPlan plan = PlanGamePatches(patches, memory, toggled);
-  // Tools/orca/online-menu.py parses "patch group <address> " lines; keep the format.
   for (const PatchPlan::Group& g : plan.landed)
     INFO_LOG_FMT(ROLLBACK, "Orca: patch group {:08x} ({} words) landed", g.address, g.words);
   for (const PatchPlan::Group& g : plan.on)
@@ -435,12 +417,12 @@ void Apply(const Core::CPUThreadGuard& guard, bool toggled)
   for (const PatchWrite& w : plan.writes)
   {
     if (w.code)
-      ApplyMemoryPatch<u32>(guard, w.value, w.address);  // invalidates the JIT's copy
+      ApplyMemoryPatch<u32>(guard, w.value, w.address);
     else
       PowerPC::MMU::HostWrite<u32>(guard, w.value, w.address);
   }
 }
-}  // namespace
+}
 
 void ApplyGamePatches(const Core::CPUThreadGuard& guard)
 {
@@ -451,4 +433,4 @@ void ApplyToggledGamePatches(const Core::CPUThreadGuard& guard)
 {
   Apply(guard, true);
 }
-}  // namespace Orca::UX
+}

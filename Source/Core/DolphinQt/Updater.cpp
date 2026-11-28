@@ -11,11 +11,11 @@
 #include <QDialogButtonBox>
 #include <QLabel>
 #include <QPushButton>
-#include <QTextBrowser>
 #include <QVBoxLayout>
 
 #include "Common/Version.h"
 
+#include "DolphinQt/QtUtils/ModalMessageBox.h"
 #include "DolphinQt/QtUtils/RunOnObject.h"
 #include "DolphinQt/Settings.h"
 
@@ -40,15 +40,23 @@ void Updater::CheckForUpdate()
                                     AutoUpdateChecker::CheckType::Manual);
 }
 
-void Updater::OnUpdateAvailable(const NewVersionInformation& info)
+void Updater::OnUpdateAvailable(const NewVersionInformation& info, CheckType check_type)
 {
-  if (std::getenv("DOLPHIN_UPDATE_SERVER_URL"))
+  const bool in_netplay = RunOnObject(m_parent, [] {
+                            return Settings::Instance().GetNetPlayClient() != nullptr ||
+                                   Settings::Instance().GetNetPlayServer() != nullptr;
+                          }).value_or(true);
+  if (in_netplay)
   {
-    TriggerUpdate(info, AutoUpdateChecker::RestartMode::RESTART_AFTER_UPDATE);
-    RunOnObject(m_parent, [this] {
-      m_parent->close();
-      return 0;
-    });
+    if (check_type == CheckType::Manual)
+    {
+      RunOnObject(m_parent, [this] {
+        ModalMessageBox::information(m_parent, tr("Update available"),
+                                     tr("A Subspace update is available. Leave NetPlay, then use "
+                                        "Help > Check for Updates to install it."));
+        return 0;
+      });
+    }
     return;
   }
 
@@ -60,27 +68,20 @@ void Updater::OnUpdateAvailable(const NewVersionInformation& info)
     dialog->setWindowTitle(tr("Update available"));
 
     auto* label = new QLabel(
-        tr("<h2>A new version of Dolphin is available!</h2>Dolphin %1 is available for "
-           "download. "
-           "You are running %2.<br> Would you like to update?<br><h4>Release Notes:</h4>")
+        tr("<h2>A Subspace update is available!</h2>%1 is available for download. "
+           "You are running %2.<br> Would you like to update?")
             .arg(QString::fromStdString(info.new_shortrev))
             .arg(QString::fromStdString(Common::GetScmDescStr())));
     label->setTextFormat(Qt::RichText);
 
-    auto* changelog = new QTextBrowser;
-
-    changelog->setHtml(QString::fromStdString(info.changelog_html));
-    changelog->setOpenExternalLinks(true);
-    changelog->setMinimumWidth(400);
-
-    auto* update_later_check = new QCheckBox(tr("Update after closing Dolphin"));
+    auto* update_later_check = new QCheckBox(tr("Update after closing Subspace"));
 
     connect(update_later_check, &QCheckBox::toggled, [&](bool checked) { later = checked; });
 
     auto* buttons = new QDialogButtonBox;
 
     auto* never_btn =
-        buttons->addButton(tr("Never Auto-Update"), QDialogButtonBox::DestructiveRole);
+        buttons->addButton(tr("Don't Check on Startup"), QDialogButtonBox::DestructiveRole);
     buttons->addButton(tr("Remind Me Later"), QDialogButtonBox::RejectRole);
     buttons->addButton(tr("Install Update"), QDialogButtonBox::AcceptRole);
 
@@ -88,7 +89,6 @@ void Updater::OnUpdateAvailable(const NewVersionInformation& info)
     dialog->setLayout(layout);
 
     layout->addWidget(label);
-    layout->addWidget(changelog);
     layout->addWidget(update_later_check);
     layout->addWidget(buttons);
 

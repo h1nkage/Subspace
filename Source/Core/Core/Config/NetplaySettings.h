@@ -31,6 +31,14 @@ extern const Info<bool> NETPLAY_USE_UPNP;
 
 extern const Info<bool> NETPLAY_ENABLE_QOS;
 
+extern const Info<int> NETPLAY_SUBSPACE_PING_DISPLAY;
+extern const Info<int> NETPLAY_SUBSPACE_HUD_NAMES;
+extern const Info<bool> NETPLAY_SUBSPACE_CORNER_SPRITE;
+extern const Info<bool> NETPLAY_SUBSPACE_CORNER_FPS;
+extern const Info<bool> NETPLAY_SUBSPACE_FRAME_MS;
+extern const Info<bool> NETPLAY_SUBSPACE_CORNER_PING;
+extern const Info<bool> NETPLAY_SUBSPACE_DIRECT_LINKS;
+
 extern const Info<bool> NETPLAY_USE_INDEX;
 extern const Info<std::string> NETPLAY_INDEX_REGION;
 extern const Info<std::string> NETPLAY_INDEX_NAME;

@@ -44,7 +44,7 @@ private:
   // Widgets
   QVBoxLayout* m_main_layout;
   ToolTipComboBox* m_combobox_speedlimit;
-  ToolTipComboBox* m_combobox_update_track;
+  ToolTipCheckBox* m_checkbox_update_on_startup;
   ToolTipComboBox* m_combobox_fallback_region;
   ConfigBool* m_checkbox_dualcore;
   ConfigBool* m_checkbox_cheats;

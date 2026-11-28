@@ -10,16 +10,13 @@ namespace Core
 class CPUThreadGuard;
 }
 
-// The emulated memory every game module reads and writes (engine side of the Orca split, S2).
-// Until S2 gives the module API its own namespace, it stays in Orca::UX, where the modules are.
 namespace Orca::UX
 {
-// Emulated memory access (tests substitute a map).
 class GuestMemory
 {
 public:
   virtual ~GuestMemory() = default;
-  virtual bool Valid(u32 address) const = 0;  // a mapped, readable RAM address
+  virtual bool Valid(u32 address) const = 0;
   virtual u32 Read32(u32 address) const = 0;
   virtual u16 Read16(u32 address) const = 0;
   virtual u8 Read8(u32 address) const = 0;
@@ -28,7 +25,6 @@ public:
   virtual void Write32(u32 address, u32 value) = 0;
 };
 
-// The CPU thread's emulated memory, through the guard.
 class GuardMemory final : public GuestMemory
 {
 public:
@@ -44,4 +40,4 @@ public:
 private:
   const Core::CPUThreadGuard& m_guard;
 };
-}  // namespace Orca::UX
+}

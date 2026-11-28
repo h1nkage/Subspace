@@ -83,8 +83,6 @@ TEST_P(ShortcutMappingTest, ControllerMappingsUseClassifiedWindowEvents)
     result.expr->UpdateReferences(environment);
     return result.expr->GetValue();
   };
-  // Raw hardware already reports every key held. The window must classify Enter before Start
-  // can see it, so a CPU poll ahead of the event cannot leak the shortcut's base key.
   EXPECT_EQ(state("Return"), 0.0);
   EXPECT_EQ(state("RETURN"), 0.0);
   EXPECT_EQ(state("Up Arrow"), 1.0);
@@ -98,7 +96,7 @@ TEST_P(ShortcutMappingTest, ControllerMappingsUseClassifiedWindowEvents)
   EXPECT_EQ(state("X"), 1.0);
   EXPECT_EQ(state("Up Arrow"), 1.0);
   Get().KeyEvent("Enter", Ctrl, false);
-  EXPECT_EQ(state("Ctrl"), 1.0);  // modifier resumes when the chord ends
+  EXPECT_EQ(state("Ctrl"), 1.0);
   Get().KeyEvent("Ctrl", 0, false);
   Get().KeyEvent("Shift", Shift, true);
   Get().KeyEvent("Tab", Shift, true);
@@ -164,4 +162,4 @@ TEST(ShortcutMapping, SparseKeyboardMetadataNeedsNeitherEnterNorShift)
   EXPECT_EQ(result.expr->GetValue(), 1.0);
   Get().FocusLost();
 }
-}  // namespace
+}

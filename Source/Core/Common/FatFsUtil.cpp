@@ -488,9 +488,6 @@ static void SortFST(File::FSTEntry* root)
     SortFST(&child);
 }
 
-// Orca mods' order: in each folder its files, then its folders, each by name with ASCII letters
-// upper-cased (then as bytes, for names that differ only in case), as Project+'s official SD image
-// lays most of its folders out (195 of 204), so a card built from the same files reads the same way.
 static void SortFSTFilesFirst(File::FSTEntry* root)
 {
   const auto key = [](const File::FSTEntry& e) {

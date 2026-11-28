@@ -19,17 +19,14 @@ using Rollback::InputGate::ALL;
 using Rollback::InputGate::Mask;
 using Rollback::InputGate::Masks;
 
-// Whether the upcoming game uses a pick order.
 bool SetApplies(const SetView& set)
 {
   return set.ruleset != Ruleset::None && set.game >= 2 && set.game <= 0xFF &&
          (set.last_winner == 0 || set.last_winner == 1);
 }
 
-}  // namespace
+}
 
-// Shared by the step machine and the gate, so the gate never acts on a state the machine would
-// clear. Once begun, the order survives a port briefly not being human, so it never restarts.
 bool Active(const SetView& set, const CssView& css, const State& state)
 {
   return css.on_css && SetApplies(set) && state.step != Step::Idle && state.game == set.game &&
@@ -38,8 +35,6 @@ bool Active(const SetView& set, const CssView& css, const State& state)
 
 namespace
 {
-// A hand position in State's anchor units (1/64), from the float's bits (no float arithmetic, so
-// every machine agrees). Nullopt off any sane position.
 std::optional<s16> ToAnchor(float value)
 {
   const std::optional<s64> fixed = Queue::ToFixed(value);
@@ -51,7 +46,6 @@ std::optional<s16> ToAnchor(float value)
   return static_cast<s16>(v);
 }
 
-// Where `port`'s token goes back to: its anchor, else the other port's, else the grid's middle.
 std::pair<float, float> AnchorFor(const State& state, int port)
 {
   for (const int p : {port, 1 - port})
@@ -62,9 +56,6 @@ std::pair<float, float> AnchorFor(const State& state, int port)
   return {kGridMiddleX, kGridMiddleY};
 }
 
-// Where Orca steers `port`'s hand, its token in hand over no character: the anchor, or the grid's
-// middle once the hand is within a unit of it (an anchor at a character's edge, the hand stopped
-// just outside). Integer comparisons only.
 std::pair<float, float> SteerTarget(const State& state, int port, const CssPort& p)
 {
   const std::pair<float, float> anchor = AnchorFor(state, port);
@@ -79,9 +70,8 @@ std::pair<float, float> SteerTarget(const State& state, int port, const CssPort&
   return anchor;
 }
 
-}  // namespace
+}
 
-// The current turn's time is up.
 bool TimedOut(const SetView& set, const State& state)
 {
   return state.elapsed >= set.pick_frames;
@@ -89,20 +79,18 @@ bool TimedOut(const SetView& set, const State& state)
 
 namespace
 {
-// Port `port`'s L and R from its raw buttons, as State::held keeps them.
 u8 HeldBits(int port, u16 raw)
 {
   const int bits = ((raw & PAD_TRIGGER_L) ? 1 : 0) | ((raw & PAD_TRIGGER_R) ? 2 : 0);
   return static_cast<u8>(bits << (2 * port));
 }
 
-// The L and R kept for `port`, as PAD_* bits.
 u16 HeldButtons(const State& state, int port)
 {
   const int bits = (state.held >> (2 * port)) & 3;
   return static_cast<u16>(((bits & 1) ? PAD_TRIGGER_L : 0) | ((bits & 2) ? PAD_TRIGGER_R : 0));
 }
-}  // namespace
+}
 
 int FirstPicker(const SetView& set)
 {
@@ -119,8 +107,6 @@ State Advance(const SetView& set, const CssView& css, const State& state, int fr
     return state == State{} ? state : State{};
   if (!Active(set, css, state))
   {
-    // Start the first picker's turn once both players have joined. Presses on this frame don't
-    // count, since they were made before the order began.
     if (!css.ports[0].human || !css.ports[1].human)
       return state == State{} ? state : State{};
     return State{static_cast<u8>(set.game), Step::First, static_cast<u8>(FirstPicker(set)), 0,
@@ -129,9 +115,7 @@ State Advance(const SetView& set, const CssView& css, const State& state, int fr
   State s = state;
   const u32 now = static_cast<u32>(frame);
   const u32 elapsed = now >= s.since ? now - s.since : 0;
-  // Past 0xFFFF frames it keeps alternating, so presses made every other frame never stop.
   s.elapsed = static_cast<u16>(elapsed <= 0xFFFF ? elapsed : 0xFFFE | (elapsed & 1));
-  // Each hand's last place over a character with its token in hand (State::anchored).
   for (int port = 0; port < 2; ++port)
   {
     const CssPort& p = css.ports[port];
@@ -146,7 +130,6 @@ State Advance(const SetView& set, const CssView& css, const State& state, int fr
   }
   if (elapsed == 0 || s.step == Step::Done)
     return s;
-  // Lock-in is a new raw Start press with the token placed on a character.
   const auto locks_in = [&css](int port) {
     const CssPort& p = css.ports[port];
     return (p.raw_new & PAD_BUTTON_START) != 0 && p.Down();
@@ -154,22 +137,17 @@ State Advance(const SetView& set, const CssView& css, const State& state, int fr
   const bool timed_out = elapsed >= set.pick_frames;
   const int first = s.first & 1;
   const int second = 1 - first;
-  // L and R as a turn ends (CharOrder.h): the game reads them as the character select ends.
   const auto keep = [&css, &s](int port) {
     s.held = static_cast<u8>((s.held & ~(3 << (2 * port))) | HeldBits(port, css.ports[port].raw));
   };
   bool next = timed_out;
   if (s.step == Step::First)
   {
-    // Free: the winner may lock in during the loser's turn, once: a later Start keeps the L and R
-    // it locked in with.
     if (set.order == Order::Free && !(s.locked & (1 << second)) && locks_in(second))
     {
       s.locked = static_cast<u8>(s.locked | (1 << second));
       keep(second);
     }
-    // A first pick that timed out with the token in hand ends once Orca has put it down (Gate),
-    // so the second picker never picks before the first pick is down.
     next = (next && css.ports[first].Down()) || locks_in(first);
   }
   else
@@ -179,7 +157,6 @@ State Advance(const SetView& set, const CssView& css, const State& state, int fr
   if (next)
   {
     keep(s.step == Step::First ? first : second);
-    // Skip the second picker's turn if they already locked in.
     s.step = s.step == Step::First && !(s.locked & (1 << second)) ? Step::Second : Step::Done;
     s.since = now;
     s.elapsed = 0;
@@ -194,10 +171,7 @@ Masks Gate(const SetView& set, const CssView& css, const State& state)
     return masks;
   const int first = state.first & 1;
   const int second = 1 - first;
-  const bool even = state.elapsed % 2 == 0;  // synthesized presses repeat every other frame
-  // On your turn: A picks, B (first frame, token placed) picks the token back up, and Start locks
-  // in without reaching the game. Same B handling as OnlineRules.h, so test runs without a header
-  // behave alike.
+  const bool even = state.elapsed % 2 == 0;
   const auto picking = [&css](int port) {
     const CssPort& p = css.ports[port];
     Mask mask;
@@ -212,8 +186,6 @@ Masks Gate(const SetView& set, const CssView& css, const State& state)
       mask.buttons |= PAD_BUTTON_B;
     return mask;
   };
-  // After your turn: no input. A token still in hand goes down for you: Orca brings the hand back
-  // to its anchor (CharOrder.h) and presses A over a character, the stick its own meanwhile.
   const auto done = [&css, &state, even](int port) {
     const CssPort& p = css.ports[port];
     if (p.placed)
@@ -239,9 +211,7 @@ Masks Gate(const SetView& set, const CssView& css, const State& state)
   switch (state.step)
   {
   case Step::First:
-    // Time ran out with the token in hand: it goes down before the second picker's turn.
     masks[first] = TimedOut(set, state) && !css.ports[first].Down() ? done(first) : picking(first);
-    // WinnerFirst: the other player waits. Free: the winner may pick and lock in, then waits.
     if (set.order == Order::WinnerFirst || (state.locked & (1 << second)))
       masks[second] = set.order == Order::WinnerFirst ? ALL : done(second);
     else
@@ -254,11 +224,8 @@ Masks Gate(const SetView& set, const CssView& css, const State& state)
   case Step::Done:
     masks[first] = done(first);
     masks[second] = done(second);
-    // Each player's L and R as they locked in, held for them while the character select ends.
     masks[first].press |= HeldButtons(state, first);
     masks[second].press |= HeldButtons(state, second);
-    // Press Start for the second picker once both tokens are placed. A queue2 room handles this
-    // itself (UX.cpp).
     if (even && css.ports[0].placed && css.ports[1].placed)
       masks[second].press |= PAD_BUTTON_START;
     break;
@@ -277,7 +244,6 @@ u8 LockedPorts(const SetView& set, const CssView& css, const State& state)
   {
   case Step::First:
     return set.order == Order::Free ? static_cast<u8>(state.locked & (1 << (1 - first))) : 0;
-  // Never a token still in hand.
   case Step::Second:
     return css.ports[first].placed ? static_cast<u8>(1 << first) : 0;
   case Step::Done:
@@ -309,4 +275,4 @@ int MkFreePicker(const std::array<int, 2>& characters, int meta_knight)
     return -1;
   return a ? 1 : 0;
 }
-}  // namespace Orca::UX::CharOrder
+}

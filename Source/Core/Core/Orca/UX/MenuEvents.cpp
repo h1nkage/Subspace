@@ -27,18 +27,13 @@ std::string_view MenuEventText(OnlinePick pick, bool queue)
 
 void AnnounceOnlinePick(OnlinePick pick, bool arm)
 {
-  // With the app's "host" capability, the queue searches while the player waits on the character
-  // select.
   const bool queue = Orca::Status::Cap("host");
   if (!arm)
   {
-    // Kept: the friends stay, nothing starts, and the app knows this pick never searches here.
     Orca::Status::Menu(fmt::format("{} kept", MenuEventText(pick, queue)));
     return;
   }
   Orca::Status::Menu(MenuEventText(pick, queue));
-  // With `queue2` the app searches once the player is ready on the queue's own character select
-  // (Games/Brawl/Queue.h, UX/QueueApp.h). Without it, the search starts at the pick.
   if (queue && pick != OnlinePick::Friends && Orca::Status::Cap("queue2"))
   {
     Search::End();
@@ -76,4 +71,4 @@ void AnnounceMenuCancel()
   QueueApp::End();
   Orca::Status::Menu("cancel");
 }
-}  // namespace Orca::UX
+}

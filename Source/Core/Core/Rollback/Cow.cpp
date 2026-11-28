@@ -29,22 +29,12 @@ namespace Rollback::Cow
 {
 namespace
 {
-// Restore compares, copies and reports changed RAM in blocks of this size (the JIT is invalidated
-// per changed block).
 constexpr std::size_t RESTORE_BLOCK = 4096;
 constexpr u32 MEM2_PHYSICAL = 0x10000000u;
 constexpr std::size_t MAX_VIEWS = 64;
-// The widest single host store (AVX-512, arm64 DC ZVA).
 constexpr std::size_t MAX_ACCESS = 64;
-// Spare page buffers kept ready at each snapshot so a fault rarely allocates.
 constexpr std::size_t RESERVE_PAGES = 512;
 
-// Hot pages. A fault costs far more than a page copy (~12 us vs under 1 us for 16 KB on Apple
-// Silicon), and games write mostly the same pages every frame. So a recently written page stays
-// writable and each snapshot copies it up front. A page's heat is how many more snapshots it stays
-// hot: set on a fault, raised to the max while its bytes keep changing, and counting down while
-// they don't. At zero it is protected again. ORCA_COW_FAULT_HEAT and ORCA_COW_HEAT (0-255) override
-// the defaults for tuning.
 int EnvHeat(const char* name, int fallback)
 {
   const char* value = std::getenv(name);
@@ -66,29 +56,23 @@ struct Tracker
   const void* owner = nullptr;
   std::size_t page_size = 0;
   std::vector<Area> areas;
-  std::vector<std::size_t> area_first_page;  // global index of each area's first page
-  std::vector<ViewInfo> views;               // writeable views only
+  std::vector<std::size_t> area_first_page;
+  std::vector<ViewInfo> views;
   std::unique_ptr<UndoLog> log;
-  // Per page: bit v set when the page is writable in views[v]. Only pages in the newest log may be.
   std::vector<u64> open_in;
-  std::vector<u32> open_pages;  // pages whose open_in is nonzero
-  // Per page: remaining heat, and whether a fault (not a snapshot copy) saved it since the newest
-  // snapshot.
+  std::vector<u32> open_pages;
   std::vector<u8> heat;
   std::vector<u8> fault_recorded;
   Counters counters;
-  // Ids stay unique across arms, so a stale id never names another ring's snapshot.
   u64 next_id = 1;
 };
 
-// Never destroyed: a fault or a static destructor may still use it at exit.
 Tracker& T()
 {
   static Tracker* const tracker = new Tracker;
   return *tracker;
 }
 
-// HandleFault's lock-free early out.
 std::atomic<bool> s_armed{false};
 
 std::size_t HostPageSize()
@@ -134,8 +118,6 @@ u32 PhysicalOf(const Tracker& t, std::size_t page)
          static_cast<u32>((page - t.area_first_page[area]) * t.page_size);
 }
 
-// Clips the writeable views to the tracked areas, as page ranges. False if one is not
-// page-aligned or there are too many.
 bool BuildViews(const Tracker& t, const std::vector<View>& views, std::vector<ViewInfo>* out)
 {
   out->clear();
@@ -172,7 +154,6 @@ bool BuildViews(const Tracker& t, const std::vector<View>& views, std::vector<Vi
   return true;
 }
 
-// Makes every page read-only in every view.
 bool ProtectAll(Tracker& t)
 {
   bool ok = true;
@@ -183,8 +164,6 @@ bool ProtectAll(Tracker& t)
   return ok;
 }
 
-// Re-protects `pages` (open, sorted) in each view where they are writable, one call per run of
-// adjacent pages.
 void Reprotect(Tracker& t, const std::vector<u32>& pages)
 {
   for (std::size_t v = 0; v < t.views.size(); ++v)
@@ -216,15 +195,11 @@ void Reprotect(Tracker& t, const std::vector<u32>& pages)
   t.counters.pages_reprotected += pages.size();
 }
 
-// At a snapshot or restore: decides which open pages stay hot and re-protects the rest.
-// `measure` updates heat by comparing each page with its saved copy; a restore passes false because
-// it has just discarded those copies.
 void SettleOpenPages(Tracker& t, bool measure)
 {
   std::vector<u32> hot, cold;
   for (const u32 page : t.open_pages)
   {
-    // Pages saved by a fault keep the heat the fault gave them.
     if (measure && !t.fault_recorded[page])
     {
       const u8* const pre_image = t.log->NewestPreImage(page);
@@ -241,7 +216,6 @@ void SettleOpenPages(Tracker& t, bool measure)
   t.open_pages = std::move(hot);
 }
 
-// Saves the hot pages into the newest log now, since they stay writable and will not fault.
 void CopyHotPages(Tracker& t)
 {
   for (const u32 page : t.open_pages)
@@ -251,8 +225,6 @@ void CopyHotPages(Tracker& t)
   }
 }
 
-// Saves `page` into the newest log (if not saved yet) and makes it writable in view `v`. False if
-// it was already writable there, meaning the fault was not caused by our protection.
 bool OpenPage(Tracker& t, std::size_t v, std::size_t page)
 {
   const u64 bit = u64{1} << v;
@@ -294,7 +266,7 @@ void ResetLocked(Tracker& t)
   t.fault_recorded.clear();
   t.log.reset();
 }
-}  // namespace
+}
 
 std::size_t PageSize()
 {
@@ -336,7 +308,6 @@ bool Arm(const void* owner, const std::vector<Area>& areas, const std::vector<Vi
   t.heat.assign(pages, 0);
   t.fault_recorded.assign(pages, 0);
   t.owner = owner;
-  // The handler must be installed and s_armed set before any page is protected.
   EMM::InstallCowFallbackHandler();
   s_armed.store(true, std::memory_order_release);
   if (!ProtectAll(t))
@@ -358,8 +329,6 @@ bool ArmForSystem(Core::System& system, const void* owner)
     areas.push_back(Area{alias, 0, memory.GetRamSize()});
   else
     return false;
-  // Page-table mappings (MMU emulation) would mean far too many views, each change re-protecting
-  // all of RAM.
   if (memory.HasPageTableMappings())
     return false;
   if (memory.GetEXRAM())
@@ -418,7 +387,6 @@ bool Restore(u64 id, const std::function<void(u32 physical_address, u32 length)>
   std::lock_guard lock(t.lock);
   if (!t.log || !t.log->Has(id))
     return false;
-  // Writes go through the private mapping, so protection does not matter here.
   t.log->ForEachPreImage(id, [&](std::size_t page, const u8* pre_image) {
     u8* const live = AliasOf(t, page);
     const u32 physical = PhysicalOf(t, page);
@@ -431,7 +399,6 @@ bool Restore(u64 id, const std::function<void(u32 physical_address, u32 length)>
     }
   });
   t.log->RewindTo(id);
-  // `id`'s log is now empty: save the hot pages into it and re-protect the rest.
   SettleOpenPages(t, false);
   CopyHotPages(t);
   return true;
@@ -454,14 +421,13 @@ std::optional<u64> Checksum(u64 id)
   std::vector<const u8*> pre_images(t.log->PageCount(), nullptr);
   t.log->ForEachPreImage(id, [&](std::size_t page, const u8* data) { pre_images[page] = data; });
 
-  // Must hash the same bytes in the same order as Rollback::RamChecksum over MEM1 and MEM2.
   XXH3_state_t* const state = XXH3_createState();
   XXH3_64bits_reset(state);
   for (std::size_t a = 0; a < t.areas.size(); ++a)
   {
     const std::size_t first = t.area_first_page[a];
     const std::size_t count = t.areas[a].size / t.page_size;
-    std::size_t run = 0;  // live pages not yet hashed
+    std::size_t run = 0;
     for (std::size_t i = 0; i <= count; ++i)
     {
       const u8* const pre_image = i < count ? pre_images[first + i] : nullptr;
@@ -490,8 +456,6 @@ bool HandleFault(uintptr_t address)
     return false;
   Tracker& t = T();
   std::lock_guard lock(t.lock);
-  // Tracking stopped while we waited for the lock and every page is writable again, so retry the
-  // write. A fault that wasn't ours will come back and find tracking off.
   if (!t.log)
     return true;
   u8* const at = reinterpret_cast<u8*>(address);
@@ -504,8 +468,6 @@ bool HandleFault(uintptr_t address)
     const std::size_t index = offset / t.page_size;
     const std::size_t in_page = offset % t.page_size;
     const std::size_t last = static_cast<std::size_t>(view.end - view.base) / t.page_size - 1;
-    // A store straddling two pages may report an address in either one (arm64 allows that), so if
-    // this page is already writable, try a protected neighbour within one access.
     if (OpenPage(t, v, view.first_page + index) ||
         (in_page >= t.page_size - MAX_ACCESS && index < last &&
          OpenPage(t, v, view.first_page + index + 1)) ||
@@ -514,8 +476,6 @@ bool HandleFault(uintptr_t address)
       ++t.counters.faults;
       return true;
     }
-    // Already writable with no protected neighbour: another thread opened it while we waited, so
-    // retry. Not near the view's ends, though, where the fault may be fastmem's.
     return (t.open_in[view.first_page + index] & (u64{1} << v)) &&
            offset >= MAX_ACCESS &&
            offset + MAX_ACCESS <= static_cast<std::size_t>(view.end - view.base);
@@ -565,12 +525,9 @@ void OnMappingsChanged(Core::System& system)
   if (built && std::equal(rebuilt.begin(), rebuilt.end(), t.views.begin(), t.views.end(), same))
     return;
   ++t.counters.remaps;
-  // New views start writable, so protect everything again. Pages already in the newest log just
-  // fault once more to reopen.
   t.views = std::move(rebuilt);
   if (!built || !ProtectAll(t))
   {
-    // Untracked writes could follow, so no snapshot can be trusted.
     ERROR_LOG_FMT(ROLLBACK, "Rollback: guest RAM mappings changed beyond what copy-on-write "
                             "snapshots track; every snapshot is dropped");
     for (const View& view : views)
@@ -596,4 +553,4 @@ Counters GetCounters()
   std::lock_guard lock(t.lock);
   return t.counters;
 }
-}  // namespace Rollback::Cow
+}

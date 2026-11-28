@@ -596,7 +596,6 @@ void PowerPCManager::CheckExceptions()
     return;
   }
 
-  // Orca: the crash dump's ring of recent exceptions (host-only; Orca/PanicDiag.h).
   Orca::PanicDiag::NoteException(m_ppc_state.pc, SRR0(m_ppc_state), m_ppc_state.gpr[1],
                                  LR(m_ppc_state));
   MSRUpdated();
@@ -651,7 +650,6 @@ void PowerPCManager::CheckExternalExceptions()
   m_ppc_state.msr.Hex &= ~0x04EF36;
   m_ppc_state.pc = m_ppc_state.npc = exception_vector;
 
-  // Orca: the crash dump's ring of recent exceptions (host-only; Orca/PanicDiag.h).
   Orca::PanicDiag::NoteException(exception_vector, SRR0(m_ppc_state), m_ppc_state.gpr[1],
                                  LR(m_ppc_state));
   MSRUpdated();

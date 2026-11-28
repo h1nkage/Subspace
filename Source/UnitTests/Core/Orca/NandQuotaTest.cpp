@@ -16,13 +16,10 @@
 #include "Core/Rollback/Rollback.h"
 #include "UICommon/UICommon.h"
 
-// An Orca session's NAND: a write past what a Wii NAND holds fails as on a full NAND, and the
-// rollback journal keeps at most JOURNAL_MAX_BYTES of destroyed contents.
 namespace
 {
 using namespace IOS::HLE::FS;
 constexpr Modes modes{Mode::ReadWrite, Mode::ReadWrite, Mode::ReadWrite};
-// CLUSTER_SIZE is a u16, so its multiples are ints; the sizes here are u32.
 constexpr u32 CLUSTER_BYTES = CLUSTER_SIZE;
 
 class OrcaNandQuota : public testing::Test
@@ -62,7 +59,6 @@ protected:
     const Result<Metadata> metadata = m_fs->GetMetadata(0, 0, path);
     return metadata ? metadata->size : 0xFFFFFFFF;
   }
-  // A rollback snapshot of the NAND: only the journal mark and the handle table.
   std::vector<u8> Snapshot()
   {
     Rollback::SnapshotScope scope;
@@ -86,28 +82,24 @@ protected:
   std::string m_root;
   std::unique_ptr<HostFileSystem> m_fs;
 };
-}  // namespace
+}
 
 TEST_F(OrcaNandQuota, AWriteThatWouldOverfillTheNandFails)
 {
-  Make(4);  // 64 KiB
+  Make(4);
   ASSERT_EQ(m_fs->CreateDirectory(0, 0, "/tmp", 0, modes), ResultCode::Success);
   ASSERT_EQ(m_fs->CreateFile(0, 0, "/tmp/a", 0, modes), ResultCode::Success);
   ASSERT_EQ(m_fs->CreateFile(0, 0, "/tmp/b", 0, modes), ResultCode::Success);
 
   EXPECT_EQ(Write("/tmp/a", 0, 3 * CLUSTER_BYTES), 3 * CLUSTER_BYTES);
-  // Rewriting what a file already holds needs no room.
   EXPECT_EQ(Write("/tmp/a", 100, 2 * CLUSTER_BYTES), 2 * CLUSTER_BYTES);
-  // Two more clusters don't fit; the file keeps its size.
   EXPECT_EQ(Write("/tmp/b", 0, CLUSTER_BYTES + 1).error(), ResultCode::NoFreeSpace);
   EXPECT_EQ(Size("/tmp/b"), 0u);
   EXPECT_EQ(Write("/tmp/a", 3 * CLUSTER_BYTES, CLUSTER_BYTES + 1).error(), ResultCode::NoFreeSpace);
   EXPECT_EQ(Size("/tmp/a"), 3 * CLUSTER_BYTES);
-  // One does.
   EXPECT_EQ(Write("/tmp/b", 0, CLUSTER_BYTES), CLUSTER_BYTES);
   EXPECT_EQ(Write("/tmp/b", CLUSTER_BYTES, 1).error(), ResultCode::NoFreeSpace);
 
-  // Deleting frees its clusters.
   ASSERT_EQ(m_fs->Delete(0, 0, "/tmp/a"), ResultCode::Success);
   EXPECT_EQ(Write("/tmp/b", CLUSTER_BYTES, 3 * CLUSTER_BYTES), 3 * CLUSTER_BYTES);
   EXPECT_EQ(Size("/tmp/b"), 4 * CLUSTER_BYTES);
@@ -121,7 +113,6 @@ TEST_F(OrcaNandQuota, FilesAlreadyThereCount)
   ASSERT_EQ(Write("/tmp/a", 0, 6 * CLUSTER_BYTES), 6 * CLUSTER_BYTES);
   m_fs.reset();
 
-  // A session NAND seeded with more than the quota: nothing may grow, rewrites still work.
   Make(4);
   ASSERT_EQ(m_fs->CreateFile(0, 0, "/tmp/b", 0, modes), ResultCode::Success);
   EXPECT_EQ(Write("/tmp/b", 0, 1).error(), ResultCode::NoFreeSpace);
@@ -148,7 +139,6 @@ TEST_F(OrcaNandQuota, RollingBackForgetsTheGrowth)
   Load(snapshot);
   EXPECT_FALSE(m_fs->TakeJournalError());
   EXPECT_EQ(Size("/tmp/a"), CLUSTER_BYTES);
-  // The undone clusters are free again, exactly as on the run that never wrote them.
   EXPECT_EQ(Write("/tmp/a", CLUSTER_BYTES, 3 * CLUSTER_BYTES), 3 * CLUSTER_BYTES);
   EXPECT_EQ(Write("/tmp/a", 4 * CLUSTER_BYTES, 1).error(), ResultCode::NoFreeSpace);
 }
@@ -161,7 +151,6 @@ TEST_F(OrcaNandQuota, TheJournalKeepsBoundedBytes)
   ASSERT_EQ(m_fs->CreateFile(0, 0, "/tmp/a", 0, modes), ResultCode::Success);
   ASSERT_EQ(Write("/tmp/a", 0, MIB, 0x11), MIB);
 
-  // Within the cap: undone exactly.
   std::vector<u8> snapshot = Snapshot();
   ASSERT_EQ(Write("/tmp/a", 0, MIB, 0x22), MIB);
   EXPECT_EQ(m_fs->JournalBytes(), MIB);
@@ -176,7 +165,6 @@ TEST_F(OrcaNandQuota, TheJournalKeepsBoundedBytes)
     EXPECT_EQ(head[0], 0x11);
   }
 
-  // Past it: memory stays bounded and the rollback across it fails instead of restoring garbage.
   snapshot = Snapshot();
   const u32 rewrites = HostFileSystem::JOURNAL_MAX_BYTES / MIB + 2;
   for (u32 i = 0; i < rewrites; ++i)
@@ -185,7 +173,6 @@ TEST_F(OrcaNandQuota, TheJournalKeepsBoundedBytes)
   Load(snapshot);
   EXPECT_TRUE(m_fs->TakeJournalError());
 
-  // Once the ring has forgotten the snapshots before them, a later snapshot's rollback works.
   snapshot = Snapshot();
   for (u32 i = 0; i < rewrites; ++i)
     ASSERT_EQ(Write("/tmp/a", 0, MIB, static_cast<u8>(i)), MIB);

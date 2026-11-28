@@ -300,7 +300,7 @@ if(MSVC)
 
   # Subspace: record source paths (__FILE__ in asserts and logs, debug info) as Subspace\... and not
   # as this PC's source folder, whose path holds the Windows user name; the exe names its .pdb by file
-  # name only. build-netplay.bat turns it on (/pathmap needs /experimental:deterministic, above).
+  # name only. build-subspace.bat turns it on (/pathmap needs /experimental:deterministic, above).
   if(SUBSPACE_NEUTRAL_PATHS)
     file(TO_NATIVE_PATH "${CMAKE_SOURCE_DIR}" subspace_source_dir)
     add_compile_options("/pathmap:${subspace_source_dir}=Subspace")

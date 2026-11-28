@@ -37,7 +37,6 @@ double Ms(std::chrono::nanoseconds time)
   return std::chrono::duration<double, std::milli>(time).count();
 }
 
-// One decimal, never NaN or infinite.
 std::string Num(double value)
 {
   if (!std::isfinite(value))
@@ -47,10 +46,9 @@ std::string Num(double value)
 
 std::string Quote(std::string_view text)
 {
-  // CleanName already left out quotes, backslashes and control characters.
   return fmt::format("\"{}\"", text);
 }
-}  // namespace
+}
 
 Mode ModeFor(int peers)
 {
@@ -137,7 +135,6 @@ std::optional<SceneTransition> PaceMeter::Present(std::chrono::nanoseconds now, 
   }
   if (scene && m_scene_last && scene != m_scene && headless == m_headless)
     transition = SceneTransition{m_scene, scene, Ms(now - *m_scene_last), headless};
-  // Unreadable scene frames must not move the last old-scene timestamp during a load.
   if (scene)
   {
     m_scene = scene;
@@ -185,8 +182,6 @@ PaceWindow PaceMeter::Take()
 
 namespace
 {
-// Fixed widths make the complete protocol line (prefix and newline included) fit 300 bytes,
-// even after an arbitrarily long stall or a pathological event count.
 u64 PaceCount(u64 value)
 {
   return std::min<u64>(value, 999999);
@@ -195,7 +190,7 @@ std::string PaceMs(double value)
 {
   return Num(std::isfinite(value) ? std::clamp(value, 0.0, 99999.9) : 0);
 }
-}  // namespace
+}
 
 std::string PaceJson(const PaceWindow& w)
 {
@@ -327,7 +322,6 @@ std::string CleanName(std::string_view name)
     const auto u = static_cast<unsigned char>(c);
     if (u < 0x20 || u >= 0x7f || c == '"' || c == '\\')
       continue;
-    // One space between words.
     if (c == ' ' && (out.empty() || out.back() == ' '))
       continue;
     out += c;
@@ -408,7 +402,6 @@ constexpr std::array<GfxSpec, 7> GFX_SPECS{{
     {"cpucull", GfxKey::CpuCull, 0, 1},
 }};
 
-// A whole number with an optional minus sign, nothing else.
 std::optional<int> ParseInt(std::string_view text)
 {
   if (text.empty() || text.size() > 3)
@@ -423,7 +416,7 @@ std::optional<int> ParseInt(std::string_view text)
     value = value * 10 + (c - '0');
   return negative ? -value : value;
 }
-}  // namespace
+}
 
 std::optional<GfxChange> ParseGfx(std::string_view line)
 {
@@ -540,10 +533,8 @@ std::optional<Window> Meter::OnBoundary(const Boundary& boundary, std::chrono::n
 {
   if (!boundary.first_run)
   {
-    // A re-run's time belongs to the next forward frame; a catch-up's makes it meaningless.
     if (boundary.excluded)
       m_spoiled = true;
-    // Where the re-runs end: the forward frame's own work starts here.
     m_last_rerun = now;
     m_rerun_totals = totals;
     ++m_reruns;
@@ -564,7 +555,6 @@ std::optional<Window> Meter::OnBoundary(const Boundary& boundary, std::chrono::n
     frame.gpu_ms = Ms(totals.present - m_totals.present);
     if (m_last_rerun && *m_last_rerun >= *m_last_forward)
     {
-      // From the last forward boundary to the last re-run one, waits out.
       frame.rerun_ms = Ms(*m_last_rerun - *m_last_forward) -
                        Ms(m_rerun_totals.sleep - m_totals.sleep) -
                        Ms(m_rerun_totals.wait - m_totals.wait);
@@ -572,7 +562,6 @@ std::optional<Window> Meter::OnBoundary(const Boundary& boundary, std::chrono::n
     }
   }
   const std::chrono::nanoseconds paused = boundary.paused_total - m_paused;
-  // A new session restarts its count.
   const u64 rerun = boundary.rerun_total >= m_rerun_total ? boundary.rerun_total - m_rerun_total :
                                                             boundary.rerun_total;
   const bool valid = has_last && !m_spoiled && !boundary.excluded && !boundary.hidden &&
@@ -600,8 +589,6 @@ std::optional<Window> Meter::OnBoundary(const Boundary& boundary, std::chrono::n
   return m_window.Take();
 }
 
-// ---- At run time ----
-
 namespace
 {
 std::atomic<bool> s_ready{false};
@@ -616,7 +603,6 @@ struct PresentEvent
   u64 scene;
   bool headless;
 };
-// Single graphics producer, CPU consumer. Release/acquire publishes complete event slots.
 constexpr std::size_t PRESENT_QUEUE_SIZE = 4096;
 std::array<PresentEvent, PRESENT_QUEUE_SIZE> s_presents;
 std::atomic<u64> s_present_write{0};
@@ -626,10 +612,8 @@ std::atomic<u64> s_pace_scene{0};
 std::atomic<u64> s_compiles{0};
 std::atomic<s64> s_compile_ns{0};
 static_assert(std::atomic<u64>::is_always_lock_free);
-// The last value queued for each key (GfxKey order), applied at the next forward boundary.
 std::array<std::optional<int>, 7> s_gfx_queue;
 
-// CPU thread only.
 struct Run
 {
   bool info_sent = false;
@@ -641,7 +625,6 @@ struct Run
 };
 Run s_run;
 
-// A harness run (ORCA_TEST_COMMANDS=1, which the app never passes) in a session.
 bool TestRun()
 {
   static const bool test = GetEnv("ORCA_TEST_COMMANDS") == "1";
@@ -671,7 +654,6 @@ const TestSlow& ReadTestSlow()
   return slow;
 }
 
-// Spins the CPU thread (busy, not asleep: it is work, as a slow machine's would be).
 void Spin(double ms)
 {
   if (ms <= 0)
@@ -768,7 +750,6 @@ void ApplyQueuedGfx()
     return;
   for (const GfxChange& change : changes)
     ApplyGfx(change);
-  // The player chose new settings: give them their own windows before switching.
   if (s_run.auto_switch)
     s_run.auto_switch->Restart();
   NOTICE_LOG_FMT(ROLLBACK, "Orca perf: {} graphics change(s) from the app; {}", changes.size(),
@@ -779,7 +760,6 @@ void SwitchToPerformance(double cap)
 {
   for (const GfxChange& change : PerformancePreset())
     ApplyGfx(change);
-  // A post-processing shader a GFX.ini set is not part of any preset.
   if (!Config::Get(Config::GFX_ENHANCE_POST_SHADER).empty())
     Config::SetCurrent(Config::GFX_ENHANCE_POST_SHADER, std::string());
   UX::ShowToast("Graphics set to Performance to hold 60 fps");
@@ -805,7 +785,7 @@ void FinishWindow(Window window)
   if (s_run.auto_switch && AutoAllowed() && s_run.auto_switch->Feed(window))
     SwitchToPerformance(s_run.auto_switch->TriggerCap());
 }
-}  // namespace
+}
 
 void Ready()
 {
@@ -961,7 +941,7 @@ void OnBoundary(const Boundary& boundary)
   u64 read = s_present_read.load(std::memory_order_relaxed);
   const u64 write = s_present_write.load(std::memory_order_acquire);
   if (paused)
-    read = write;  // Discard redraws queued while the CPU was paused.
+    read = write;
   while (read != write)
   {
     const PresentEvent& event = s_presents[read % PRESENT_QUEUE_SIZE];
@@ -979,11 +959,10 @@ void OnBoundary(const Boundary& boundary)
   {
     FinishWindow(*window);
   }
-  // A test's slow machine: after the clock was read, so the next forward frame carries it.
   if (boundary.first_run && !boundary.excluded)
   {
     const TestSlow& slow = ReadTestSlow();
     Spin(PerformancePicture() ? slow.performance_ms : slow.ms);
   }
 }
-}  // namespace Orca::Perf
+}

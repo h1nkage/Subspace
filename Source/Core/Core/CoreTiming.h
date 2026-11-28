@@ -108,9 +108,6 @@ public:
   u64 GetIdleTicks() const;
   TimePoint GetTargetHostTime(s64 target_cycle);
 
-  // Orca rollback pacing (CPU thread). The throttle maps an emulated cycle to a host time. A
-  // rollback restores that reference once the re-run catches up, so the rollback's cost is made up
-  // instead of delaying every later frame. ResetThrottleToNow drops any lead or lag.
   std::pair<s64, TimePoint> GetThrottleReference() const;
   void SetThrottleReference(const std::pair<s64, TimePoint>& reference);
   void ResetThrottleToNow();

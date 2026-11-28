@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <bit>
 #include <cstdlib>
 #include <cstring>
 #include <utility>
@@ -14,6 +15,7 @@
 #include "Common/Logging/Log.h"
 #include "Core/Orca/Profile.h"
 #include "Core/Orca/Engine/GuestMemory.h"
+#include "Core/Orca/Games/Brawl/OnlineMenu.h"
 #include "Core/Orca/Games/Brawl/OnlineRules.h"
 #include "Core/Orca/Games/Brawl/Rulesets.h"
 #include "Core/Orca/UX/Probe.h"
@@ -55,9 +57,6 @@ u8 Byte(int v)
   return v < 0 || v > 254 ? 0xFF : static_cast<u8>(v);
 }
 
-// The ruleset a set block's ruleset byte names. A ranked header whose byte names none (Orca never
-// writes one) keeps what the tracker did before rulesets were data: the results screen decides,
-// two wins take the set, five ties in a row void it, no tiebreak game.
 const Ranked::Ruleset* RulesOf(Ruleset ruleset)
 {
   return Rulesets::ByBlock(static_cast<u8>(ruleset));
@@ -70,19 +69,14 @@ bool Judged(const Ranked::Ruleset* rules)
   return rules && rules->time_out == Ranked::TimeOut::Judged;
 }
 
-// Last published set for CurrentScoreLine. Bit 31 ranked, 30 fighting, 29 results screen, 24-25
-// done, 23 tiebreak, then each port's wins and the game number.
 std::atomic<u32> s_published{0};
 std::atomic<int> s_local_port{0};
-// Last published dots for CurrentDots. Bit 31 on, bits 2i..2i+1 game i's winner plus one (0 none),
-// bits 8..9 the current game (3 none).
 std::atomic<u32> s_dots{0};
-}  // namespace
+}
 
 std::optional<GameRecord> Judge(Ruleset ruleset, const SetState& set, const ResultBlock& block,
                                 u8 decision)
 {
-  // Decision 9 means no contest, e.g. quitting from the pause menu.
   const auto& p = block.ports;
   if (decision == DECISION_NO_CONTEST || !p[0].present || !p[1].present || !p[0].human ||
       !p[1].human || p[2].present || p[3].present)
@@ -116,25 +110,20 @@ std::optional<GameRecord> Judge(Ruleset ruleset, const SetState& set, const Resu
   const Ranked::Ruleset* rules = RulesOf(ruleset);
   if (!Judged(rules))
   {
-    // The results screen decides (Project+'s codeset settles time-outs itself).
     if (first0 != first1)
       return win(first0 ? 0 : 1, How::Results);
     if (first0 && first1)
       return tie();
     return std::nullopt;
   }
-  // A sudden death not caused by a seen time-up (a simultaneous last-stock KO, or a time-out we
-  // couldn't read) is a tie, settled by a tiebreak game.
   if (sudden && !snapped)
     return tie();
   if (r.timeout)
   {
-    // Ledge-grab limit first: if exactly one player is over it, they lose.
     const bool over0 = set.ledge[0] > rules->ledge.For(set.tiebreak, r.characters[0]);
     const bool over1 = set.ledge[1] > rules->ledge.For(set.tiebreak, r.characters[1]);
     if (over0 != over1)
       return win(over0 ? 1 : 0, How::Ledge);
-    // Then stocks, then percent, as they were when time ran out.
     std::array<int, 2> stocks{p[0].stocks, p[1].stocks};
     if (snapped)
       stocks = {set.snap_stocks[0], set.snap_stocks[1]};
@@ -181,26 +170,21 @@ SetState Step(SetState s, Ruleset ruleset, const Facts& f, u32 frame)
     }
     else if (s.fight_flags & SetBlock::FIGHT_BETWEEN)
     {
-      // Back into a fight from between scenes: sudden death in the same game.
       s.fight_flags =
           static_cast<u8>((s.fight_flags & ~SetBlock::FIGHT_BETWEEN) | SetBlock::FIGHT_SUDDEN);
     }
     if (f.live.valid && !judged)
     {
-      // The results screen decides (Project+): only the fighters being in counts, when the game
-      // began (its game-start). Nothing else is counted.
       s.fight_flags |= SetBlock::FIGHT_SEEN;
     }
     else if (f.live.valid)
     {
-      // Fighters reappearing in the same scene means Brawl started a sudden death.
       if (s.fight_flags & SetBlock::FIGHT_GONE)
       {
         s.fight_flags = static_cast<u8>((s.fight_flags & ~SetBlock::FIGHT_GONE) |
                                         SetBlock::FIGHT_SUDDEN);
       }
       s.fight_flags |= SetBlock::FIGHT_SEEN;
-      // Ledge grabs and the time-up snapshot count only in regulation, not sudden death.
       if (!(s.fight_flags & (SetBlock::FIGHT_SUDDEN | SetBlock::FIGHT_TIMEUP)))
       {
         for (int i = 0; i < 2; ++i)
@@ -255,7 +239,6 @@ SetState Step(SetState s, Ruleset ruleset, const Facts& f, u32 frame)
     else
     {
       ++s.tb_streak;
-      // A ruleset with a tiebreak game plays one (Brawl). Project+ has its own overtime.
       s.tiebreak = rules && rules->tiebreak;
       if (s.tb_streak >= (rules ? rules->void_after_ties : NO_RULESET_VOID_AFTER_TIES))
         s.done = 2;
@@ -272,7 +255,6 @@ SetState Step(SetState s, Ruleset ruleset, const Facts& f, u32 frame)
   case Scene::Other:
     if (s.fight)
     {
-      // A fight that ends without a results screen is not a game.
       s.fight = false;
       s.fight_flags = 0;
       s.on_ledge = {0, 0};
@@ -305,10 +287,6 @@ int WriteSetRules(GuestMemory& memory, const SetState& set, const Ranked::Rulese
 
 namespace
 {
-// Fighters come from sora_melee's g_ftEntryManager (module 27, section 6 + 0x2E88), found through
-// the OS module list. ftEntryManager +0x00 is the entries and +0x04 their count. An ftEntry
-// (0x244 bytes) has the active instance at +0x0A, its ftOwner at +0x28, the (kind, Fighter*)
-// instances at +0x30 and the port at +0x58. An ftOwner's data pointer is at +0x00.
 constexpr u32 OS_MODULE_LIST = 0x800030C8;
 constexpr u32 SORA_MELEE = 27;
 constexpr u32 SORA_MELEE_BSS_SECTION = 6;
@@ -318,19 +296,14 @@ constexpr u32 ENTRY_ACTIVE = 0x0A;
 constexpr u32 ENTRY_OWNER = 0x28;
 constexpr u32 ENTRY_INSTANCES = 0x30;
 constexpr u32 ENTRY_PLAYER_NO = 0x58;
-// Fighter +0x60 is its soModuleAccesser, +0xD8 the module list, +0x70 the status module.
 constexpr u32 FIGHTER_MODULES = 0x60;
 constexpr u32 MODULES_LIST = 0xD8;
 constexpr u32 LIST_STATUS = 0x70;
-// Found in RAM dumps: stock count is the owner data's u32 at +0x34, damage its f32 at +0x24, and
-// the status kind the status module's u32 at +0x34.
 constexpr u32 OWNER_DATA_STOCKS = 0x34;
 constexpr u32 OWNER_DATA_DAMAGE = 0x24;
 constexpr u32 STATUS_KIND = 0x34;
-// The result info's decision during a fight: 9 while it runs, 1 at time-up, 2 at the deciding KO.
 constexpr u32 GLOBAL_RESULT_INFO = 0x18;
 constexpr u32 RESULT_DECISION = 0x1378;
-// Fighter::StatusKind: Cliff_Catch_Move, Cliff_Catch, Cliff_Wait.
 constexpr u32 STATUS_CLIFF_FIRST = 0x73;
 constexpr u32 STATUS_CLIFF_LAST = 0x75;
 
@@ -362,7 +335,7 @@ u32 SoraMeleeBss(const GuestMemory& m)
   }
   return 0;
 }
-}  // namespace
+}
 
 Live ReadLiveFight(const GuestMemory& m)
 {
@@ -414,6 +387,114 @@ Live ReadLiveFight(const GuestMemory& m)
   return live;
 }
 
+namespace
+{
+constexpr u32 SCENE_MANAGER = 0x805A0060;
+constexpr u32 SCENE_CURRENT = 0x04;
+constexpr u32 MELEE_RULE = 0x54;
+constexpr u32 RULE_FRAMES_RUN = 0xE4;
+constexpr int PAUSED_AFTER = 2;
+constexpr u32 MELEE_HUD = 0x28;
+constexpr u32 HUD_PORTS = 0xEC;
+constexpr u32 HUD_PORT_FADE = 0x558;
+}
+
+std::array<float, 4> ReadHudFade(const GuestMemory& m)
+{
+  std::array<float, 4> fade{};
+  const u32 manager = Ptr(m, SCENE_MANAGER);
+  const u32 scene = manager ? Ptr(m, manager + SCENE_CURRENT) : 0;
+  const u32 hud = scene ? Ptr(m, scene + MELEE_HUD) : 0;
+  if (!hud || !m.Valid(hud + HUD_PORTS + 15))
+    return fade;
+  for (u32 port = 0; port < 4; ++port)
+  {
+    const u32 display = Ptr(m, hud + HUD_PORTS + 4 * port);
+    if (!display || !m.Valid(display + HUD_PORT_FADE + 3))
+      continue;
+    const float w = std::bit_cast<float>(m.Read32(display + HUD_PORT_FADE));
+    fade[port] = w > 0.0f ? std::min(w, 1.0f) : 0.0f;
+  }
+  return fade;
+}
+
+std::optional<u32> ReadFightClock(const GuestMemory& m)
+{
+  const u32 manager = Ptr(m, SCENE_MANAGER);
+  const u32 scene = manager ? Ptr(m, manager + SCENE_CURRENT) : 0;
+  const u32 rule = scene ? Ptr(m, scene + MELEE_RULE) : 0;
+  if (!rule || !m.Valid(rule + RULE_FRAMES_RUN + 3))
+    return std::nullopt;
+  return m.Read32(rule + RULE_FRAMES_RUN);
+}
+
+u8 ReadHudPorts(const GuestMemory& m)
+{
+  if (ReadResults(m).scene != Scene::Fight)
+    return 0;
+  const u32 bss = SoraMeleeBss(m);
+  const u32 manager = bss ? Ptr(m, bss + G_FT_ENTRY_MANAGER) : 0;
+  const u32 entries = manager ? Ptr(m, manager) : 0;
+  if (!entries || !m.Valid(manager + 4))
+    return 0;
+  const u32 count = std::min<u32>(m.Read32(manager + 4), 8);
+  u8 ports = 0;
+  for (u32 i = 0; i < count; ++i)
+  {
+    const u32 e = entries + ENTRY_SIZE * i;
+    if (!m.Valid(e + ENTRY_SIZE - 1))
+      break;
+    const u32 port = m.Read32(e + ENTRY_PLAYER_NO);
+    if (port < 4 && Ptr(m, e + ENTRY_OWNER))
+      ports |= static_cast<u8>(1u << port);
+  }
+  return ports;
+}
+
+namespace
+{
+std::atomic<u8> s_hud_ports{0};
+std::atomic<u32> s_hud_fade{0};
+}
+
+void HudFrame(const Core::CPUThreadGuard& guard, bool resimulating)
+{
+  if (resimulating)
+    return;
+  GuardMemory memory(guard);
+  u8 ports = ReadHudPorts(memory);
+  static std::optional<u32> s_clock;
+  static int s_still = 0;
+  const std::optional<u32> clock = ports ? ReadFightClock(memory) : std::nullopt;
+  s_still = clock && *clock > 0 && s_clock && *clock == *s_clock ? s_still + 1 : 0;
+  s_clock = clock;
+  if (s_still >= PAUSED_AFTER)
+    ports |= 0x10;
+  if (!ports && ReadSceneName(memory) == "scSelctCharacter")
+    ports = 0x20;
+  s_hud_ports.store(ports, std::memory_order_relaxed);
+  u32 packed = 0;
+  if (ports & 0x0F)
+  {
+    const std::array<float, 4> fade = ReadHudFade(memory);
+    for (int port = 0; port < 4; ++port)
+      packed |= static_cast<u32>(fade[port] * 255.0f + 0.5f) << (8 * port);
+  }
+  s_hud_fade.store(packed, std::memory_order_relaxed);
+}
+
+u8 HudPorts()
+{
+  return s_hud_ports.load(std::memory_order_relaxed);
+}
+
+std::array<u8, 4> HudFade()
+{
+  const u32 packed = s_hud_fade.load(std::memory_order_relaxed);
+  return {static_cast<u8>(packed), static_cast<u8>(packed >> 8), static_cast<u8>(packed >> 16),
+          static_cast<u8>(packed >> 24)};
+}
+
 Facts ReadFacts(const GuestMemory& memory, bool live)
 {
   Facts f;
@@ -441,8 +522,6 @@ void Frame(const Core::CPUThreadGuard& guard, int frame, bool resimulating)
     s_dots.store(0, std::memory_order_relaxed);
     return;
   }
-  // Brawl's verdict needs the live fight state, and in both games the fighters being in is when a
-  // game began (FIGHT_SEEN: the room's game-start, after the loading image).
   const Facts facts = ReadFacts(memory, true);
   const SetState before = SetBlock::ReadSet(memory);
   const SetState after = Step(before, header->ruleset, facts, static_cast<u32>(frame));
@@ -472,7 +551,6 @@ void Frame(const Core::CPUThreadGuard& guard, int frame, bool resimulating)
   const Ranked::Ruleset* rules = RulesOf(header->ruleset);
   if (rules && rules->SetWritesGameRules() && facts.scene != Scene::Fight)
   {
-    // Test knob ORCA_TEST_SET_RULES=<stocks>,<minutes> for shorter games.
     static const std::optional<std::pair<u8, u8>> s_rules = []() -> std::optional<std::pair<u8, u8>> {
       const char* v = std::getenv("ORCA_TEST_SET_RULES");
       char* end = nullptr;
@@ -487,7 +565,6 @@ void Frame(const Core::CPUThreadGuard& guard, int frame, bool resimulating)
     }();
     WriteSetRules(memory, after, *rules, s_rules);
   }
-  // Show VICTORY or DEFEAT on the deciding game's results screen. Local display, never on re-runs.
   if (!resimulating && after.done == 1 && facts.scene == Scene::Results && after.games > 0 &&
       after.winner != NO_PORT)
   {
@@ -554,11 +631,9 @@ std::string ScoreLine(const SetState& set, int local_port, bool results)
     return fmt::format("Set over · {}–{}", mine, theirs);
   if (set.tiebreak)
     return fmt::format("Tiebreak game · {}–{}", mine, theirs);
-  // On a results screen, name the game just played. The set already counts it there.
   const int played = set.wins[0] + set.wins[1];
   if (results && played > 0)
     return fmt::format("Game {} · {}–{}", played, mine, theirs);
-  // Elsewhere the dots and the result toast already say it.
   return "";
 }
 
@@ -576,7 +651,6 @@ std::string ResultToast(std::string_view out, int mine, int theirs)
 std::string CurrentScoreLine()
 {
   const u32 packed = s_published.load(std::memory_order_relaxed);
-  // Menus only, never over a fight.
   if (!(packed & 0x80000000u) || (packed & (1u << 30)))
     return "";
   SetState s;
@@ -590,4 +664,4 @@ void SetLocalPort(int port)
 {
   s_local_port.store(port, std::memory_order_relaxed);
 }
-}  // namespace Orca::UX::RankedSet
+}

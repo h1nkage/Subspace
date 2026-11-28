@@ -1,0 +1,4 @@
+If you somehow missed dragging your disc image file directly into Subspace, or you otherwise messed up your games directory or got lost
+and ended up here, don't worry. All you have to do still is move your "Super Smash Bros. Brawl (USA)" file to this folder.
+
+Subspace supports either Rev 1 or Rev 2, and .iso/.rvz/.wbfs/.wia/.gcz extensions.

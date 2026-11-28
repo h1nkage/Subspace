@@ -15,12 +15,9 @@ namespace Orca::UX
 {
 inline constexpr int GENERIC_COMPAT = 1;
 
-// Selection uses only the boot's verified bundle and local jail verdict. Tree bundles are
-// available to TEST-key builds only; flat bundles always require a jail.
 bool GenericModuleEligible(const Profile* profile, Mod::BundleKind kind, bool jailed,
                            bool test_build);
 
-// Engine-only sessions: no game addresses, rules, scene reads, or guest writes.
 class GenericModule final : public Engine::Module,
                             private Engine::Verdicts,
                             private Engine::HeaderHost,
@@ -76,4 +73,4 @@ private:
 };
 
 GenericModule& Generic();
-}  // namespace Orca::UX
+}

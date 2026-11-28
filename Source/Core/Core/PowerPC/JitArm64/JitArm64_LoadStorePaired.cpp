@@ -25,10 +25,6 @@ void JitArm64::psq_lXX(UGeckoInstruction inst)
   // If fastmem is enabled, the asm routines assume address translation is on.
   FALLBACK_IF(!js.assumeNoPairedQuantize && jo.fastmem &&
               !(m_ppc_state.feature_flags & FEATURE_FLAG_MSR_DR));
-  // Orca: in a session, send to the interpreter exactly the psq_l and psq_st that Jit64 does
-  // (address translation off, or rA = 0), so a Mac and a PC run each one on the same core. The
-  // interpreter's results differ from both JITs' (SNaNs, denormal flushing). Rarely hit in
-  // practice.
   FALLBACK_IF(m_orca_session &&
               (inst.RA == 0 || !(m_ppc_state.feature_flags & FEATURE_FLAG_MSR_DR)));
 
@@ -130,10 +126,6 @@ void JitArm64::psq_lXX(UGeckoInstruction inst)
 
   if (m_orca_session)
   {
-    // Orca: Jit64 widens psq_l's singles with CVTPS2PD, which quiets an SNaN and keeps everything
-    // else exact. JitArm64 keeps the raw bits, so in a session set the quiet bit of each NaN lane
-    // here to match. FCMEQ only compares (a denormal still equals itself under FPCR.FZ), so other
-    // values stay bit for bit. Only a float type can load a NaN.
     const ARM64Reg VS_d = EncodeRegToDouble(VS);
     const auto quiet_reg = fpr.GetScopedReg();
     const ARM64Reg quiet = EncodeRegToDouble(quiet_reg);
@@ -173,7 +165,6 @@ void JitArm64::psq_stXX(UGeckoInstruction inst)
   // If fastmem is enabled, the asm routines assume address translation is on.
   FALLBACK_IF(!js.assumeNoPairedQuantize && jo.fastmem &&
               !(m_ppc_state.feature_flags & FEATURE_FLAG_MSR_DR));
-  // Orca: as Jit64 does it, in a session (see psq_lXX).
   FALLBACK_IF(m_orca_session &&
               (inst.RA == 0 || !(m_ppc_state.feature_flags & FEATURE_FLAG_MSR_DR)));
 
@@ -193,9 +184,6 @@ void JitArm64::psq_stXX(UGeckoInstruction inst)
   if (!js.assumeNoPairedQuantize)
     fpr.Lock(ARM64Reg::Q1);
 
-  // Orca: in a session, a single is stored bit for bit only when it is store-safe (an arithmetic
-  // result). Any other (loaded by psq_l, say) is rounded to single as Jit64 does it (CVTPD2PS):
-  // a denormal flushes in the guest's non-IEEE mode and an SNaN goes quiet.
   const bool have_single =
       fpr.IsSingle(inst.RS) && (!m_orca_session || js.fpr_is_store_safe[inst.RS]);
 

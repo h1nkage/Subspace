@@ -6,7 +6,7 @@
     name="DolphinTeam.DolphinEmuUpdater"
     type="win32"
 />
-<description>Dolphin updater</description>
+<description>Subspace updater</description>
 <dependency>
     <dependentAssembly>
         <assemblyIdentity

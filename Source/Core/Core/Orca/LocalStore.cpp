@@ -17,7 +17,7 @@ namespace
 std::mutex s_mutex;
 bool s_seen_loaded = false;
 std::string s_seen_text;
-}  // namespace
+}
 
 bool SeenIn(std::string_view text, std::string_view key)
 {
@@ -107,4 +107,4 @@ bool KeepControls(std::string_view text)
   const std::string path = ControlsPath();
   return !path.empty() && File::WriteStringToFile(path, text);
 }
-}  // namespace Orca::LocalStore
+}

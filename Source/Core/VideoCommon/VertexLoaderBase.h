@@ -71,7 +71,6 @@ public:
   // used by VertexLoaderManager
   NativeVertexFormat* m_native_vertex_format = nullptr;
   int m_numLoadedVertices = 0;
-  // Orca: the indexed reads each vertex makes (VertexLoaderManager::IndexedReadsFit).
   std::array<VertexLoaderManager::IndexedRead, VertexLoaderManager::MAX_INDEXED_READS>
       m_indexed_reads{};
   std::size_t m_num_indexed_reads = 0;

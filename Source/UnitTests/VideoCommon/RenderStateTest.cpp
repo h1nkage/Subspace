@@ -7,10 +7,6 @@
 #include "VideoCommon/BPMemory.h"
 #include "VideoCommon/RenderState.h"
 
-// Orca: on GPUs without D3D11.1 logic ops (older Intel integrated graphics), logic ops are
-// approximated with blending. D3D11 refuses a *_COLOR factor in the alpha blend factors, so the
-// approximation must only ever put the ALPHA forms there.
-
 static BlendingState LogicOpState(u32 mode, bool alpha_update)
 {
   BlendingState state;
@@ -48,7 +44,6 @@ TEST(OrcaLogicOpApproximation, AlphaFactorsNeverUseColorFactors)
 
 TEST(OrcaLogicOpApproximation, AlphaFactorsMatchTheColorFactors)
 {
-  // XOR: InvDstClr / InvSrcClr for color, InvDstAlpha / InvSrcAlpha for alpha.
   BlendingState xor_state = LogicOpState(static_cast<u32>(LogicOp::Xor), true);
   xor_state.ApproximateLogicOpWithBlending();
   EXPECT_TRUE(xor_state.blend_enable);
@@ -57,13 +52,11 @@ TEST(OrcaLogicOpApproximation, AlphaFactorsMatchTheColorFactors)
   EXPECT_EQ(xor_state.src_factor_alpha.Value(), SrcBlendFactor::InvDstAlpha);
   EXPECT_EQ(xor_state.dst_factor_alpha.Value(), DstBlendFactor::InvSrcAlpha);
 
-  // AND: DstClr / Zero becomes DstAlpha / Zero; factors without a color form are kept.
   BlendingState and_state = LogicOpState(static_cast<u32>(LogicOp::And), true);
   and_state.ApproximateLogicOpWithBlending();
   EXPECT_EQ(and_state.src_factor_alpha.Value(), SrcBlendFactor::DstAlpha);
   EXPECT_EQ(and_state.dst_factor_alpha.Value(), DstBlendFactor::Zero);
 
-  // OR_REVERSE keeps its alpha factors as they are.
   BlendingState or_reverse = LogicOpState(static_cast<u32>(LogicOp::OrReverse), true);
   or_reverse.ApproximateLogicOpWithBlending();
   EXPECT_EQ(or_reverse.src_factor_alpha.Value(), SrcBlendFactor::One);

@@ -994,7 +994,6 @@ void NetPlayClient::OnPlayerPingData(sf::Packet& packet)
     packet >> player.ping;
   }
 
-  DisplayPlayersPing();
   m_dialog->Update();
 }
 
@@ -1548,15 +1547,6 @@ void NetPlayClient::OnGameDigestAbort()
 void NetPlayClient::Send(const sf::Packet& packet, const u8 channel_id)
 {
   Common::ENet::SendPacket(m_server, packet, channel_id);
-}
-
-void NetPlayClient::DisplayPlayersPing()
-{
-  if (!Config::Get(Config::GFX_SHOW_NETPLAY_PING))
-    return;
-
-  OSD::AddTypedMessage(OSD::MessageType::NetPlayPing, fmt::format("Ping: {}", GetPlayersMaxPing()),
-                       OSD::Duration::SHORT, OSD::Color::CYAN);
 }
 
 u32 NetPlayClient::GetPlayersMaxPing() const
@@ -2882,6 +2872,15 @@ void NetPlayClient::OnOrcaRoom(sf::Packet& packet)
     launch.site = fresh->Site();
     launch.name = m_player_name;
     m_dialog->LaunchOrca(launch);
+    break;
+  }
+  case Op::Delay:
+  {
+    u32 frames = 0;
+    s32 at = -1;
+    packet >> frames >> at;
+    if (packet && frames >= 1 && frames <= 12 && at >= 0)
+      m_dialog->OrcaDelay(frames, at);
     break;
   }
   case Op::OpenResult:

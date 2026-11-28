@@ -33,7 +33,7 @@ void SetEnv(const char* name, const std::string& value)
     setenv(name, value.c_str(), 1);
 #endif
 }
-}  // namespace
+}
 
 TEST(OrcaStatus, ShortcutsRequiresFrontendHandlersAndKeepsChatMeaning)
 {
@@ -79,7 +79,6 @@ TEST(OrcaStatus, ReportsRemainSurvivableAfterOnlineWithdrawal)
                    "orca error network Still playing solo\n"
                    "orca error peer_left Still playing solo\n"
                    "orca error room_mismatch Still playing solo\n");
-  // Withdrawal keeps every other base capability, including future additions, in order.
   std::istringstream base{Orca::Status::CAPS};
   std::string expected;
   for (std::string cap; base >> cap;)
@@ -113,7 +112,6 @@ TEST(OrcaStatus, LegacyRebootReagreesOnlyTheAppsListedCapabilities)
   EXPECT_FALSE(Orca::Status::Cap("join"));
   EXPECT_FALSE(Orca::Status::Cap("host"));
   EXPECT_TRUE(Orca::Status::Cap("stats"));
-  // SetActiveProfile is the in-process boot path and calls ResetOnline after resetting guards.
   Orca::SetActiveProfile(Orca::Profile{});
   EXPECT_TRUE(Orca::Status::Cap("join"));
   EXPECT_TRUE(Orca::Status::Cap("host"));
@@ -222,7 +220,6 @@ TEST(OrcaStatus, CoSeatsCapsAreAppendOnlyAndFitLegacyReaders)
       before += " music results locks queue2 pick-casual pick-ranked talk rumble";
       if (product)
       {
-        // Core always includes BroadcastSink.cpp; its private define is not a test define.
         before += " replay broadcast";
       }
       before += " record hostui";
@@ -270,7 +267,6 @@ TEST(OrcaStatus, CoSeatsCapsAreAppendOnlyAndFitLegacyReaders)
 
 TEST(OrcaStatusDeathTest, ErrorsAndLegacyReportsBrandTheOutputAndListener)
 {
-  // Error's first-failure state lasts for the process, so exercise each route in a fresh child.
   for (bool report : {false, true})
   {
     ASSERT_EXIT(
@@ -304,8 +300,6 @@ TEST(OrcaStatusDeathTest, ErrorsAndLegacyReportsBrandTheOutputAndListener)
 #if defined(__APPLE__) || defined(__linux__)
 TEST(OrcaStatus, CapabilityReadsContinueWhileStatusOutputIsBlocked)
 {
-  // Stall inside the stream's write callback: the output thread definitely holds the status
-  // output lock, without relying on pipe capacity, scheduler ordering, or a real app.
   struct Output
   {
     std::mutex mutex;
@@ -360,7 +354,6 @@ TEST(OrcaStatus, CapabilityReadsContinueWhileStatusOutputIsBlocked)
   }
   auto capability = std::async(std::launch::async, [] { return Orca::Status::Cap("direct"); });
   const auto ready = capability.wait_for(std::chrono::milliseconds(200));
-  // Release before inspecting the assertion/future, including on the old implementation.
   {
     std::lock_guard lock(output.mutex);
     output.released = true;

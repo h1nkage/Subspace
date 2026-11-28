@@ -71,7 +71,7 @@ static bool InitWindow()
     return false;
 
   window_handle =
-      CreateWindow(L"UPDATER", L"Dolphin Updater", WINDOW_FLAGS, CW_USEDEFAULT, CW_USEDEFAULT, 500,
+      CreateWindow(L"UPDATER", L"Subspace Updater", WINDOW_FLAGS, CW_USEDEFAULT, CW_USEDEFAULT, 500,
                    100, nullptr, nullptr, GetModuleHandle(nullptr), 0);
 
   if (!window_handle)
@@ -255,11 +255,6 @@ void Stop()
   ui_thread.join();
 }
 
-bool IsTestMode()
-{
-  return std::getenv("DOLPHIN_UPDATE_SERVER_URL") != nullptr;
-}
-
 void LaunchApplication(std::string path)
 {
   const auto wpath = UTF8ToWString(path);
@@ -274,8 +269,6 @@ void LaunchApplication(std::string path)
     std::wstring cmdline = L"\"" + wpath + L"\"";
     STARTUPINFOW startup_info{.cb = sizeof(startup_info)};
     PROCESS_INFORMATION process_info;
-    if (IsTestMode())
-      SetEnvironmentVariableA("DOLPHIN_UPDATE_TEST_DONE", "1");
     if (CreateProcessW(wpath.c_str(), cmdline.data(), nullptr, nullptr, TRUE, 0, nullptr, nullptr,
                        &startup_info, &process_info))
     {

@@ -62,7 +62,7 @@ u64 MemoryChecksum(Core::System& system)
   return RamChecksum({memory.GetRAM(), memory.GetRamSize()},
                      {memory.GetEXRAM(), memory.GetEXRAM() ? memory.GetExRamSize() : 0});
 }
-}  // namespace
+}
 
 bool ProductMode()
 {
@@ -78,8 +78,6 @@ struct WatchOrigin
   unsigned port;
 };
 
-// Deliberately accept only the DNS/IPv4 authorities used by rooms. Reject ambiguous encodings
-// before passing the original URL to the socket library.
 std::optional<WatchOrigin> ParseWatchOrigin(std::string_view url, bool origin_only)
 {
   if (url.find_first_of("\\@#") != std::string_view::npos ||
@@ -117,7 +115,7 @@ std::optional<WatchOrigin> ParseWatchOrigin(std::string_view url, bool origin_on
   }
   return WatchOrigin{scheme, std::move(host), port};
 }
-}  // namespace
+}
 
 bool WatchSourceAllowed(std::string_view source, std::string_view rooms_origin, bool test_knobs,
                         std::string* error)
@@ -156,7 +154,6 @@ std::unique_ptr<File::IOFile> OpenReplayFile(const std::string& path, std::strin
   if (_fstat64(_fileno(file->GetHandle()), &info) != 0 ||
       (info.st_mode & _S_IFMT) != _S_IFREG)
 #else
-  // A FIFO must not block before its descriptor can be checked.
   const int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
   if (fd < 0)
   {
@@ -277,7 +274,6 @@ std::vector<std::vector<u8>> RepackedPieces(const std::vector<u8>& written, int*
     *too_big = false;
   if (max_piece == 0 || written.empty())
     return {};
-  // Our own bytes, but read back with the untrusted reader's bounds all the same.
   Orca::Net::ReplayStreamReader reader;
   std::string error;
   if (!reader.Feed(written.data(), written.size(), &error) || !reader.Info() ||
@@ -310,8 +306,6 @@ std::vector<std::vector<u8>> RepackedPieces(const std::vector<u8>& written, int*
   return pieces;
 }
 
-// ---- PackedSender ----
-
 PackedSender::PackedSender(Send send) : m_send(std::move(send))
 {
 }
@@ -332,7 +326,6 @@ void PackedSender::Submit(std::vector<u8> written, u64 generation, u32 history)
   {
     m_started = true;
     m_thread.Reset("Replay packer", [this](Job job) {
-      // A newer copy is waiting: it covers this one.
       if (job.sequence != m_latest.load())
         return;
       int frames = 0;
@@ -348,8 +341,6 @@ void PackedSender::Submit(std::vector<u8> written, u64 generation, u32 history)
   const u64 sequence = m_latest.fetch_add(1) + 1;
   m_thread.Push(Job{std::move(written), generation, history, sequence});
 }
-
-// ---- Writer ----
 
 struct Writer::Timing
 {
@@ -369,7 +360,6 @@ std::unique_ptr<Writer> Writer::ForMatch()
     base = Orca::GetEnv("ORCA_TEST_REPLAY_OUT");
     to_room = Orca::GetEnv("ORCA_TEST_REPLAY_ROOM") == "1";
   }
-  // The product's writer: room only, while the room records (Online::RecordWanted).
   if (base.empty() && !to_room)
   {
     if (!Orca::SessionActive())
@@ -387,7 +377,6 @@ Writer::Writer(std::string base, bool to_room, bool gated)
 {
 }
 
-// The next whole unit to the file and, once its stream has started there, to the room.
 bool Writer::Emit(const std::vector<u8>& bytes)
 {
   if (m_file && (!m_file->WriteBytes(bytes.data(), bytes.size()) || !m_file->Flush()))
@@ -396,7 +385,6 @@ bool Writer::Emit(const std::vector<u8>& bytes)
     Orca::Online::SendReplayStream(bytes);
   if (m_to_room && !m_written_over)
   {
-    // ~60 KB a minute: past this, about 6 hours in, the copy wouldn't pack into 1 MiB anyway.
     constexpr size_t MAX_WRITTEN = 24u << 20;
     if (m_written.size() + bytes.size() > MAX_WRITTEN)
     {
@@ -413,8 +401,6 @@ bool Writer::Emit(const std::vector<u8>& bytes)
   return true;
 }
 
-// The room's stream starts: the header, then the frames written so far, a few hundred a message
-// (a room message holds at most 64 KiB).
 bool Writer::StartRoom(const Orca::Net::ReplayArchive& replay, int live)
 {
   bool emitted = false;
@@ -470,16 +456,12 @@ void Writer::SendPacked()
   }
   if (m_gated && !Orca::Online::RecordWanted())
     return;
-  // This history's copy already packed past 1 MiB: later ones only grow.
   if (m_packer && m_packer->TooBig(m_segment))
     return;
   if (!m_packer)
   {
-    // A room reopened while this packed: its stream starts again and the next result's copy goes
-    // there.
     m_packer = std::make_unique<PackedSender>(&Orca::Online::SendReplayPacked);
   }
-  // A copy of what was written (a memcpy of ~60 KB a minute of play); the packing happens there.
   m_packer->Submit(m_written, m_room_generation, m_segment);
 }
 
@@ -492,7 +474,6 @@ void Writer::LogTiming(bool final) const
     double total = 0;
     for (double us : calls)
       total += us;
-    // Nearest-rank percentiles; an empty group has no cost.
     const auto percentile = [&calls](size_t percent) {
       return calls.empty() ? 0.0 : calls[(calls.size() * percent + 99) / 100 - 1];
     };
@@ -514,8 +495,6 @@ Writer::~Writer()
 bool Writer::Pump(const Orca::Net::ReplayArchive& replay, int end, int live,
                   const std::map<int, u64>* checksums, bool room_ready)
 {
-  // The product writer does nothing while this room doesn't record. The answer (the app's caps,
-  // the player's choice, the room) changes rarely and takes three locks: asked twice a second.
   if (m_gated)
   {
     if (!room_ready)
@@ -528,8 +507,6 @@ bool Writer::Pump(const Orca::Net::ReplayArchive& replay, int end, int live,
     if (!m_record_wanted)
       return true;
   }
-  // The test timer covers every return, including calls with nothing settled yet. With it off,
-  // no timing samples or clock reads are added to the writer's normal flush cadence.
   const auto started = m_timing ? Clock::now() : Clock::time_point{};
   bool emitted = false;
   Common::ScopeGuard timing([&] {
@@ -558,19 +535,12 @@ bool Writer::Pump(const Orca::Net::ReplayArchive& replay, int end, int live,
     }
   }
   const u32 seed = replay.frames[0].seed;
-  // Another history (a fresh start or a join: a new first frame, origin or seed, or an archive that
-  // starts over shorter than what was written). Not a rollback: the session loads the newest
-  // snapshot at or before the frame it guessed wrong, which on a machine that snapshots every few
-  // frames (Windows: 3-11 ms each) can be before frames already written; they re-run with the same
-  // inputs and `end` dips under m_written_end until the re-run passes it, with nothing new to write.
   if (!m_started || replay.first_frame != m_first || replay.origin_hash != m_origin ||
       seed != m_seed || replay.EndFrame() < m_written_end)
   {
-    // Another history: a file of its own, from its first frame.
     ++m_segment;
     const std::string path =
         m_base.empty() ? std::string() : fmt::format("{}-{}.ssr", m_base, m_segment);
-    // Others may read it as it grows (a live watcher of the file, on Windows too).
     m_file = path.empty() ? nullptr :
                             std::make_unique<File::IOFile>(path, "wb", File::SharedAccess::Read);
     Orca::Net::ReplayStreamInfo info;
@@ -617,7 +587,6 @@ bool Writer::Pump(const Orca::Net::ReplayArchive& replay, int end, int live,
   for (int f = chunk.first; f < chunk.first + count; ++f)
   {
     Orca::Net::ReplayFrame frame = *replay.At(f);
-    // A frame recorded before its hook ran (none should be final) takes the last ports.
     if (!frame.ports)
     {
       frame.ports = chunk.frames.empty() ?
@@ -654,9 +623,6 @@ bool Writer::Pump(const Orca::Net::ReplayArchive& replay, int end, int live,
   return true;
 }
 
-// ---- Player ----
-
-// A watch URL's stream, handed from its socket's thread to the player.
 struct Player::Watch
 {
   std::shared_ptr<Orca::BootAudit::Audit> audit;
@@ -684,9 +650,6 @@ Player::~Player()
   }
 }
 
-// The URL to watch on, with a ticket good now. A `watch:<room>` source gets a watch ticket from the
-// site for the dev game, as the app's page would get one for a real listing, so every reconnect
-// has a fresh one; a ws(s):// URL is used as given (its ticket expires).
 static std::string WatchTarget(const std::string& source, std::string* error)
 {
   if (!source.starts_with("watch:"))
@@ -694,7 +657,6 @@ static std::string WatchTarget(const std::string& source, std::string* error)
   std::string site = Orca::GetEnv("ORCA_SITE");
   if (site.empty())
   {
-    // No built-in room service: a watch ticket needs one named explicitly.
     *error = "no online service is configured (set ORCA_SITE)";
     return {};
   }
@@ -755,25 +717,16 @@ void Player::WatchThread(std::string source)
     if (fatal)
       watch.pending = {};
   };
-  // ORCA_TEST_REPLAY_WATCH_DROP=<s>: the socket drops once, that long after it first connected, as
-  // a network failure would (the reconnect test).
   const int drop_after = !m_product && Orca::UX::TestKnobsAllowed() ?
                             std::max(0, std::atoi(Orca::GetEnv("ORCA_TEST_REPLAY_WATCH_DROP").c_str())) :
                             0;
   bool dropped = false;
-  // This segment's bytes taken so far. A connection starts the newest segment from its header,
-  // so after a reconnect the first `received` bytes are ones already played: they are skipped,
-  // and the first of them (`head`) must be the same, or it is another stream.
   u64 received = 0;
   std::vector<u8> head;
   int connections = 0;
-  // Connections in a row that closed with nothing new (a finished stream sends its backlog and
-  // closes): the stream is over after a few, rather than reconnecting forever.
   int fruitless = 0;
   while (!watch.stop)
   {
-    // A busy room may take a while to answer: a few tries, a moment apart, before giving up; a
-    // dropped connection gets about half a minute to come back.
     Common::WebSocket socket;
     std::string error;
     bool connected = false;
@@ -785,8 +738,6 @@ void Player::WatchThread(std::string source)
         WARN_LOG_FMT(ROLLBACK, "Replay: the match's stream didn't answer ({}); trying again", error);
         std::this_thread::sleep_for(std::chrono::seconds(2));
       }
-      // Both the dev ticket POST and the app-supplied socket wait on this worker, never on the
-      // CPU thread. Destruction can interrupt the wait without cancelling the session's audit.
       if (!Orca::BootAudit::WaitForOnline(watch.audit, &watch.stop))
       {
         if (!watch.stop)
@@ -823,7 +774,7 @@ void Player::WatchThread(std::string source)
     }
     const auto connected_at = Clock::now();
     u64 received_before = received;
-    u64 seen = 0;  // this connection's bytes
+    u64 seen = 0;
     auto last_ping = Clock::now();
     bool lost = false;
     while (!watch.stop)
@@ -880,8 +831,6 @@ void Player::WatchThread(std::string source)
           fail("the match's stream is damaged");
           return;
         }
-        // What this connection repeats of the stream already taken: compared where it is the
-        // stream's head, then skipped.
         size_t from = 0;
         if (seen < received)
         {
@@ -917,8 +866,6 @@ void Player::WatchThread(std::string source)
       }
       else if (t == "reset")
       {
-        // The room starts another segment, possibly a repack of this same history. The player
-        // checks its header and overlap, after every byte queued before this marker.
         bool queued;
         {
           std::lock_guard lock(watch.mutex);
@@ -976,8 +923,6 @@ std::unique_ptr<Player> Player::FromEnv()
   if (product)
   {
     Broadcast::StartReplay();
-    // Names only when the app gives them (a public replay's view-time names); a player's own replay
-    // keeps the recording's labels. A malformed map shows every port as "Player N".
     if (const std::string names = Orca::GetEnv("ORCA_REPLAY_NAMES"); !names.empty())
       play->m_names = ParseNames(names).value_or(NameMap{});
     play->m_follow = play->m_path.starts_with("ws://") || play->m_path.starts_with("wss://");
@@ -1007,8 +952,6 @@ std::unique_ptr<Player> Player::FromEnv()
   return play;
 }
 
-// Feeds the reader whatever the file has gained. False, with `error`, if it isn't a valid stream
-// for this build.
 bool Player::Poll(std::string* error)
 {
   if (!m_reader)
@@ -1029,7 +972,6 @@ bool Player::Poll(std::string* error)
     std::vector<size_t> resets;
     {
       std::lock_guard lock(m_watch->mutex);
-      // Disk verification has no network timeout. Start that clock after the audit passes.
       if (m_watch->auditing)
         m_last_data = Clock::now();
       bytes.swap(m_watch->pending.bytes);
@@ -1072,14 +1014,13 @@ bool Player::Poll(std::string* error)
   }
   if (!m_file)
   {
-    // The writer may still have it open for writing (a live watcher of a growing file).
     m_file = OpenReplayFile(m_path, error);
     if (!m_file)
     {
       if (!m_follow || *error != "the replay file can't be opened")
         return false;
       error->clear();
-      return true;  // a live stream not started yet
+      return true;
     }
   }
   const u64 size = m_file->GetSize();
@@ -1175,12 +1116,10 @@ std::optional<int> Player::Step(Core::System& system, const PlayerHost& host, in
   }
   if (!m_loaded)
   {
-    // A live stream may not have its header yet.
     while (!m_reader->Info())
     {
       if (host.stopping())
         return std::nullopt;
-      // A watch URL may take several tries to connect (WatchThread).
       const auto limit = m_watch ? std::chrono::seconds(75) : std::chrono::seconds(30);
       if (m_source_ended || Clock::now() - m_last_data > limit)
       {
@@ -1216,8 +1155,6 @@ std::optional<int> Player::Step(Core::System& system, const PlayerHost& host, in
                                    info.build, info.game_id, info.first_frame, info.origin_hash));
     PrintTime(m_position, true);
   }
-  // The window thread never touches the player or machine state. Apply its mailbox here, even
-  // while paused or waiting on a live chunk, so stdin and the window heartbeat keep working.
   const auto controls = [&] {
     if (!m_product)
       return true;
@@ -1242,8 +1179,6 @@ std::optional<int> Player::Step(Core::System& system, const PlayerHost& host, in
     if (seek)
     {
       const auto& archive = m_reader->Archive();
-      // Live playback can seek only within the history already received. An invalid target
-      // leaves the run and its pause alone, like any unsupported embed command.
       if (*seek < archive.first_frame || *seek >= archive.EndFrame())
       {
         Orca::Status::Line("unsupported replay");
@@ -1269,10 +1204,8 @@ std::optional<int> Player::Step(Core::System& system, const PlayerHost& host, in
   const auto wait_paused = [&] {
     if (!controls())
       return false;
-    // A pause queued during boot still presents the first replay frame before holding it.
     while (m_paused && !m_seek_target && *running >= origin_frame)
     {
-      // Keep the last picture visible while the CPU thread waits at its next boundary.
       host.set_catching_up(false);
       m_catching = false;
       PrintTime(m_position);
@@ -1311,8 +1244,6 @@ std::optional<int> Player::Step(Core::System& system, const PlayerHost& host, in
   Orca::Net::ReplayArchive& archive = m_reader->Archive();
   if (m_follow && !m_seek_target)
   {
-    // A live watcher stays `delay` frames behind the newest final frame, so a late chunk doesn't
-    // freeze the picture; it waits when closer, and plays out the tail once the stream goes quiet.
     if (archive.EndFrame() - frame <= m_delay)
     {
       const auto wait_start = Clock::now();
@@ -1325,8 +1256,6 @@ std::optional<int> Player::Step(Core::System& system, const PlayerHost& host, in
         if (m_seek_target || archive.EndFrame() - frame > m_delay)
           break;
         PrintTime(m_position);
-        // A file is over once it stops growing; a watch socket says so ({"t":"end"}, or it is lost
-        // for good), and its silence is a network hiccup or a reconnect, not the end.
         const auto quiet_after = m_watch ? std::chrono::seconds(150) : std::chrono::seconds(5);
         const bool quiet = m_source_ended || Clock::now() - m_last_data > quiet_after;
         if (quiet && frame < archive.EndFrame())
@@ -1334,7 +1263,6 @@ std::optional<int> Player::Step(Core::System& system, const PlayerHost& host, in
         if (quiet)
         {
           m_waited_ms += MsSince(wait_start);
-          // A watch socket lost for good ends the watching early: not a whole match.
           std::string lost;
           if (m_watch)
           {
@@ -1371,11 +1299,6 @@ std::optional<int> Player::Step(Core::System& system, const PlayerHost& host, in
     return std::nullopt;
   }
   const int behind = archive.EndFrame() - frame;
-  // A saved replay plays flat out unless asked for real time. A watcher plays flat out while far
-  // behind (joining late, or after a stall) and in real time once back near its delay; the gap
-  // between the two thresholds keeps it from flapping.
-  // Render the requested frame before a paused seek waits at the next boundary. Earlier seek
-  // frames are hidden and unthrottled, as the canonical boot is.
   const bool seeking = m_seek_target.has_value();
   bool catching = seeking ? frame < *m_seek_target : !m_realtime;
   if (m_follow && !m_realtime && !seeking)
@@ -1398,7 +1321,6 @@ std::optional<int> Player::Step(Core::System& system, const PlayerHost& host, in
     m_behind_max = std::max(m_behind_max, behind);
     m_live_max = std::max(m_live_max, behind_live);
   }
-  // A seek point: the state at this frame's start, before its hook, as an origin is taken.
   if (m_seek && !m_seek_taken && frame == m_seek->first)
   {
     m_seek_taken =
@@ -1412,8 +1334,6 @@ std::optional<int> Player::Step(Core::System& system, const PlayerHost& host, in
     Finish(host, false, "the replay has no frame at this position");
     return std::nullopt;
   }
-  // Earlier labeled recordings predate the header flag. Recognize their seat metadata
-  // too; empty startup frames have no names yet and are not compared below.
   if (!m_labeled_recording && !record->ports->empty() &&
       std::ranges::all_of(*record->ports, [](const auto& port) {
         return port.name == fmt::format("P{}", port.port + 1);
@@ -1429,8 +1349,6 @@ std::optional<int> Player::Step(Core::System& system, const PlayerHost& host, in
     Orca::Net::ReplayScope scope(&view, true, true, m_product && m_names.has_value(), true);
     on_frame(frame, true, *view.ports, false);
   }
-  // Names are also copied/rendered by the game outside Orca's writes. Labeled recordings
-  // and view-time names cannot reproduce the live run's full RAM.
   if (const auto it = m_reader->Checksums().find(frame);
       it != m_reader->Checksums().end() && !m_labeled_recording && !record->ports->empty() &&
       !(m_product && m_names))
@@ -1461,4 +1379,4 @@ std::optional<int> Player::Step(Core::System& system, const PlayerHost& host, in
   }
   return rewound;
 }
-}  // namespace Rollback::ReplayStream
+}

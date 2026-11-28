@@ -624,7 +624,7 @@ def main(argv):
         if not commit:
             raise SystemExit("give --scmrev or --commit")
         covers = a.cover or sorted(
-            n[:-4] for n in os.listdir(os.path.join(a.sys, "Orca"))
+            n[:-4] for n in os.listdir(os.path.join(a.sys, "Subspace"))
             if re.fullmatch(r"[A-Z0-9]{6}\.ini", n))
         t = make_template(a.source, a.sys, commit, a.version, covers)
         text = json.dumps(t, indent=1, sort_keys=True) + "\n"

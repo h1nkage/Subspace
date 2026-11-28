@@ -52,8 +52,6 @@ TEST(BroadcastPresentation, DisabledSinkPreservesWindowPolicy)
 
 TEST(BroadcastContract, AppHeaderMatchesEveryByte)
 {
-  // Literal desktop/src/broadcast-ring.ts ringHeader() fields and zero-filled reserved bytes.
-  // Independent of the engine constants, so an accidental layout change cannot update both sides.
   constexpr std::array<u32, 12> app_fields = {0x31425353, 1, 1280, 720, 30, 48000,
                                              2, 3, 64, 3686400, 480, 11186624};
   std::array<u8, 256> app_header{};
@@ -83,7 +81,7 @@ TEST(BroadcastContract, AppSlotOffsetsGuardsAndMetadata)
   for (const size_t offset : {size_t{256}, size_t{11059648}})
   {
     const bool is_audio = offset != 256;
-    EXPECT_EQ(memory[offset / 4], 2u);  // matching even ticket * 2
+    EXPECT_EQ(memory[offset / 4], 2u);
     EXPECT_EQ(memory[(offset + 4) / 4], is_audio ? 1920u : 3686400u);
     EXPECT_EQ(memory[(offset + 8) / 4], is_audio ? 4u : 2u);
     EXPECT_EQ(memory[(offset + 12) / 4], is_audio ? 3u : 1u);

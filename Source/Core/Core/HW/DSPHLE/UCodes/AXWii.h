@@ -47,8 +47,6 @@ protected:
   u16 m_last_main_volume = 0;
   u16 m_last_aux_volumes[3]{};
 
-  // Orca's Music switch (Orca/Music.h): the music voices' share of the main bus this frame. Host
-  // only, never saved; the mix written to RAM doesn't depend on it.
   bool m_music_split = false;
   int m_music_left[32 * 3]{};
   int m_music_right[32 * 3]{};

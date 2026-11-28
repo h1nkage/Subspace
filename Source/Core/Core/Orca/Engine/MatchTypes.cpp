@@ -23,4 +23,4 @@ std::string GameResult::DetailJson() const
   }
   return out + "}";
 }
-}  // namespace Orca::Engine
+}

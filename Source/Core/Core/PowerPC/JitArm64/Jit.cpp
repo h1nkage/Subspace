@@ -996,7 +996,6 @@ void JitArm64::Jit(u32 em_address, bool clear_cache_and_retry_on_failure)
 
   if (SConfig::GetInstance().bJITNoBlockCache)
     ClearCache();
-  // Orca: not from a hook (JitBase::CompileFromHook).
   if (!m_compiling_from_hook)
     FreeRanges();
 
@@ -1051,9 +1050,6 @@ void JitArm64::Jit(u32 em_address, bool clear_cache_and_retry_on_failure)
     const bool compiled = DoJit(em_address, b, nextPC);
     if (!compiled && m_compiling_from_hook)
     {
-      // Orca: never clear the cache under the hook's caller (JitBase::CompileFromHook). Drop the
-      // unfinished block and the fastmem entries its partial code registered; that code is in free
-      // space.
       blocks.DiscardUnfinalizedBlock(*b);
       for (const auto& [from, to] : {std::pair<const u8*, const u8*>(near_start, GetCodeEnd()),
                                      std::pair<const u8*, const u8*>(

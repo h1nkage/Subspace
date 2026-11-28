@@ -1,9 +1,6 @@
 // Copyright 2026 YouGame
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Matchmaking (ORCA.md "Matchmaking"): each game's result read from the game's memory as its frames
-// become final, the ranked set's tally, and the Online menu's lines with the app's "host".
-
 #include <map>
 #include <string>
 #include <string_view>
@@ -66,8 +63,6 @@ public:
 constexpr u32 RESULT_INFO = 0x9017F420;
 constexpr u32 SET_RULE = 0x9017F360;
 
-// Brawl's memory as the probes found it (Results.h): the scene manager, g_GameGlobal with the
-// result info and the rules, and a 1v1's result records (Mario on port 1, Link's 0x03 on port 2).
 FakeMemory Game(std::string_view scene)
 {
   FakeMemory m;
@@ -84,11 +79,11 @@ FakeMemory Game(std::string_view scene)
   m.Write32(0x90181318, RESULT_INFO);
   m.Write32(0x9018131C, SET_RULE);
   m.Fill(SET_RULE, 0x10);
-  m.Write8(SET_RULE + 0x03, 2);  // a timed match, 2 minutes: the fresh save's rules
+  m.Write8(SET_RULE + 0x03, 2);
   m.Write8(SET_RULE + 0x04, 3);
   m.Write8(SET_RULE + 0x0C, 1);
   m.Fill(RESULT_INFO, 0x24 + 4 * 0x2AC + 4);
-  m.Write8(RESULT_INFO + 0x01, 1);  // stock
+  m.Write8(RESULT_INFO + 0x01, 1);
   m.Write16(RESULT_INFO + 0x0C, 2);
   m.Write16(RESULT_INFO + 0x0E, 1);
   for (u32 port = 0; port < 4; ++port)
@@ -129,7 +124,6 @@ Reading At(Scene scene, int winner_port = 0)
   return r;
 }
 
-// Feeds a scene timeline from `first`, each scene for `frames` frames, confirming as it goes.
 struct Timeline
 {
   ResultsTracker tracker;
@@ -147,7 +141,7 @@ struct Timeline
     }
   }
 };
-}  // namespace
+}
 
 TEST(OrcaResults, ReadsTheResultInfoOnTheResultsScreenOnly)
 {
@@ -167,7 +161,6 @@ TEST(OrcaResults, ReadsTheResultInfoOnTheResultsScreenOnly)
     EXPECT_EQ(m.writes, 0);
   }
   {
-    // A timed match's stocks read as none.
     FakeMemory m = Game("scVsResult");
     SetPort(m, 0, 0, 0xFF, 0);
     EXPECT_EQ(ReadResults(m).block.ports[0].stocks, -1);
@@ -180,7 +173,6 @@ TEST(OrcaResults, ReadsTheResultInfoOnTheResultsScreenOnly)
   }
   EXPECT_EQ(ReadResults(Game("scMemoryChange")).scene, Scene::Between);
   EXPECT_EQ(ReadResults(Game("scSelctCharacter")).scene, Scene::Other);
-  // Nothing mapped: nothing read.
   EXPECT_EQ(ReadResults(FakeMemory{}).scene, Scene::Other);
 }
 
@@ -202,7 +194,6 @@ TEST(OrcaResults, JudgesAOneVersusOne)
     EXPECT_FALSE(g.timeout);
   }
   {
-    // Out of time with stocks left on both sides; a timed match is always out of time.
     SetPort(m, 0, 0, 1, 1);
     SetPort(m, 1, 0, 2, 0);
     EXPECT_TRUE(Judge(ReadResults(m).block, 7).timeout);
@@ -215,13 +206,11 @@ TEST(OrcaResults, JudgesAOneVersusOne)
     EXPECT_EQ(g.DetailJson(), R"({"f":9,"st":2,"c":[0,3],"s":[-1,-1],"to":1})");
   }
   {
-    // Both first: a draw.
     FakeMemory d = Game("scVsResult");
     SetPort(d, 1, 0, 3, 0);
     EXPECT_EQ(Judge(ReadResults(d).block, 1).kind, Kind::Draw);
   }
   {
-    // The pause menu's quit: no contest.
     FakeMemory q = Game("scVsResult");
     q.Write16(RESULT_INFO + 0x0E, 2);
     const GameResult g = Judge(ReadResults(q).block, 1);
@@ -229,7 +218,6 @@ TEST(OrcaResults, JudgesAOneVersusOne)
     EXPECT_EQ(g.why, "nocontest");
   }
   {
-    // A CPU on port 3, or port 2 a CPU: not a 1v1 of the two players.
     FakeMemory c = Game("scVsResult");
     SetPort(c, 2, 1, 3, 2);
     EXPECT_EQ(Judge(ReadResults(c).block, 1).why, "ports");
@@ -255,14 +243,11 @@ TEST(OrcaResults, AGameIsAFightThatReachesItsResults)
   ASSERT_EQ(t.out.size(), 1u);
   EXPECT_EQ(t.out[0].kind, Kind::Win);
   EXPECT_EQ(t.out[0].winner_port, 1);
-  // The frame of the first results reading.
   EXPECT_EQ(t.out[0].frame, 120);
   EXPECT_EQ(t.out[0].start, t.starts[0]);
-  // The results screen and the character select after it count nothing more.
   t.Run(Scene::Between, 5);
   t.Run(Scene::Other, 50);
   EXPECT_EQ(t.out.size(), 1u);
-  // The next game.
   t.Run(Scene::Between, 5);
   t.Run(Scene::Fight, 100);
   t.Run(Scene::Between, 5);
@@ -300,14 +285,12 @@ TEST(OrcaResults, SceneGameStartsOnlyWhenItsFirstFightFrameIsFinal)
   tracker.Store(11, At(Scene::Fight), 0);
   EXPECT_TRUE(tracker.Confirm(10, -1, &starts).empty());
   EXPECT_TRUE(starts.empty());
-  // A guessed fight that rolls back is never announced.
   tracker.Store(11, At(Scene::Other), 0);
   EXPECT_TRUE(tracker.Confirm(11, -1, &starts).empty());
   EXPECT_TRUE(starts.empty());
   tracker.Store(12, At(Scene::Fight), 0);
   EXPECT_TRUE(tracker.Confirm(12, -1, &starts).empty());
   EXPECT_EQ(starts, std::vector<int>{12});
-  // A rollback cannot replace a confirmed frame or announce it twice.
   tracker.Store(12, At(Scene::Fight), 0);
   EXPECT_TRUE(tracker.Confirm(12, -1, &starts).empty());
   EXPECT_EQ(starts, std::vector<int>{12});
@@ -322,7 +305,7 @@ TEST(OrcaResults, SceneGameStartRequiresItsPreviousFrameToBeAfterPlug)
     t.plug = plug;
     t.Run(Scene::Fight, 5);
     t.Run(Scene::Between, 2);
-    t.Run(Scene::Fight, 5);  // Sudden death cannot turn a pre-plug fight into a counted game.
+    t.Run(Scene::Fight, 5);
     t.Run(Scene::Results, 1);
     EXPECT_TRUE(t.starts.empty()) << plug;
     EXPECT_TRUE(t.out.empty()) << plug;
@@ -341,20 +324,17 @@ TEST(OrcaResults, AFightRunningWhenTheOpponentPluggedInNeverCounts)
 {
   Timeline t;
   t.Run(Scene::Fight, 50);
-  // Plugged in mid-fight: this fight is not a game of theirs.
   t.plug = 60;
   t.Run(Scene::Fight, 50);
   t.Run(Scene::Between, 5);
   t.Run(Scene::Results, 10);
   EXPECT_TRUE(t.out.empty());
-  // A fight entered right at the plug frame, whose frame before was read before it: not either.
   Timeline u;
   u.Run(Scene::Other, 10);
   u.plug = 10;
   u.Run(Scene::Fight, 20);
   u.Run(Scene::Results, 5);
   EXPECT_TRUE(u.out.empty());
-  // The next one does.
   t.Run(Scene::Other, 20);
   t.Run(Scene::Fight, 20);
   t.Run(Scene::Between, 2);
@@ -462,18 +442,14 @@ TEST(OrcaResults, OnlyFinalFramesCountAndARerunReplacesTheGuess)
     tracker.Store(f, At(Scene::Other), 0);
   for (; f < 60; ++f)
     tracker.Store(f, At(Scene::Fight), 0);
-  // On guessed inputs, port 1 won.
   for (int g = 60; g < 70; ++g)
     tracker.Store(g, At(Scene::Results, 0), 0);
   EXPECT_TRUE(tracker.Confirm(59, -1).empty());
-  // The real inputs arrive: the frames from 60 re-run (frames through 59 were final), and port 2
-  // won.
   for (int g = 60; g < 70; ++g)
     tracker.Store(g, At(Scene::Results, 1), 0);
   const auto out = tracker.Confirm(69, -1);
   ASSERT_EQ(out.size(), 1u);
   EXPECT_EQ(out[0].winner_port, 1);
-  // A frame already final is never read again.
   tracker.Store(65, At(Scene::Results, 0), 0);
   EXPECT_TRUE(tracker.Confirm(70, -1).empty());
 }
@@ -516,8 +492,6 @@ TEST(OrcaResults, AResyncForgetsWhatWasRead)
   for (int f = 0; f < 50; ++f)
     t.Store(f, At(f < 10 ? Scene::Other : Scene::Fight), 0);
   EXPECT_TRUE(t.Confirm(49, -1).empty());
-  // A keyframe loaded (resync 1): the results screen that follows is not the end of a fight seen
-  // here.
   for (int f = 50; f < 60; ++f)
     t.Store(f, At(Scene::Results, 0), 1);
   EXPECT_TRUE(t.Confirm(59, -1).empty());
@@ -526,15 +500,12 @@ TEST(OrcaResults, AResyncForgetsWhatWasRead)
 TEST(OrcaResults, TheQueueRulesPresetBrawlsRules)
 {
   FakeMemory m = Game("scSelctCharacter");
-  // The fresh save's 3 stocks stay; the mode, the stock match's time limit and the items change.
   EXPECT_EQ(WriteQueueRules(m), 3);
   EXPECT_EQ(m.Read8(SET_RULE + 0x02), 1);
   EXPECT_EQ(m.Read8(SET_RULE + 0x04), 3);
   EXPECT_EQ(m.Read8(SET_RULE + 0x08), 8);
   EXPECT_EQ(m.Read8(SET_RULE + 0x0C), 0);
-  // Twice is once.
   EXPECT_EQ(WriteQueueRules(m), 0);
-  // No rules to find: nothing written.
   FakeMemory empty;
   EXPECT_EQ(WriteQueueRules(empty), 0);
   EXPECT_EQ(empty.writes, 0);
@@ -545,13 +516,12 @@ TEST(OrcaRankedSet, FirstToTwoWins)
   Orca::Net::SetTally t;
   EXPECT_FALSE(t.Game("ada"));
   EXPECT_FALSE(t.Game("bo"));
-  EXPECT_FALSE(t.Game(""));  // a draw or a void game counts for nobody
+  EXPECT_FALSE(t.Game(""));
   const auto end = t.Game("bo");
   ASSERT_TRUE(end);
   EXPECT_EQ(end->winner, "bo");
   EXPECT_EQ(t.Wins("bo"), 2);
   EXPECT_EQ(t.Wins("ada"), 1);
-  // Nothing after the end.
   EXPECT_FALSE(t.Game("ada"));
   EXPECT_FALSE(t.Game("ada"));
 }
@@ -592,17 +562,12 @@ TEST(OrcaMatchmakingMenu, TheSearchLinesFollowTheQueue)
   Search::End();
   Search::Begin(false);
   EXPECT_TRUE(Search::Lines().second.empty());
-  // A join: its own messages take over.
   Search::Matched(false);
   EXPECT_EQ(Search::Current(), Search::State::None);
-  // A match after the player backed out never shows Found.
   Search::Matched(true);
   EXPECT_EQ(Search::Current(), Search::State::None);
 }
 
-// A matched joiner sees that the opponent was found from its `join` until the host's game is loaded
-// (or the join ends), over its own select's search lines; Current() stays None meanwhile, so
-// nothing that reads the search state changes.
 TEST(OrcaMatchmakingMenu, AMatchedJoinerSaysTheOpponentWasFound)
 {
   Search::End();
@@ -610,7 +575,6 @@ TEST(OrcaMatchmakingMenu, AMatchedJoinerSaysTheOpponentWasFound)
   Search::Matched(false);
   EXPECT_EQ(Search::Current(), Search::State::None);
   EXPECT_TRUE(Search::Joining());
-  // No room yet: the host has no name.
   EXPECT_EQ(Search::Lines().first, "Opponent found · joining their game…");
   EXPECT_EQ(Search::JoiningLines("Cy", false),
             (std::pair<std::string, std::string>{"Opponent found · joining Cy…", ""}));
@@ -618,14 +582,12 @@ TEST(OrcaMatchmakingMenu, AMatchedJoinerSaysTheOpponentWasFound)
   Search::JoinOver();
   EXPECT_FALSE(Search::Joining());
   EXPECT_TRUE(Search::Lines().first.empty());
-  // The queue's own select (queue2) searches without Search: the join says so all the same.
   Search::Matched(false);
   EXPECT_FALSE(Search::Joining());
   Search::JoinStarted();
   EXPECT_TRUE(Search::Joining());
   Search::End();
   EXPECT_FALSE(Search::Joining());
-  // A new search, or hosting, is never "joining".
   Search::JoinStarted();
   Search::Begin(true);
   EXPECT_FALSE(Search::Joining());
@@ -636,7 +598,6 @@ TEST(OrcaMatchmakingMenu, AMatchedJoinerSaysTheOpponentWasFound)
 
 TEST(OrcaMatchmakingMenu, HostIsACapResultsOnlyWithAVerifiedReader)
 {
-  // No profile here: host is offered, results is not.
   EXPECT_EQ(Orca::Status::OfferedCaps(),
             "join leave stats pause delay perf direct host chat orb gfx talk rumble record hostui");
   Orca::Status::SetAppCaps("join host results");
@@ -649,16 +610,14 @@ namespace
 {
 constexpr u32 ITEM_FREQUENCY = 0x9017BE50;
 
-// A 1v1's results screen (port 1 won) played under 3 stocks, 8:00 and items off, as the rules block
-// and the item record hold them. The fresh save's own rules (Game) differ in all three.
 FakeMemory RankedResult()
 {
   FakeMemory m = Game("scVsResult");
-  m.Write8(SET_RULE + 0x02, 0x81);  // stock; the bits above the rule are not the rule's
-  m.Write8(SET_RULE + 0x03, 2);     // a timed match's minutes: not this match's
+  m.Write8(SET_RULE + 0x02, 0x81);
+  m.Write8(SET_RULE + 0x03, 2);
   m.Write8(SET_RULE + 0x04, 3);
-  m.Write8(SET_RULE + 0x05, 0);   // handicap off
-  m.Write8(SET_RULE + 0x06, 10);  // damage ratio 1.0
+  m.Write8(SET_RULE + 0x05, 0);
+  m.Write8(SET_RULE + 0x06, 10);
   m.Write8(SET_RULE + 0x08, 8);
   m.Write8(ITEM_FREQUENCY, 0);
   m.writes = 0;
@@ -666,12 +625,11 @@ FakeMemory RankedResult()
 }
 
 const Orca::Mod::RankedRules RULES{3, 8};
-}  // namespace
+}
 
 TEST(OrcaResults, RankedRulesReadTheRulesTheFightStartedWith)
 {
   FakeMemory m = RankedResult();
-  // Not read: the rules block's own item byte (+0x0C) and the result info's +0x04 and +0x08.
   m.Write8(SET_RULE + 0x0C, 3);
   m.Write32(RESULT_INFO + 0x04, 2);
   m.Write32(RESULT_INFO + 0x08, 1);
@@ -681,9 +639,7 @@ TEST(OrcaResults, RankedRulesReadTheRulesTheFightStartedWith)
   EXPECT_EQ(Judge(checked.block, 500).kind, Kind::Win);
   EXPECT_EQ(Judge(checked.block, 500).winner_port, 0);
   EXPECT_EQ(m.writes, 0);
-  // The fresh save's rules (timed, 2 minutes, items Medium) differ from the first rule on.
   EXPECT_EQ(ReadResults(Game("scVsResult"), RULES).block.differing_rule, "stocks");
-  // Only the results screen is judged.
   FakeMemory fight = RankedResult();
   fight.Text(0x80920000, "scMelee");
   fight.Write8(SET_RULE + 0x04, 4);
@@ -699,24 +655,21 @@ TEST(OrcaResults, RankedRulesReadTheRulesTheFightStartedWith)
     EXPECT_EQ(result.winner_port, -1);
     EXPECT_EQ(result.why, fmt::format("rules-{}", rule));
     EXPECT_EQ(image.writes, 0);
-    // Without rankedRules the same screen is a win, as before.
     EXPECT_TRUE(ReadResults(image).block.differing_rule.empty());
     EXPECT_EQ(Judge(ReadResults(image).block, 500).kind, Kind::Win);
   };
   check(m, SET_RULE + 0x04, 4, "stocks");
   check(m, SET_RULE + 0x04, 2, "stocks");
-  check(m, SET_RULE + 0x02, 0x80, "stocks");  // a timed match
+  check(m, SET_RULE + 0x02, 0x80, "stocks");
   check(m, SET_RULE + 0x02, 0x02, "stocks");
   check(m, SET_RULE + 0x08, 7, "timeMinutes");
-  check(m, SET_RULE + 0x08, 0, "timeMinutes");  // no time limit
+  check(m, SET_RULE + 0x08, 0, "timeMinutes");
   for (const int frequency : {1, 2, 3, 4})
     check(m, ITEM_FREQUENCY, static_cast<u8>(frequency), "items");
-  // The engine's own two: handicap off and a damage ratio of 1.0, whatever mod.json says.
   for (const int handicap : {1, 2})
     check(m, SET_RULE + 0x05, static_cast<u8>(handicap), "handicap");
   for (const int ratio : {0, 5, 9, 11, 20})
     check(m, SET_RULE + 0x06, static_cast<u8>(ratio), "damageRatio");
-  // The first rule that differs is the one named.
   FakeMemory all = RankedResult();
   all.Write8(SET_RULE + 0x08, 6);
   all.Write8(ITEM_FREQUENCY, 2);
@@ -748,7 +701,6 @@ TEST(OrcaResults, RankedRulesThatCantBeReadAreNotRated)
     EXPECT_EQ(Judge(reading.block, 500).kind, Kind::Void);
     EXPECT_EQ(Judge(ReadResults(m).block, 500).kind, Kind::Win);
   }
-  // No rules block at all (g_GameGlobal +0x1C null).
   FakeMemory m = RankedResult();
   m.Write32(0x9018131C, 0);
   EXPECT_EQ(ReadResults(m, RULES).block.differing_rule, "stocks");
@@ -765,7 +717,6 @@ TEST(OrcaResults, RankedRulesVerdictUsesFinalFramesAndReportsOnce)
   tracker.Store(1, At(Scene::Fight), 0);
   tracker.Store(2, bad, 0);
   EXPECT_TRUE(tracker.Confirm(1, -1).empty());
-  // A rollback re-run replaces frame 2's predicted reading before it is final.
   m.Write8(ITEM_FREQUENCY, 0);
   tracker.Store(2, ReadResults(m, RULES), 0);
   auto out = tracker.Confirm(2, -1);
@@ -788,7 +739,7 @@ TEST(OrcaResults, FourSeatJointWinnersKeepSeatOrderedDetail)
   m.Write16(RESULT_INFO + 0x0E, 1);
   for (u32 port = 0; port < 4; ++port)
     m.Write8(RESULT_INFO + 0x24 + port * 0x2AC + 0x06, port % 2);
-  SetPort(m, 0, 0, 0, 3); // eliminated before the surviving winner on port 3
+  SetPort(m, 0, 0, 0, 3);
   SetPort(m, 1, 0, 0, 2);
   SetPort(m, 2, 0, 1, 0);
   SetPort(m, 3, 0, 0, 3);
@@ -800,7 +751,6 @@ TEST(OrcaResults, FourSeatJointWinnersKeepSeatOrderedDetail)
   EXPECT_EQ(g.winning_ports, 5u);
   EXPECT_EQ(g.DetailJson(), R"({"f":9000,"st":2,"c":[0,3,62,62],"s":[0,0,1,0],"to":0})");
   EXPECT_EQ(m.writes, 0);
-  // A colour partition that is not two native pairs never becomes a doubles win.
   m.Write8(RESULT_INFO + 0x24 + 2 * 0x2AC + 0x06, 1);
   EXPECT_EQ(Judge(ReadResults(m).block, 9000).why, "teams");
   m.Write8(RESULT_INFO + 0x24 + 2 * 0x2AC + 0x06, 0);
@@ -839,8 +789,6 @@ TEST(OrcaResults, FourSeatResultsWaitForConfirmationAndRollbackReplacesTheWinner
 
 TEST(OrcaResults, NativeTeamByteMatchesTheRetainedFourMachineResultRecords)
 {
-  // First 16 bytes of each 0x2AC-byte record in all four
-  // notes/friendlies-0348-runs/case-3-attempt-3/peer-*-probe-teams-results.bin dumps.
   constexpr std::array<std::array<u8, 16>, 4> records{{
       {0, 0, 0, 0, 1, 0, 0, 80, 0, 0, 1, 0, 0, 0, 0, 0},
       {3, 0, 3, 1, 2, 1, 1, 80, 0, 0, 0, 0, 0, 0, 2, 2},
@@ -860,7 +808,6 @@ TEST(OrcaResults, NativeTeamByteMatchesTheRetainedFourMachineResultRecords)
   EXPECT_EQ(g.kind, Kind::Win);
   EXPECT_EQ(g.winning_ports, 5u);
   EXPECT_EQ(g.DetailJson(), R"({"f":9000,"st":2,"c":[0,3,7,20],"s":[1,0,1,0],"to":0})");
-  // Native colours are not room team labels: every two-colour pairing works.
   for (int first = 0; first < 3; ++first)
     for (int second = 0; second < 3; ++second)
       if (first != second)

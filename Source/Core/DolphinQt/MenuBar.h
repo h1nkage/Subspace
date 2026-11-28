@@ -112,6 +112,7 @@ signals:
   void ConfigureGraphics();
   void ConfigureAudio();
   void ConfigureControllers();
+  void ConfigureNetPlay();
   void ConfigureHotkeys();
   void ConfigureFreelook();
 

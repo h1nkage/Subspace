@@ -50,7 +50,6 @@ protected:
     profile.mod.emplace();
     profile.mod->flat = flat;
     profile.mod->manifest.format = flat ? 2 : 1;
-    // A tree may list an arbitrary file, but no manifest field imports one into the NAND.
     if (save_file)
       profile.mod->tree.files.push_back({"save.bin", std::string(64, 'a'), 1});
     Orca::SetActiveProfile(std::move(profile));
@@ -61,7 +60,7 @@ private:
   std::optional<Orca::Profile> m_profile;
   bool m_seed = true;
 };
-}  // namespace
+}
 
 TEST_F(OrcaSessionIsolation, ModSessionsStartCleanWithOrWithoutATreeSaveFile)
 {
@@ -91,7 +90,6 @@ TEST_F(OrcaSessionIsolation, LegacySeedDecisionIsUnchanged)
       EXPECT_EQ(Orca::SeedSessionSave(), seed) << game;
     }
   }
-  // Even a retained mod profile must not change non-session behavior.
   Mod();
   Session("0");
   EXPECT_TRUE(Orca::SeedSessionSave());

@@ -420,8 +420,6 @@ u32 CEXIIPL::GetEmulatedTime(Core::System& system, u32 epoch)
   }
   else if (Orca::SessionActive())
   {
-    // Orca: the profile's pinned RTC plus emulated time, never the host clock, so both players read
-    // the same time.
     ltime = Config::Get(Config::MAIN_CUSTOM_RTC_VALUE);
     ltime += system.GetCoreTiming().GetTicks() / system.GetSystemTimers().GetTicksPerSecond();
   }

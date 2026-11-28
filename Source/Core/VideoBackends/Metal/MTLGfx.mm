@@ -475,19 +475,6 @@ void Metal::Gfx::DispatchComputeShader(const AbstractShader* shader,  //
   }
 }
 
-// Orca: nextDrawable can block for up to a second when the layer isn't shown (window minimized
-// or covered) or the screen is slower than the game. In a single-core session that blocks the CPU
-// thread, stalling this game and the opponent's. So no drawable is taken while the surface is
-// hidden, and when waiting would slow the game, drawables come from a background acquire one frame
-// ahead instead: a frame with no drawable ready is simply not shown. Emulated GPU work is the same
-// either way. Reasons for background acquires (Late), and when each ends:
-// - Covered: a nextDrawable waited longer than LATE_DRAWABLE. Ends when the frontend next reports
-//   the surface hidden; quick acquires prove nothing, since covered windows return some promptly.
-// - SlowScreen: the screen refreshes below MIN_SCREEN_HZ, so waiting would slow the game to the
-//   screen's rate. Ends when the window is on a screen that keeps up.
-// - Paced: PACED_COUNT of the last PACED_WINDOW calls waited PACED_WAIT or more. Ends after
-//   PROMPT_ACQUIRES prompt background acquires in a row, doubling each time Paced recurs (up to
-//   16x). A single slow wait changes nothing.
 static constexpr std::chrono::milliseconds LATE_DRAWABLE{50};
 static constexpr int MIN_SCREEN_HZ = 59;
 static constexpr std::chrono::microseconds PACED_WAIT{4000};
@@ -664,7 +651,6 @@ bool Metal::Gfx::BindBackbuffer(const ClearColor& clear_color)
     CheckForSurfaceChange();
     CheckForSurfaceResize();
     m_drawable = AcquireDrawable();
-    // Orca: no drawable, no render pass (a pass with no texture is invalid).
     if (!m_drawable)
       return false;
     m_backbuffer->UpdateBackbufferTexture([m_drawable texture]);
@@ -703,7 +689,6 @@ void Metal::Gfx::CheckForSurfaceChange()
   if (!g_presenter->SurfaceChangedTestAndClear())
     return;
   m_layer = MRCRetain(static_cast<CAMetalLayer*>(g_presenter->GetNewSurfaceHandle()));
-  // Orca: drop any background acquire still running on the old layer.
   m_drawable_probe.reset();
   m_late = Late::No;
   m_paced_waits = 0;

@@ -169,7 +169,7 @@ const Info<SerialInterface::SIDevices>& GetInfoForSIDevice(int channel)
 {
   static const std::array<const Info<SerialInterface::SIDevices>, 4> infos{
       Info<SerialInterface::SIDevices>{{System::Main, "Core", "SIDevice0"},
-                                       SerialInterface::SIDEVICE_GC_CONTROLLER},
+                                       SerialInterface::SIDEVICE_WIIU_ADAPTER},
       Info<SerialInterface::SIDevices>{{System::Main, "Core", "SIDevice1"},
                                        SerialInterface::SIDEVICE_NONE},
       Info<SerialInterface::SIDevices>{{System::Main, "Core", "SIDevice2"},
@@ -512,7 +512,7 @@ const Info<bool> MAIN_FIFOPLAYER_EARLY_MEMORY_UPDATES{
 // Main.AutoUpdate
 
 const Info<std::string> MAIN_AUTOUPDATE_UPDATE_TRACK{{System::Main, "AutoUpdate", "UpdateTrack"},
-                                                     Common::GetScmUpdateTrackStr()};
+                                                     "stable"};
 const Info<std::string> MAIN_AUTOUPDATE_HASH_OVERRIDE{{System::Main, "AutoUpdate", "HashOverride"},
                                                       ""};
 

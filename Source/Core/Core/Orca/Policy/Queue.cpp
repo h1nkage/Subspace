@@ -21,9 +21,7 @@ using Rollback::InputGate::Masks;
 
 constexpr u16 BUTTON_START = PAD_BUTTON_START;
 constexpr u16 BUTTON_B = PAD_BUTTON_B;
-}  // namespace
-
-// ---- The step machine ----
+}
 
 bool ReadyPhase(const View& v)
 {
@@ -75,8 +73,6 @@ State Advance(const View& v, const State& state, int frame)
   for (int p = 0; p < 2; ++p)
     newly[p] = static_cast<u16>(v.raw[p] & ~v.raw_prev[p]);
   const u32 now = static_cast<u32>(frame) + 1;
-  // Start with the token down readies a port. B, or picking the token back up, un-readies it.
-  // B wins if both happen in one frame.
   const auto follow = [&](int p, bool may_ready) {
     bool ready = (s.ready >> p) & 1;
     const bool placed = v.ports[p].placed;
@@ -89,16 +85,10 @@ State Advance(const View& v, const State& state, int frame)
 
   if (v.solo)
   {
-    // The queue's own character select, port 1 only. The B that cancels the search, and a Start
-    // still held from leaving a room, are hidden from the game until released. That B still held
-    // SOLO_LEAVE_FRAMES later reaches the game, which backs out as for any held B: hold B leaves
-    // whether or not the player was searching.
     const u8 ready = s.ready;
     const bool swallowing = (s.flags & FLAG_SWALLOW_B) && (v.raw[0] & BUTTON_B);
-    const u32 swallow_since = s.timer_start;  // TIMER_START's solo meaning
+    const u32 swallow_since = s.timer_start;
     const bool swallowing_start = (s.flags & FLAG_SWALLOW_START) && (v.raw[0] & BUTTON_START);
-    // A new A on BACK while ready cancels the search, then the next frame passes it to the game
-    // to back out (FLAG_BACK_A). The flag survives this frame being re-run.
     const bool back_press = Rules::CssHandOnBack(v.ports[0].hand_target, v.ports[0].hand_button) &&
                             (newly[0] & PAD_BUTTON_A);
     const bool back_a = back_press && ((ready & 1) || (s.flags & FLAG_BACK_A));
@@ -106,7 +96,6 @@ State Advance(const View& v, const State& state, int frame)
       newly[0] = static_cast<u16>(newly[0] & ~BUTTON_START);
     s = State{};
     s.ready = ready & 1;
-    // Never ready with the name list open: a room's select couldn't close it.
     follow(0, !v.ports[0].name_list);
     if (swallowing || ((ready & 1) && !(s.ready & 1) && (newly[0] & BUTTON_B)))
       s.flags |= FLAG_SWALLOW_B;
@@ -130,9 +119,7 @@ State Advance(const View& v, const State& state, int frame)
     return s;
   }
 
-  // ---- The room's character select ----
   const bool both = (v.plugged & 3) == 3;
-  // Port 2's pick from its synced queue identity, game 1 only.
   s.pick_set = v.game1 && v.pick2 && v.pick2->HasPick();
   if (s.pick_set)
   {
@@ -155,15 +142,11 @@ State Advance(const View& v, const State& state, int frame)
   }
   if (v.game1 && both)
   {
-    // Game 1's picks lock once placed: the host's as is, the joiner's once steering placed it,
-    // gave up, or had nothing to steer to.
     if (v.ports[0].placed)
       s.locked |= 1;
     const CssPort& two = v.ports[1];
     const bool steering_over = s.steer_start != 0 && s.steer >= STEER_LIMIT_FRAMES;
     const bool on_pick = s.pick_set && two.placed && two.character == s.pick_character;
-    // Accept any colour when the pick's own is unavailable: a mirror match can't share port 1's
-    // colour, and Random has no colour.
     const bool any_colour = (v.ports[0].placed && v.ports[0].character == s.pick_character &&
                              v.ports[0].costume == s.pick_costume) ||
                             s.pick_character == RANDOM_CHARACTER;
@@ -185,8 +168,6 @@ State Advance(const View& v, const State& state, int frame)
 
   if (!ReadyPhase(v))
   {
-    // Not both players in, or ranked's character order still running: nobody is ready and there
-    // is no timer. A casual timeout stays set while the players leave the room.
     s.ready = 0;
     s.flags &= FLAG_TIMED_OUT;
     if (!(s.flags & FLAG_TIMED_OUT))
@@ -195,8 +176,6 @@ State Advance(const View& v, const State& state, int frame)
     s.timer = 0;
     return s;
   }
-  // Restart the timer if its start is in the future or implausibly old (another frame
-  // numbering). It also counts when untimed, for the alternating Start presses below.
   if (s.timer_start == 0 || s.timer_start > now ||
       now - s.timer_start > u32{v.ready_frames} * 4)
   {
@@ -208,8 +187,6 @@ State Advance(const View& v, const State& state, int frame)
     return s;
   if (OrderLockedIn(v))
   {
-    // Ranked later games: the character order's Starts were the lock-ins, so go to the stage
-    // select as soon as both tokens are down.
     if (v.ports[0].placed && v.ports[1].placed)
     {
       s.ready = 3;
@@ -217,7 +194,6 @@ State Advance(const View& v, const State& state, int frame)
     }
     return s;
   }
-  // A joiner whose pick is still being put in can't ready yet.
   const bool steering = v.game1 && s.pick_set && !(s.locked & 2);
   follow(0, true);
   follow(1, !steering);
@@ -229,8 +205,6 @@ State Advance(const View& v, const State& state, int frame)
   {
     if (v.ranked)
     {
-      // Ranked continues with the current picks. If a character is missing, the no-show rule
-      // (OnlineRules.h) decides.
       if (v.ports[0].placed && v.ports[1].placed)
         s.flags |= FLAG_GO;
     }
@@ -272,22 +246,21 @@ std::optional<s64> ToFixed(float value)
   const u32 bits = std::bit_cast<u32>(value);
   const u32 exponent = (bits >> 23) & 0xFF;
   if (exponent == 0xFF)
-    return std::nullopt;  // an infinity or a NaN
+    return std::nullopt;
   if (exponent == 0)
-    return 0;  // zero or a denormal (far below one FIXED_ONE)
-  // value = mantissa * 2^(exponent - 150), so value * 2^FIXED_BITS = mantissa * 2^shift.
+    return 0;
   const u64 mantissa = (bits & 0x7FFFFF) | 0x800000;
   const int shift = static_cast<int>(exponent) - 150 + FIXED_BITS;
   u64 magnitude;
   if (shift >= 0)
   {
     if (shift > 16)
-      return std::nullopt;  // 2^40 and more: far past FIXED_LIMIT
+      return std::nullopt;
     magnitude = mantissa << shift;
   }
   else
   {
-    magnitude = shift <= -24 ? 0 : mantissa >> -shift;  // truncated toward zero
+    magnitude = shift <= -24 ? 0 : mantissa >> -shift;
   }
   if (magnitude >= static_cast<u64>(FIXED_LIMIT))
     return std::nullopt;
@@ -297,7 +270,6 @@ std::optional<s64> ToFixed(float value)
 
 u64 IntSqrt(u64 n)
 {
-  // Digit by digit, two bits at a time.
   u64 root = 0;
   u64 bit = u64{1} << 62;
   while (bit > n)
@@ -325,14 +297,10 @@ std::pair<u8, u8> SteerToward(float x, float y, float tx, float ty)
   const std::optional<s64> fx = ToFixed(x), fy = ToFixed(y), ftx = ToFixed(tx), fty = ToFixed(ty);
   if (!fx || !fy || !ftx || !fty)
     return centred;
-  // In FIXED_ONEs: |dx|, |dy| < 2^29, so dx * dx + dy * dy < 2^59.
   const s64 dx = *ftx - *fx, dy = *fty - *fy;
   const s64 d = static_cast<s64>(IntSqrt(static_cast<u64>(dx * dx) + static_cast<u64>(dy * dy)));
-  if (d * 10 < FIXED_ONE)  // within 0.1
+  if (d * 10 < FIXED_ONE)
     return centred;
-  // Full tilt from 3 units out, slower nearer. The larger component is at least 30, just past
-  // the game's dead zone (about 0.06 units a frame), so the hand always closes in. Components are
-  // in FIXED_ONEs (|dx * mag| < 2^29 * 2^23); divisions truncate toward zero.
   const s64 mag = std::clamp(100 * d / 3, 30 * FIXED_ONE, 100 * FIXED_ONE);
   s64 cx = dx * mag / d, cy = dy * mag / d;
   const s64 larger = std::max(cx < 0 ? -cx : cx, cy < 0 ? -cy : cy);
@@ -341,7 +309,6 @@ std::pair<u8, u8> SteerToward(float x, float y, float tx, float ty)
     cx = cx * (30 * FIXED_ONE) / larger;
     cy = cy * (30 * FIXED_ONE) / larger;
   }
-  // Round centre + c half up, matching lround for positive values (the shift is a floor).
   const auto axis = [](s64 c, u8 centre) {
     const s64 v = (static_cast<s64>(centre) * FIXED_ONE + c + FIXED_ONE / 2) >> FIXED_BITS;
     return static_cast<u8>(std::clamp<s64>(v, 1, 255));
@@ -355,7 +322,6 @@ bool HandStill(float x, float y, float prev_x, float prev_y)
                            py = ToFixed(prev_y);
   if (!fx || !fy || !px || !py)
     return false;
-  // |d| < 0.05, written as 20 * |d| < 1.
   const auto under = [](s64 d) { return 20 * (d < 0 ? -d : d) < FIXED_ONE; };
   return under(*fx - *px) && under(*fy - *py);
 }
@@ -367,14 +333,8 @@ Masks Gate(const View& v, const State& s)
     return masks;
   if (v.solo)
   {
-    // Port 1 only. Start (ready) never reaches the game. While ready, B only cancels the search
-    // (until held SOLO_LEAVE_FRAMES). Z is the game's own.
     masks[0].buttons =
         BUTTON_START | ((s.ready & 1) || (s.flags & FLAG_SWALLOW_B) ? BUTTON_B : 0);
-    // A on BACK while ready first cancels the search, then reaches the game a frame later
-    // (FLAG_BACK_A), so the app hears `orca queue unready` before the game backs out. The stick is
-    // centred while a new A is down so the hand stays on BACK. An A already held when the hand
-    // arrived leaves the stick free.
     if (Rules::CssHandOnBack(v.ports[0].hand_target, v.ports[0].hand_button))
     {
       if (s.ready & 1)
@@ -393,8 +353,6 @@ Masks Gate(const View& v, const State& s)
       masks[port] = ALL;
     return masks;
   }
-  // Start is Orca's (the go). Z reaches the game, locked in or not: Project+ reads it as the
-  // select ends for the AltZ costume, which no lock covers (as R's AltR never was masked).
   masks[0].buttons = BUTTON_START;
   masks[1].buttons = BUTTON_START;
   masks[2] = ALL;
@@ -407,28 +365,23 @@ Masks Gate(const View& v, const State& s)
   }
   if (v.game1)
   {
-    // Game 1's characters are locked once in: no token pickup, no costume change.
     for (int p = 0; p < 2; ++p)
     {
       if (s.locked & (1 << p))
         masks[p].buttons |= PAD_BUTTON_A | PAD_BUTTON_B | PAD_BUTTON_X | PAD_BUTTON_Y;
     }
-    // Steer port 2's pick into place. Its own controller is ignored meanwhile.
     if (s.pick_set && !(s.locked & 2) && s.steer < STEER_LIMIT_FRAMES && (v.plugged & 2))
     {
       Mask& two = masks[1];
       two = ALL;
       const CssPort& p = v.ports[1];
-      const bool edge = (s.steer & 3) == 0;  // press every fourth frame, released between
+      const bool edge = (s.steer & 3) == 0;
       two.steer = s.steer >= STEER_SETTLE_FRAMES;
       if (!two.steer)
       {
-        // Stick centred while the game calibrates the new pad (ALL centres it).
       }
       else if (p.placed)
       {
-        // On the wrong character, pick the token back up. On the right one in the wrong costume,
-        // press X (except on Random, which accepts any).
         if (p.character != s.pick_character)
           two.press = edge ? BUTTON_B : 0;
         else if (p.costume != s.pick_costume && s.pick_character != RANDOM_CHARACTER)
@@ -436,8 +389,6 @@ Masks Gate(const View& v, const State& s)
       }
       else if (p.hand_target == Rules::CSS_HAND_GRID_HOLDING && p.character == s.pick_character)
       {
-        // Over the pick: press A once the hand has nearly stopped. The character read lags the
-        // hand by a frame, so a moving hand could drop the token on the next character.
         const bool still = HandStill(p.hand_x, p.hand_y, v.hand2_prev_x, v.hand2_prev_y);
         two.press = edge && still ? PAD_BUTTON_A : 0;
       }
@@ -449,8 +400,6 @@ Masks Gate(const View& v, const State& s)
       }
     }
   }
-  // A ready player's pick is frozen (no A, X or Y). B only un-readies; the game never sees it,
-  // because the online rules only pass a press's first frame.
   for (int p = 0; p < 2; ++p)
   {
     if (s.ready & (1 << p))
@@ -463,4 +412,4 @@ Masks Gate(const View& v, const State& s)
   }
   return masks;
 }
-}  // namespace Orca::UX::Queue
+}

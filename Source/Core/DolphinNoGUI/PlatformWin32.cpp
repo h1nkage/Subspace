@@ -75,8 +75,13 @@ private:
   void ProcessEvents();
   void UpdateEmbedFocus();
   void KeepAdoptedPlaced();
+  void SetFullscreen(bool fullscreen);
 
   HWND m_hwnd{};
+  // The windowed style and placement to go back to.
+  LONG_PTR m_saved_style = 0;
+  LONG_PTR m_saved_ex_style = 0;
+  WINDOWPLACEMENT m_saved_placement{sizeof(WINDOWPLACEMENT)};
   // --embed-adopted: the app's launcher made the window a child of the app's (Embed.h).
   bool m_adopted = false;
   int m_misplaced_notes = 0;
@@ -264,10 +269,10 @@ bool PlatformWin32::Init()
   if (IsEmbedded())
     return true;
 
-  // TODO: Enter fullscreen if enabled.
   if (Config::Get(Config::MAIN_FULLSCREEN))
   {
     ProcessEvents();
+    SetFullscreen(true);
   }
 
   if (Config::Get(Config::MAIN_DISABLE_SCREENSAVER))
@@ -325,6 +330,42 @@ void PlatformWin32::UpdateWindowPosition()
   m_window_y = rc.top;
   m_window_width = rc.right - rc.left;
   m_window_height = rc.bottom - rc.top;
+}
+
+void PlatformWin32::SetFullscreen(bool fullscreen)
+{
+  if (IsEmbedded() || m_adopted || !m_hwnd || fullscreen == m_window_fullscreen)
+    return;
+  if (fullscreen)
+  {
+    MONITORINFO monitor{sizeof(MONITORINFO)};
+    if (!GetWindowPlacement(m_hwnd, &m_saved_placement) ||
+        !GetMonitorInfo(MonitorFromWindow(m_hwnd, MONITOR_DEFAULTTONEAREST), &monitor))
+    {
+      return;
+    }
+    UpdateWindowPosition();
+    m_saved_style = GetWindowLongPtr(m_hwnd, GWL_STYLE);
+    m_saved_ex_style = GetWindowLongPtr(m_hwnd, GWL_EXSTYLE);
+    m_window_fullscreen = true;
+    SetWindowLongPtr(m_hwnd, GWL_STYLE, (m_saved_style & ~WS_OVERLAPPEDWINDOW) | WS_POPUP);
+    SetWindowLongPtr(m_hwnd, GWL_EXSTYLE,
+                     m_saved_ex_style & ~(WS_EX_CLIENTEDGE | WS_EX_WINDOWEDGE |
+                                          WS_EX_DLGMODALFRAME | WS_EX_STATICEDGE));
+    const RECT& r = monitor.rcMonitor;
+    SetWindowPos(m_hwnd, HWND_TOP, r.left, r.top, r.right - r.left, r.bottom - r.top,
+                 SWP_FRAMECHANGED | SWP_NOOWNERZORDER | SWP_SHOWWINDOW);
+  }
+  else
+  {
+    m_window_fullscreen = false;
+    SetWindowLongPtr(m_hwnd, GWL_STYLE, m_saved_style);
+    SetWindowLongPtr(m_hwnd, GWL_EXSTYLE, m_saved_ex_style);
+    SetWindowPos(m_hwnd, nullptr, 0, 0, 0, 0,
+                 SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER);
+    SetWindowPlacement(m_hwnd, &m_saved_placement);
+    UpdateWindowPosition();
+  }
 }
 
 // An adopted window can end up somewhere else in the app's window (Windows keeps a window's screen
@@ -543,9 +584,12 @@ LRESULT PlatformWin32::WndProc(const HWND hwnd, const UINT msg, const WPARAM wPa
       else if (wParam == VK_F11)
         Embed::Out("key fullscreen");
     }
-    else if (wParam == VK_ESCAPE)
+    else if (!(lParam & (1 << 30)) && wParam == VK_ESCAPE)
     {
-      platform->RequestShutdown();
+      if (platform->m_window_fullscreen)
+        platform->SetFullscreen(false);
+      else
+        platform->RequestShutdown();
     }
     break;
 
@@ -608,6 +652,12 @@ LRESULT PlatformWin32::WndProc(const HWND hwnd, const UINT msg, const WPARAM wPa
   case WM_SYSCHAR:
     if (platform && platform->IsEmbedded() && wParam != VK_F4)
       return 0;
+    if (platform && wParam == VK_RETURN && (lParam & (1 << 29)))
+    {
+      if (msg == WM_SYSKEYDOWN && !(lParam & (1 << 30)))
+        platform->SetFullscreen(!platform->m_window_fullscreen);
+      return 0;
+    }
     return DefWindowProc(hwnd, msg, wParam, lParam);
 
   // When embedded, the app's window was destroyed along with ours, so stop.

@@ -16,13 +16,11 @@ namespace
 {
 using Duration = PresentPacer::Duration;
 
-// A frame copied about 14 ms before its due time (the copy right after the game's logic), give or
-// take a millisecond.
 Duration Bare(std::mt19937& rng)
 {
   return -14ms + Duration(std::uniform_int_distribution<long long>(-1'000'000, 1'000'000)(rng));
 }
-}  // namespace
+}
 
 TEST(OrcaPresentPacing, FollowsSteadyArrivalsNearTheirLatest)
 {
@@ -31,15 +29,12 @@ TEST(OrcaPresentPacing, FollowsSteadyArrivalsNearTheirLatest)
   Duration offset{};
   for (int i = 0; i < 2000; ++i)
     offset = pacer.Next(Bare(rng));
-  // The 98th percentile of -15..-13 ms.
   EXPECT_GT(offset, -13200us);
   EXPECT_LT(offset, -12900us);
 }
 
 TEST(OrcaPresentPacing, RareLateFramesMoveNothing)
 {
-  // One rollback's re-run every 200 frames, 10 ms long: only that frame is late; the frames after
-  // it present when they would have.
   std::mt19937 rng(2);
   PresentPacer pacer;
   Duration lowest = Duration::max(), highest = Duration::min();
@@ -59,8 +54,6 @@ TEST(OrcaPresentPacing, RareLateFramesMoveNothing)
 
 TEST(OrcaPresentPacing, FrequentLateFramesAreAbsorbed)
 {
-  // A re-run every 10 frames: the offset rises to cover them and then holds, so the frames between
-  // them wait for the same time instead of following each one.
   std::mt19937 rng(3);
   PresentPacer pacer;
   int covered = 0, counted = 0;
@@ -83,7 +76,7 @@ TEST(OrcaPresentPacing, FrequentLateFramesAreAbsorbed)
   }
   EXPECT_GT(covered, counted * 2 / 3);
   EXPECT_LT(highest - lowest, 1500us);
-  EXPECT_LT(highest, -4ms);  // no later than the re-runs need
+  EXPECT_LT(highest, -4ms);
 }
 
 TEST(OrcaPresentPacing, MovesAtMostItsStepPerFrame)
@@ -110,7 +103,6 @@ TEST(OrcaPresentPacing, MovesAtMostItsStepPerFrame)
     ++frames;
   }
   EXPECT_EQ(offset, -14ms);
-  // The late arrivals leave the window first, then it walks down 12 ms at 200 us a frame.
   EXPECT_GT(frames, 200);
   EXPECT_LT(frames, 260);
 }
@@ -119,7 +111,7 @@ TEST(OrcaPresentPacing, NeverWaitsPastTheDueTime)
 {
   PresentPacer pacer;
   for (int i = 0; i < 1000; ++i)
-    EXPECT_LE(pacer.Next(40ms), 0ms);  // a stall's frame, or a re-run longer than a frame
+    EXPECT_LE(pacer.Next(40ms), 0ms);
   EXPECT_EQ(pacer.Offset(), 0ms);
   PresentPacer early;
   EXPECT_EQ(early.Next(-500ms), early.GetTuning().earliest);

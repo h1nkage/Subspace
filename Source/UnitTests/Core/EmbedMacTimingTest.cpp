@@ -15,7 +15,7 @@ using namespace std::chrono_literals;
 namespace
 {
 constexpr Embed::Mac::QueryTimer::Clock::time_point START{};
-}  // namespace
+}
 
 TEST(EmbedMacTiming, ParentQueriesAtMostTenTimesPerSecond)
 {

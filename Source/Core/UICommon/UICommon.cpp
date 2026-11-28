@@ -206,8 +206,6 @@ void InitControllers(const WindowSystemInfo& wsi)
                                       "mappings intended for the default device may not work.");
   }
 
-  // Orca: in a session the app's helper owns the GameCube adapter (Orca/Sandbox.h). Without the
-  // app (the Subspace lobby's games), the engine reads the player's own adapter itself.
   if (Orca::SessionActive() && Orca::UX::OwnAdapterPorts() != 0)
   {
     GCAdapter::SetWantedOverride(true);
@@ -517,7 +515,6 @@ void SetUserDirectory(std::string custom_path)
 
 bool TriggerSTMPowerEvent()
 {
-  // Orca: the power button would reach only this player's game; callers stop the core instead.
   if (Orca::SessionActive())
     return false;
 

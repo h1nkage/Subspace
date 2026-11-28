@@ -32,7 +32,6 @@ namespace
 {
 std::optional<CacheRecord> Load(const std::string& path)
 {
-  // A local cache is only a hint, and must be cheap to reject even when damaged.
   if (!File::IsFile(path) || File::GetSize(path) > 16384)
     return std::nullopt;
   Common::IniFile ini;
@@ -78,7 +77,7 @@ void Drop(const std::string& path)
   if (File::Exists(path))
     File::Delete(path);
 }
-}  // namespace
+}
 
 std::optional<Identity> Identify(const std::string& path, std::string* reason)
 {
@@ -91,10 +90,6 @@ std::optional<Identity> Identify(const std::string& path, std::string* reason)
   };
   std::error_code ec;
 #ifdef _WIN32
-  // Not canonical() on Windows: its GetFinalPathNameByHandleW(FILE_NAME_NORMALIZED |
-  // VOLUME_NAME_DOS) is refused inside the app's AppContainer even though the file itself opens
-  // and reads (11-01, P+'s launcher). The identity is the volume serial and file id read below,
-  // which another name for the same file can't change; the path is only recorded beside it.
   const auto canonical = std::filesystem::absolute(StringToPath(path), ec).lexically_normal();
   if (ec)
     return fail("file status failed: " + ec.message());
@@ -233,7 +228,6 @@ void Audit::Run()
     }
     const HashResult result = m_hasher(file.path, m_stop);
     const auto after = Identify(file.path);
-    // A file replaced or edited during verification never supplies a cache record or goes online.
     std::string reason;
     if (after != m_identities[i])
       reason = "changed while being verified";
@@ -258,8 +252,6 @@ void Audit::Complete(bool passed, std::string error, std::optional<std::size_t> 
   std::function<void()> failure;
   {
     std::lock_guard lock(m_mutex);
-    // Publish cache changes only after the entire audit, serialized with Cancel. In particular,
-    // cancelling the SD read must leave the launcher's record unchanged too.
     if (m_stop.load(std::memory_order_relaxed))
     {
       passed = false;
@@ -293,7 +285,6 @@ bool Audit::Wait(const std::atomic<bool>* stop)
   std::unique_lock lock(m_mutex);
   if (stop)
   {
-    // A watch worker can be destroyed independently of the session's audit.
     while (!m_finished && !stop->load(std::memory_order_relaxed))
       m_done.wait_for(lock, std::chrono::milliseconds(10));
     if (stop->load(std::memory_order_relaxed))
@@ -385,4 +376,4 @@ void WatchSession(const std::shared_ptr<Audit>& audit)
         true);
   });
 }
-}  // namespace Orca::BootAudit
+}

@@ -61,9 +61,6 @@ NativeVertexFormat* GetCurrentVertexFormat();
 extern Common::EnumMap<u8*, CPArray::TexCoord7> cached_arraybases;
 void UpdateVertexArrayPointers();
 
-// Orca: indexed vertex reads stay inside guest RAM. The guest picks each array's base, stride and
-// every index, so an element can lie past the end of MEM1 or MEM2; such a draw is dropped (no
-// emulated state depends on vertex loading). A draw whose elements are all in RAM is unaffected.
 struct IndexedRead
 {
   CPArray array = CPArray::Position;

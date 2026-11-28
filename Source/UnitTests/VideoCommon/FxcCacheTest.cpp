@@ -1,12 +1,6 @@
 // Copyright 2026 Dolphin Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Orca: tests for the D3D FXC shader cache, which keeps compiled shaders across runs. A binary only
-// comes back for the exact compile that made it (every input is in the key), and a damaged file
-// never returns bytes: reading stops at the first bad record and the file is rewritten from the
-// good ones. Another Orca may share the open file. On Windows a plain open fails while a run has
-// the file open for writing, so tests end the run (Reopen) before reading or damaging it that way.
-
 #include <string>
 #include <string_view>
 #include <vector>

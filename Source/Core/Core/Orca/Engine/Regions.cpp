@@ -13,20 +13,17 @@ namespace Orca::Engine
 {
 namespace
 {
-// Distinct 256-byte blocks logged per module, so a write repeated every frame logs once.
 constexpr size_t LOGGED_BLOCKS = 16;
 
-// Set by SetWriteRegions while no hook runs (UX::Init before installing them, Shutdown after
-// removing them); read on the CPU thread.
 std::atomic<const Region*> s_regions{nullptr};
 std::atomic<size_t> s_region_count{0};
-std::mutex s_lock;  // the module's name and the logged blocks
+std::mutex s_lock;
 std::string_view s_module;
 std::array<u32, LOGGED_BLOCKS> s_logged{};
 size_t s_logged_count = 0;
 std::atomic<u64> s_writes{0};
 std::atomic<u64> s_outside{0};
-}  // namespace
+}
 
 void SetWriteRegions(std::string_view module, std::span<const Region> regions)
 {
@@ -35,8 +32,6 @@ void SetWriteRegions(std::string_view module, std::span<const Region> regions)
   s_logged_count = 0;
   s_writes = 0;
   s_outside = 0;
-  // Count first, pointer after: a NoteWrite racing a clear sees no regions or the old ones, never
-  // the old count over a null pointer (a module's regions are static, so the old ones stay valid).
   s_region_count.store(0, std::memory_order_release);
   if (regions.empty())
     return;
@@ -76,4 +71,4 @@ WriteCounts Writes()
 {
   return {s_writes.load(std::memory_order_relaxed), s_outside.load(std::memory_order_relaxed)};
 }
-}  // namespace Orca::Engine
+}

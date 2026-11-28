@@ -171,6 +171,7 @@ private:
   void ShowGeneralWindow();
   void ShowAudioWindow();
   void ShowControllersWindow();
+  void ShowNetPlaySettingsWindow();
   void ShowGraphicsWindow();
   void ShowFreeLookWindow();
   void ShowAboutDialog();
@@ -229,6 +230,8 @@ private:
   void OnStopComplete();
   void dragEnterEvent(QDragEnterEvent* event) override;
   void dropEvent(QDropEvent* event) override;
+  bool MoveIntoGamesFolder(const QString& path);
+  bool CopyIntoGamesFolder(const QString& from, const QString& to);
   QSize sizeHint() const override;
 
   Core::System& m_system;

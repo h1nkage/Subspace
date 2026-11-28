@@ -1,9 +1,6 @@
 // Copyright 2026 YouGame
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Orca::PrioritizeThread (Profile.h): raises the priority of the threads on the input path. Kept
-// out of Profile.cpp so the platform headers stay out of there.
-
 #include "Core/Orca/Profile.h"
 
 #if defined(_WIN32)
@@ -46,20 +43,15 @@ bool Wanted(LatencyThread thread)
     return false;
   if (knob == "1" || thread != LatencyThread::Cpu)
     return true;
-  // An unpaced harness run (no online match, no ORCA_THROTTLE) runs flat out, so it must not hold a
-  // core at interactive priority.
   return !Rollback::Harness::Active() || Online::Enabled() || Rollback::Diag::KeepThrottle();
 }
-}  // namespace
+}
 
 void PrioritizeThread(LatencyThread thread)
 {
   if (!Wanted(thread))
     return;
 #if defined(_WIN32)
-  // The CPU thread runs flat out, so one notch up; the network threads mostly wait and should wake
-  // at once. EcoQoS is also turned off per thread: Orca's window is a child of the app's, so
-  // Windows never treats Orca as the foreground process.
   const bool ok = SetThreadPriority(GetCurrentThread(), thread == LatencyThread::Cpu ?
                                                             THREAD_PRIORITY_ABOVE_NORMAL :
                                                             THREAD_PRIORITY_HIGHEST) != 0;
@@ -76,4 +68,4 @@ void PrioritizeThread(LatencyThread thread)
                  ok ? "" : " (refused)");
 #endif
 }
-}  // namespace Orca
+}

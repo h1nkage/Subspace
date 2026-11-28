@@ -42,4 +42,4 @@ PresentPacer::Duration PresentPacer::Next(Duration arrival)
     m_offset = std::max(wanted, m_offset - m_tuning.fall_per_frame);
   return m_offset;
 }
-}  // namespace VideoCommon
+}

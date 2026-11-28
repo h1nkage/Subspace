@@ -238,9 +238,6 @@ void BlendingState::ApproximateLogicOpWithBlending()
     subtract = approximation.subtract;
     src_factor = approximation.src_factor;
     dst_factor = approximation.dst_factor;
-    // Orca: the alpha factors take the ALPHA form of each color factor, as Generate does. D3D11
-    // refuses a *_COLOR factor for alpha (E_INVALIDARG), which stopped Subspace at the first
-    // logic-op draw on GPUs without D3D11.1 logic ops; for alpha the two forms blend the same.
     src_factor_alpha = RemoveDstColorUsage(approximation.src_factor);
     dst_factor_alpha = RemoveSrcColorUsage(approximation.dst_factor);
     if (!alpha_update)

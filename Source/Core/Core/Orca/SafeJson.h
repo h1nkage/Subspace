@@ -20,11 +20,9 @@ enum class NumberPolicy
   Finite,
 };
 
-// Room numbers use the protocol limits. Finite numbers retain controller precision.
 std::optional<std::string> SanitizeJson(std::string_view text,
                                       NumberPolicy numbers = NumberPolicy::Room);
 bool ParseJson(const std::string& text, picojson::value* value,
                NumberPolicy numbers = NumberPolicy::Room);
-// The same cleanup, requiring exactly one value and returning an empty string on success.
 std::string ParseWholeJson(std::string_view text, picojson::value* value);
-}  // namespace Orca::Json
+}

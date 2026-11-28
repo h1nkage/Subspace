@@ -44,7 +44,7 @@ std::optional<Combo> ParseCombo(std::string_view text)
   combo.key = text;
   return combo;
 }
-}  // namespace
+}
 std::string NormalizeKey(std::string_view key)
 {
   if (key == "Return" || key == "RETURN" || key == "ENTER")
@@ -73,7 +73,6 @@ std::string NormalizeKey(std::string_view key)
 }
 std::string EvdevKey(unsigned code, std::string_view name)
 {
-  // Linux EV_KEY values below BTN_MISC (0x100) describe keyboard keys.
   return code < 0x100 ? NormalizeKey(name) : std::string{};
 }
 std::string ScanCodeKey(unsigned scan)
@@ -176,8 +175,6 @@ void Manager::End(bool chat, bool cancel)
 }
 void Manager::SwallowHeldBindings()
 {
-  // Suppression is independent of relay presses: a base key held before its modifiers,
-  // or a modifier released and pressed again after cancel, must never reach the game.
   for (const auto& combo : {m_bindings.menu, m_bindings.chat})
   {
     if (combo && m_pressed.contains(combo->key) && m_modifiers == combo->modifiers)
@@ -204,7 +201,6 @@ bool Manager::Configure(std::string_view line)
     End(true, true);
     m_bindings = *bindings;
     m_suppressed.clear();
-    // Swallow a newly bound chord already held, without a synthetic press.
     SwallowHeldBindings();
   }
   m_configured = true;
@@ -229,8 +225,6 @@ bool Manager::ProcessKey(std::string_view key, unsigned modifiers, bool down, bo
   bool consumed = m_suppressed.contains(key);
   const bool fresh_press = down && !repeat && !key.empty() && !m_pressed.contains(key);
   m_modifiers = modifiers;
-  // Unknown platform keys carry modifier updates but have no canonical key state.
-  // Repeats may reveal a dropped modifier, but must never begin a new press.
   if (!key.empty() && !repeat)
   {
     if (down)
@@ -248,7 +242,6 @@ bool Manager::ProcessKey(std::string_view key, unsigned modifiers, bool down, bo
   }
   SwallowHeldBindings();
   consumed = consumed || m_suppressed.contains(key);
-  // A base-key release is a normal up; losing any required modifier drops the hold.
   const auto update = [&](bool chat, const std::optional<Combo>& combo) {
     if (!combo)
       return;
@@ -296,7 +289,7 @@ void Manager::SetFocus(bool focused)
     End(false, true);
     End(true, true);
     m_suppressed.clear();
-    m_pressed.clear();  // FocusIn snapshots reconstruct keys that still require release.
+    m_pressed.clear();
     m_poll_rearm = true;
     m_modifiers = 0;
   }
@@ -317,7 +310,6 @@ std::optional<bool> Manager::GetWindowKeyState(std::string_view key) const
     return std::nullopt;
   if (m_focused && m_suppressed.contains(key))
     return false;
-  // Only bound base keys need event classification; every other input keeps its raw state.
   const bool bound = (m_bindings.menu && m_bindings.menu->key == key) ||
                      (m_bindings.chat && m_bindings.chat->key == key);
   if (!bound || m_polling)
@@ -353,8 +345,6 @@ void Manager::PollKeys(const std::set<std::string, std::less<>>& held)
     return;
   if (m_poll_rearm)
   {
-    // Do not sample in the background. The first focused snapshot suppresses held
-    // chords without inventing a physical press while focus was elsewhere.
     m_pressed = held;
     m_modifiers = mods;
     m_poll_rearm = false;
@@ -368,8 +358,6 @@ void Manager::PollKeys(const std::set<std::string, std::less<>>& held)
     return previous.contains(key) && !held.contains(key) && key != "Shift" && key != "Ctrl" &&
            key != "Alt" && key != "Meta";
   };
-  // A snapshot can contain both base and modifier releases. End the base normally first,
-  // rather than reporting a modifier cancellation for a fully released chord.
   for (const auto& key : changed)
     if (base_release(key))
       ProcessKey(key, mods, false, false);
@@ -385,4 +373,4 @@ Manager& Get()
   static Manager manager;
   return manager;
 }
-}  // namespace InputCommon::Shortcuts
+}

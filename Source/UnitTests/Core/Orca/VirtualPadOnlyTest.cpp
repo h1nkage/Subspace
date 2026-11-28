@@ -67,7 +67,6 @@ protected:
       buttons += i == 0 ? R"({"value":1,"pressed":true})" :
                           R"({"value":0,"pressed":false})";
     }
-    // The desktop page's virtual pad arrives as a standard pad in the app's snapshot.
     const std::string line =
         R"(br {"push":{"type":"controllers","snapshot":{"schema":1,"session":"virtual-pad-test",)"
         R"("sequence":1,"sentAt":1000,"receivedAt":1000,"owned":false,"suspended":false,)"
@@ -80,7 +79,7 @@ protected:
 
   const bool m_gate = ControlReference::GetInputGate();
 };
-}  // namespace
+}
 
 TEST_F(OrcaVirtualPadOnly, ExactOneDisablesAllNativeInputBackends)
 {
@@ -230,7 +229,6 @@ TEST_F(OrcaVirtualPadOnly, CoSeatAssignmentsPrintOneCompleteLinePerChange)
   for (int repeat = 0; repeat < 3; ++repeat)
     for (int ordinal = 0; ordinal < 2; ++ordinal)
       Orca::UX::LocalPad(ordinal, true);
-  // This snapshot has no explicit seats: neither player borrows its legacy pad.
   std::rewind(output);
   char buffer[256]{};
   std::string lines;

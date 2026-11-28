@@ -60,8 +60,6 @@ public:
   std::vector<Packet> pending;
 };
 
-// Run in a fresh child: the harness caches its input file, and other suites can leave threads.
-// _Exit avoids running process-wide teardown from the assertion child.
 void ScriptedRun(bool online)
 {
   const std::string directory = File::CreateTempDir();
@@ -87,8 +85,6 @@ void ScriptedRun(bool online)
     std::_Exit(unthrottled ? 0 : 4);
   }
 
-  // Two real input-exchange sessions; one samples the script, one a pad. The host pacer
-  // schedules one boundary per tick, or four when the boot throttle was left disabled.
   InputGame games[2];
   InputLink links[2];
   links[0].peer = &links[1];
@@ -96,7 +92,7 @@ void ScriptedRun(bool online)
   Config a;
   a.input_delay = 2;
   a.max_delay = 2;
-  a.time_sync = false;  // Expose pacing errors instead of hiding them in time-sync waits.
+  a.time_sync = false;
   Config b = a;
   b.local_seat = 1;
   Session sessions[] = {Session(a, games[0], links[0]), Session(b, games[1], links[1])};
@@ -145,7 +141,7 @@ protected:
 private:
   std::string m_style;
 };
-}  // namespace
+}
 
 TEST_F(OrcaHarnessInput, OnlineScriptUsesSessionPacingAndDelayedLocalInput)
 {

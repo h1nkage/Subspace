@@ -95,7 +95,6 @@ void LogMemory()
                 static_cast<unsigned long long>(total / MB),
                 static_cast<unsigned long long>(available / MB));
 #endif
-  // Boot/error diagnostics go through the normal listeners even with category filtering off.
   if (auto* const logs = Common::Log::LogManager::GetInstance())
   {
     logs->LogWithFullPath(Common::Log::LogLevel::LNOTICE, Common::Log::LogType::ROLLBACK,
@@ -126,4 +125,4 @@ bool AllocationFailed()
                               "first.");
   return true;
 }
-}  // namespace Orca::BootMemory
+}

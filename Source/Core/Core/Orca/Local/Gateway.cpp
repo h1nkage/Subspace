@@ -17,6 +17,7 @@
 
 #include "Common/Crypto/SHA1.h"
 #include "Common/Logging/Log.h"
+#include "Core/Config/NetplaySettings.h"
 #include "Core/Orca/Local/LocalProto.h"
 #include "Core/Orca/SafeJson.h"
 
@@ -490,10 +491,12 @@ void Gateway::Route(const std::shared_ptr<Conn>& conn, const std::string& method
           JsonResponse(403, R"({"error":"This game was started for a different room"})"));
       return;
     }
-    const picojson::object reply{{"url", picojson::value(Site())},
-                                 {"ticket", picojson::value(m_ticket)},
-                                 // Inputs go through the lobby host, as Dolphin NetPlay's do.
-                                 {"direct", picojson::value(false)}};
+    const picojson::object stun{{"urls", picojson::value("stun:stun.l.google.com:19302")}};
+    const picojson::object reply{
+        {"url", picojson::value(Site())},
+        {"ticket", picojson::value(m_ticket)},
+        {"direct", picojson::value(Config::Get(Config::NETPLAY_SUBSPACE_DIRECT_LINKS))},
+        {"ice", picojson::value(picojson::array{picojson::value(stun)})}};
     conn->WriteAndClose(JsonResponse(200, picojson::value(reply).serialize()));
     return;
   }

@@ -60,7 +60,6 @@ bool EnvIs(const char* name, const char* value)
   return GetEnv(name) == value;
 }
 
-// Decimal, or hex with a 0x prefix (a leading zero is still decimal, not octal).
 bool ParseNumber(const std::string& text, u32* out)
 {
   if (text.starts_with("0x") || text.starts_with("0X"))
@@ -68,13 +67,9 @@ bool ParseNumber(const std::string& text, u32* out)
   return TryParse(text, out, 10);
 }
 
-// Every setting an Orca session forces, whatever the game. ForcedConfigLoader applies these and
-// VerifyForcedSettings checks them, so the two lists can't drift apart.
 template <typename F>
 void ForEachUniversalSetting(F&& f)
 {
-  // CPU and timing. Each host uses its own JIT (JitArm64 on Mac, Jit64 on PC); both compute the
-  // same game (see MAIN_ACCURATE_NANS below and Online.cpp CompatibilityKey).
   f(Config::MAIN_CPU_THREAD, false);
   f(Config::MAIN_CPU_CORE, TestCpuCore().value_or(PowerPC::DefaultCPUCore()));
   f(Config::MAIN_OVERCLOCK_ENABLE, false);
@@ -82,11 +77,6 @@ void ForEachUniversalSetting(F&& f)
   f(Config::MAIN_VI_OVERCLOCK_ENABLE, false);
   f(Config::MAIN_MMU, false);
   f(Config::MAIN_FASTMEM, Config::MAIN_FASTMEM.GetDefaultValue());
-  // PowerPC NaN rules on every host: an input NaN is picked in PowerPC operand order and quieted,
-  // and a NaN produced from non-NaNs (inf * 0, inf - inf, 0 / 0, frsqrte of -1) is the positive
-  // default 0x7FF8000000000000. Host rules differ (x86-64 and ARM with FEAT_AFP make it negative,
-  // ARM without it positive), and Project+ produces such a NaN when a match starts. The accurate
-  // paths cost one never-taken branch per arithmetic op unless a NaN comes out.
   f(Config::MAIN_ACCURATE_NANS, true);
   f(Config::MAIN_ACCURATE_FMADDS, Config::MAIN_ACCURATE_FMADDS.GetDefaultValue());
   f(Config::MAIN_FPRF, false);
@@ -96,69 +86,48 @@ void ForEachUniversalSetting(F&& f)
   f(Config::MAIN_ACCURATE_CPU_CACHE, false);
   f(Config::MAIN_JIT_FOLLOW_BRANCH, Config::MAIN_JIT_FOLLOW_BRANCH.GetDefaultValue());
   f(Config::MAIN_SYNC_ON_SKIP_IDLE, Config::MAIN_SYNC_ON_SKIP_IDLE.GetDefaultValue());
-  // Fused multiply-add changes float results. ARM64 always has it; on x86-64 it depends on the
-  // host, so it is part of the lobby compatibility key.
   f(Config::SESSION_USE_FMA, cpu_info.bFMA);
   f(Config::MAIN_RAM_OVERRIDE_ENABLE, false);
-  // Switching to the desktop app (to invite a friend) must not pause the match.
   f(Config::MAIN_PAUSE_ON_FOCUS_LOST, false);
-  // Orca talks to the service only: no usage reports to Dolphin's analytics server.
   f(Config::MAIN_ANALYTICS_ENABLED, false);
   f(Config::MAIN_CUSTOM_RTC_ENABLE, true);
-  // A pinned clock, the same for both players. Not Dolphin's default (2000-01-01, the GameCube
-  // epoch): there the timebase reads about -2^32 at boot, and an SI alarm queued for a small
-  // absolute time waits ~70 s for it to climb past 0, leaving Brawl's pads in PADReset. 2025-01-01
-  // UTC.
   f(Config::MAIN_CUSTOM_RTC_VALUE, 1735689600u);
   f(Config::MAIN_DSP_HLE, true);
   f(Config::MAIN_FAST_DISC_SPEED, false);
   f(Config::MAIN_SKIP_IPL, true);
   f(Config::SESSION_LOAD_IPL_DUMP, false);
   f(Config::MAIN_ENABLE_CHEATS, false);
-  // No SD card unless the profile inserts one; a profile's card is a verified read-only image
-  // (writes would outlive a rollback and differ between players), never rebuilt from a folder.
   f(Config::MAIN_WII_SD_CARD, false);
   f(Config::MAIN_ALLOW_SD_WRITES, false);
   f(Config::MAIN_WII_SD_CARD_ENABLE_FOLDER_SYNC, false);
   f(Config::MAIN_BLUETOOTH_PASSTHROUGH_ENABLED, false);
-  // No USB keyboard and no real USB device handed to the guest. The session's device budget
-  // (IOS::HLE::SessionAllowsDevice) keeps the USB devices closed anyway; these keep a player's
-  // Dolphin.ini from asking for them.
   f(Config::MAIN_WII_KEYBOARD, false);
   f(Config::MAIN_USB_PASSTHROUGH_DEVICES, std::string());
   f(Config::MAIN_OVERRIDE_REGION_SETTINGS, true);
-  // The console region a DOL boots as (the Project+ launcher). Dolphin otherwise takes it from the
-  // host locale, so two machines could boot different regions and diverge from the first frame.
-  // Orca's games are NTSC-U discs; a disc boot uses the disc's region and never reads this.
   f(Config::MAIN_FALLBACK_REGION, DiscIO::Region::NTSC_U);
-  f(Config::MAIN_GC_LANGUAGE, 0);  // English; written into the session SRAM
+  f(Config::MAIN_GC_LANGUAGE, 0);
   f(Config::MAIN_WII_WIILINK_ENABLE, false);
   f(Config::MAIN_EMULATE_SKYLANDER_PORTAL, false);
   f(Config::MAIN_EMULATE_INFINITY_BASE, false);
   f(Config::MAIN_EMULATE_WII_SPEAK, false);
   for (const auto& mic : Config::MAIN_EMULATE_LOGITECH_MIC)
     f(mic, false);
-  // No memory cards or other EXI devices (netplay forces these too).
   for (const auto slot : {ExpansionInterface::Slot::A, ExpansionInterface::Slot::B,
                           ExpansionInterface::Slot::SP1})
   {
     f(Config::GetInfoForEXIDevice(slot), ExpansionInterface::EXIDeviceType::None);
   }
 #ifdef USE_RETRO_ACHIEVEMENTS
-  // Hardcore mode refuses state loads, which rollback needs.
   f(Config::RA_HARDCORE_ENABLED, false);
 #endif
 
-  // Wii system settings: the same on both machines rather than each user's.
-  f(Config::SYSCONF_LANGUAGE, 1u);  // English
-  f(Config::SYSCONF_COUNTRY, 49u);  // USA
+  f(Config::SYSCONF_LANGUAGE, 1u);
+  f(Config::SYSCONF_COUNTRY, 49u);
   f(Config::SYSCONF_WIDESCREEN, true);
   f(Config::SYSCONF_PROGRESSIVE_SCAN, true);
-  f(Config::SYSCONF_PAL60, false);  // BootCore forces it off for NTSC Wii games anyway
+  f(Config::SYSCONF_PAL60, false);
   f(Config::SYSCONF_SOUND_MODE, 1u);
 
-  // Controllers: GameCube pads only. 1v1 by default; four ports in online (drop-in) play, where an
-  // empty port reports no controller (Orca::Net::UNPLUGGED_PAD) until a friend plugs in.
   const bool four = TestPads() == 4 || Online::Enabled();
   f(Config::GetInfoForSIDevice(0), SerialInterface::SIDEVICE_GC_CONTROLLER);
   f(Config::GetInfoForSIDevice(1), SerialInterface::SIDEVICE_GC_CONTROLLER);
@@ -169,56 +138,25 @@ void ForEachUniversalSetting(F&& f)
   for (int i = 0; i < 5; ++i)
     f(Config::GetInfoForWiimoteSource(i), WiimoteSource::None);
 
-  // Graphics: EFB copies stay on the GPU, so RAM only ever gets a constant placeholder, never
-  // pixels; no CPU readbacks of GPU results; no graphics mods (they can skip copies).
   f(Config::GFX_HACK_SKIP_EFB_COPY_TO_RAM, true);
   f(Config::GFX_HACK_SKIP_XFB_COPY_TO_RAM, true);
   f(Config::GFX_HACK_DISABLE_COPY_TO_VRAM, false);
   f(Config::GFX_HACK_DEFER_EFB_COPIES, true);
-  // Latency: present each frame at its XFB copy instead of waiting for the VI field that would scan
-  // it out (about 20 ms sooner), and after a rollback show the corrected frame. Host-side only:
-  // ImmediateSwap is skipped on re-runs, the VI throttle it bypasses only sleeps, and SyncGPU does
-  // nothing in single core. Brawl and P+ make one XFB copy per frame, so CapImmediateXFB stays off.
-  // See ORCA.md, "Input latency".
   f(Config::GFX_HACK_IMMEDIATE_XFB, true);
-  // Smooth Early Presentation: Immediate XFB frames are shown at a steady offset from their VI time
-  // that covers the usual rollback re-run (VideoCommon/PresentPacing.h), so with the v-sync move's
-  // early copy a re-run doesn't move the picture. Host-side only.
   f(Config::MAIN_SMOOTH_EARLY_PRESENTATION, true);
-  // Those presents wait until a set time: sleep to it precisely (Dolphin's default). Host-only.
   f(Config::MAIN_PRECISION_FRAME_TIMING, true);
-  // VSync adds 2-19 ms of display latency with no pacing gain (a composited window never tears)
-  // and, below 60 Hz, would slow the game: always off in a session, whatever GFX.ini says.
   f(Config::GFX_VSYNC, false);
-  // The JIT vertex loaders: the session's vertex bounds (VertexLoaderManager::IndexedReadsFit)
-  // assume what they read, and the software loader reads a skipped vertex's position too.
   f(Config::GFX_VERTEX_LOADER_TYPE, VertexLoaderType::Native);
   f(Config::GFX_HACK_EFB_ACCESS_ENABLE, false);
   f(Config::GFX_HACK_BBOX_ENABLE, false);
   f(Config::GFX_HACK_EFB_EMULATE_FORMAT_CHANGES, false);
   f(Config::GFX_PERF_QUERIES_ENABLE, false);
   f(Config::GFX_MODS_ENABLE, false);
-  // Texture replacement, for Orca's own pack (the Online menu's labels, Data/Sys/Orca/Textures),
-  // loaded alongside the player's own. It only changes what is drawn: the cache hashes RAM, and
-  // nothing drawn reaches RAM. Prefetching stays the player's choice, since forcing it would load a
-  // player's whole pack into memory; Orca's few labels are always preloaded.
   f(Config::GFX_HIRES_TEXTURES, true);
-  // Shaders: every pipeline seen before (Cache/<game>.uidcache), the ubershaders and the EFB copy
-  // pipelines compile before the first frame. The compilation mode and thread count are the
-  // player's (the app's Graphics settings), within what a session allows: ForcedConfigLoader
-  // refuses the modes that compile on the emulation thread. See ORCA.md, "Match start" and
-  // "Graphics".
   f(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, true);
 
-  // Every other graphics setting is the player's: it only changes what this machine draws and how
-  // fast (ORCA.md, "Graphics"). The settings below are Dolphin's defaults, pinned so a player's
-  // Dolphin.ini or GFX.ini can't change them.
-  //
-  // Security: no GDB stub. It would serve the game's memory and registers to anyone who connects.
   f(Config::MAIN_GDB_PORT, -1);
   f(Config::MAIN_GDB_SOCKET, std::string());
-  // Debugging and the JIT: each of these routes code through the interpreter or changes how the JIT
-  // analyses it, a different machine from the one the other player runs.
   f(Config::MAIN_ENABLE_DEBUGGING, false);
   for (const Config::Info<bool>* jit_off :
        {&Config::MAIN_DEBUG_JIT_OFF, &Config::MAIN_DEBUG_JIT_LOAD_STORE_OFF,
@@ -232,8 +170,6 @@ void ForEachUniversalSetting(F&& f)
   {
     f(*jit_off, false);
   }
-  // PauseOnPanic turns on the JIT's memory checks (jo.memcheck): an unresolved access then breaks
-  // into a DSI instead of reading 0 and going on, so this player's game would leave the other's.
   f(Config::MAIN_PAUSE_ON_PANIC, false);
   f(Config::MAIN_LOW_DCBZ_HACK, false);
   f(Config::MAIN_PAGE_TABLE_FASTMEM, Config::MAIN_PAGE_TABLE_FASTMEM.GetDefaultValue());
@@ -241,24 +177,14 @@ void ForEachUniversalSetting(F&& f)
   f(Config::MAIN_LARGE_ENTRY_POINTS_MAP, Config::MAIN_LARGE_ENTRY_POINTS_MAP.GetDefaultValue());
   f(Config::MAIN_OVERRIDE_BOOT_IOS, -1);
   f(Config::MAIN_HSP_DEVICE, HSP::HSPDeviceType::None);
-  // Pacing: full speed, Dolphin's throttle. A slower speed would stall the other player every
-  // frame, and the rest interact with Orca's presentation pacing and rollback re-runs.
   f(Config::MAIN_EMULATION_SPEED, 1.0f);
   f(Config::MAIN_RUSH_FRAME_PRESENTATION, Config::MAIN_RUSH_FRAME_PRESENTATION.GetDefaultValue());
   f(Config::MAIN_MAX_FALLBACK, Config::MAIN_MAX_FALLBACK.GetDefaultValue());
   f(Config::MAIN_TIMING_VARIANCE, Config::MAIN_TIMING_VARIANCE.GetDefaultValue());
   f(Config::MAIN_CORRECT_TIME_DRIFT, Config::MAIN_CORRECT_TIME_DRIFT.GetDefaultValue());
   f(Config::GFX_HACK_CAP_IMMEDIATE_XFB, false);
-  // The audio buffer bounds how far the throttle may fall behind before it skips ahead
-  // (CoreTiming's max fallback); kept at Dolphin's 80 ms like the other pacing settings.
   f(Config::MAIN_AUDIO_BUFFER_SIZE, Config::MAIN_AUDIO_BUFFER_SIZE.GetDefaultValue());
-  // Drawing-only, but it is a shader host-config bit that flips whenever the internal resolution
-  // goes to or from native (VideoConfig::UseVertexRounding). With it on, a live `gfx res` or the
-  // switch to Performance would reload every shader on the CPU thread mid-match, with no time
-  // limit, and freeze both players.
   f(Config::GFX_HACK_VERTEX_ROUNDING, false);
-  // Fairness: drawing-only, but each shows a player more than the game does (the stage past its
-  // framing, through fog, through cover) or a free camera.
   f(Config::GFX_WIDESCREEN_HACK, false);
   f(Config::GFX_DISABLE_FOG, false);
   f(Config::GFX_ENABLE_WIREFRAME, false);
@@ -266,8 +192,6 @@ void ForEachUniversalSetting(F&& f)
   f(Config::FREE_LOOK_ENABLED, false);
 }
 
-// The value a setting has from the layers under the forced one, as if Orca forced nothing: the
-// first of them that sets it, as Config::Get reads it; nullopt when none sets it.
 template <typename T>
 std::optional<T> BelowForced(const Config::Info<T>& info)
 {
@@ -287,17 +211,9 @@ std::optional<T> BelowForced(const Config::Info<T>& info)
 class ForcedConfigLoader final : public Config::ConfigLayerLoader
 {
 public:
-  // Reads the layers under this one now, before it is added (Load runs under the config lock).
   explicit ForcedConfigLoader(Profile profile)
       : ConfigLayerLoader(Config::LayerType::Netplay), m_profile(std::move(profile))
   {
-    // The player's shader mode and compile threads, within what a session allows, pinned for the
-    // run (a launcher's disc brings its own game INI layers in later). Synchronous modes compile
-    // on the emulation thread (Synchronous at a pipeline's first draw, which freezes the other
-    // player too; SyncUber never compiles specialized shaders, and is heavy on the graphics card),
-    // and so do zero compile threads. Set by nobody, they are what sessions forced before the
-    // player could choose: AsyncUber (Dolphin's default is Synchronous) and Dolphin's Auto thread
-    // count (cores - 3, 1 to 4; Dolphin's default is one thread).
     const std::optional<ShaderCompilationMode> mode =
         BelowForced(Config::GFX_SHADER_COMPILATION_MODE);
     m_shader_mode = mode && SessionShaderModeAllowed(*mode) ?
@@ -314,7 +230,6 @@ public:
     layer->Set(Config::GFX_SHADER_COMPILER_THREADS, m_shader_threads);
     for (const auto& [location, value] : m_profile.forced)
       layer->Set(location, value);
-    // A launcher profile's verified SD image overrides any card path the player set.
     if (!m_profile.sd_image_path.empty())
       layer->Set(Config::MAIN_WII_SD_CARD_IMAGE_PATH, m_profile.sd_image_path);
   }
@@ -326,7 +241,7 @@ private:
   ShaderCompilationMode m_shader_mode = ShaderCompilationMode::AsynchronousUberShaders;
   int m_shader_threads = -1;
 };
-}  // namespace
+}
 
 std::string GetEnv(const char* name)
 {
@@ -412,7 +327,6 @@ std::optional<TestNetSpikes> TestNetSpikesConfig()
   int fields;
   if (value[0] == '~')
   {
-    // Random gaps around a mean (a Poisson process), not between two bounds.
     fields = 1 + std::sscanf(value.c_str(), "~%d/%d-%d/%d-%d", &spikes.gap_min_ms,
                              &spikes.length_min_ms, &spikes.length_max_ms, &spikes.from_s,
                              &spikes.to_s);
@@ -488,8 +402,6 @@ std::optional<PowerPC::CPUCore> TestCpuCore()
 
 bool TestNoAfp()
 {
-  // Read at CPU detection (Common/ArmCPUDetect.cpp), which clears cpu_info.bAFP. Only ARM builds
-  // have anything to clear, but the key counts it everywhere.
   return EnvIs("ORCA_TEST_NO_AFP", "1");
 }
 
@@ -550,7 +462,7 @@ const Sram* SessionSram()
 {
   static const Sram sram = [] {
     Sram s;
-    InitSRAM(&s, "");  // no file: Dolphin's built-in default
+    InitSRAM(&s, "");
     return s;
   }();
   return &sram;
@@ -561,12 +473,9 @@ namespace
 u64 s_seed_save_hash = 0;
 bool s_seed_session_save = true;
 std::optional<Profile> s_active_profile;
-// First-run frame boundaries since boot, for jit_clear_frame.
 u32 s_boot_frames = 0;
-// The active profile's kept_code by physical address (MEM1: the low 29 bits of the effective
-// address, so cached and uncached mirrors match). Set at boot, before the CPU thread runs.
 std::vector<Profile::KeptCode> s_kept_code;
-}  // namespace
+}
 
 void SetActiveProfile(std::optional<Profile> profile)
 {
@@ -620,10 +529,7 @@ u64 HashSessionSave(u64 title_id)
                                       static_cast<u32>(title_id));
   if (!File::IsDirectory(dir))
     return 0;
-  // Files in name order, each hashed with its name.
   File::FSTEntry tree = File::ScanDirectoryTree(dir, true);
-  // Names relative to the root as ScanDirectoryTree spells it (on Windows it rebuilds paths in
-  // generic form), so every platform hashes the same names.
   std::string root = tree.physicalName;
   if (!root.ends_with('/'))
     root += '/';
@@ -635,7 +541,6 @@ u64 HashSessionSave(u64 title_id)
       collect(child);
   };
   collect(tree);
-  // ES creates the title's data folder at boot, so an empty one also means no save.
   if (paths.empty())
     return 0;
   std::sort(paths.begin(), paths.end());
@@ -672,8 +577,6 @@ void SetSeedSessionSave(bool seed)
 
 bool SeedSessionSave()
 {
-  // Bundles have no NAND save import contract. A listed file or saveTitle alone cannot
-  // supply a seed; mod sessions start clean, including before their profile is selected.
   return s_seed_session_save &&
          !(SessionActive() && (Mod::Requested() || Mod::ActiveMod()));
 }
@@ -687,9 +590,7 @@ std::optional<Profile> LoadProfile(const std::string& game_id, std::optional<u16
 std::optional<Profile> LoadProfileFrom(const std::string& sys_directory, const std::string& game_id,
                                        std::optional<u16> revision, std::string* error)
 {
-  const std::string path = sys_directory + "Orca/" + game_id + ".ini";
-  // OpenFStream, because the path is UTF-8 and std::ifstream would read it in the ANSI code page on
-  // Windows.
+  const std::string path = sys_directory + "Subspace/" + game_id + ".ini";
   std::ifstream in;
   File::OpenFStream(in, path, std::ios_base::in);
   if (!in)
@@ -710,7 +611,6 @@ std::optional<Profile> LoadProfileFrom(const std::string& sys_directory, const s
   while (std::getline(in, line))
   {
     ++line_number;
-    // Comments start a line or follow whitespace.
     if (const size_t hash = line.find('#');
         hash == 0 || (hash != std::string::npos && (line[hash - 1] == ' ' || line[hash - 1] == '\t')))
     {
@@ -755,14 +655,12 @@ std::optional<Profile> LoadProfileFrom(const std::string& sys_directory, const s
     }
     else if (section == "Profile" && (key == "Disc" || key == "SDImage"))
     {
-      // A file name next to the launcher, never a path out of its folder.
       if (key == "SDImage" && (value.find_first_of("/\\") != std::string::npos || value == ".."))
         return fail("SDImage must be a file name");
       (key == "Disc" ? profile.disc : profile.sd_image) = value;
     }
     else if (section == "Profile" && key == "Title")
     {
-      // Shown in the window title: printable ASCII only, and short.
       if (value.size() > 48 ||
           !std::ranges::all_of(value, [](unsigned char c) { return c >= 0x20 && c < 0x7f; }))
       {
@@ -779,7 +677,6 @@ std::optional<Profile> LoadProfileFrom(const std::string& sys_directory, const s
     }
     else if (section == "Profile" && key == "KeepGameCode")
     {
-      // <address> <game's word> <loader's word>, in hex.
       std::istringstream words(value);
       std::string address, game, loader, extra;
       Profile::KeptCode kept;
@@ -821,7 +718,6 @@ std::optional<Profile> LoadProfileFrom(const std::string& sys_directory, const s
     }
     else if (section == "Forced")
     {
-      // <System>.<Section>.<Key>, as on the command line.
       const size_t dot1 = key.find('.');
       const size_t dot2 = dot1 == std::string::npos ? dot1 : key.find('.', dot1 + 1);
       if (dot2 == std::string::npos)
@@ -846,8 +742,6 @@ std::optional<Profile> LoadProfileFrom(const std::string& sys_directory, const s
   }
   if (revision && *profile_revision != *revision)
   {
-    // Brawl Rev 1 reaches here only when AliasRevision refused it (not an unmodified copy);
-    // callers append its reason.
     if (game_id == "RSBE01" && *revision == 1)
       *error = "That Brawl disc is Rev 1 but not an unmodified copy of it. Subspace plays "
                "unmodified USA Rev 1 and Rev 2 discs, so both players have the same game.";
@@ -859,14 +753,12 @@ std::optional<Profile> LoadProfileFrom(const std::string& sys_directory, const s
     return std::nullopt;
   }
   profile.revision = *profile_revision;
-  // A launcher profile names the whole boot: loader, disc and SD image.
   const bool any_launcher = !profile.launcher_hash.empty() || !profile.disc.empty() ||
                             !profile.sd_image.empty() || !profile.sd_image_hash.empty();
   if (any_launcher && (profile.launcher_hash.empty() || profile.disc.empty() ||
                        profile.sd_image.empty() != profile.sd_image_hash.empty() ||
                        !profile.frame_hook || !profile.frame_hook_word))
   {
-    // Without the word, the boundary would fire inside the loader.
     *error = fmt::format("Orca profile {}: a launcher profile needs Launcher, Disc, FrameHook and "
                          "FrameHookWord, and SDImage with SDImageHash",
                          path);
@@ -880,7 +772,6 @@ std::string LauncherProfileName()
   const char* name = std::getenv("ORCA_PROFILE");
   if (!name)
     return {};
-  // A profile file name in Data/Sys/Orca, nothing else.
   const std::string value(name);
   if (value.empty() || value.size() > 32 ||
       !std::ranges::all_of(value,
@@ -891,9 +782,6 @@ std::string LauncherProfileName()
   return value;
 }
 
-// The system's reason for the last failed open or read. On Windows that's its own code and words
-// (a full disk, OneDrive not running, a sharing violation), which the C library folds into one
-// errno; the number keeps a report readable when Windows answers in the player's language.
 static std::string LastFileError()
 {
 #ifdef _WIN32
@@ -955,10 +843,7 @@ std::string DiscOpenProblem(const std::string& disc_path)
 {
   if (disc_path.empty())
     return "no disc is set";
-  // Shared like DiscIO's own open (CreateBlobReader), so another program holding the image open
-  // isn't blamed for a failure it didn't cause.
 #ifdef _WIN32
-  // LastFileError reads the CRT's last Windows code: clear it, so an older failure isn't reported.
   _doserrno = 0;
 #endif
   File::IOFile file(disc_path, "rb", File::SharedAccess::ReadWrite);
@@ -972,11 +857,8 @@ std::string DiscOpenProblem(const std::string& disc_path)
   {
     if (std::feof(file.GetHandle()))
       return "its disc file is cut short";
-    // A file Windows has to fetch first (a OneDrive copy kept online only) fails here.
     return fmt::format("its disc won't read: {}", LastFileError());
   }
-  // Only a plain extension goes in: the app passes a native path, and on Windows SplitPath doesn't
-  // split at a backslash, so a name without one would hand back part of a folder's name.
   std::string path = disc_path;
   UnifyPathSeparators(path);
   std::string extension;
@@ -999,7 +881,6 @@ bool PrepareLauncherBoot(Profile* profile, const std::string& executable_path,
                          profile->disc, DiscOpenProblem(disc_path));
     return false;
   }
-  // The boot inserts the disc with the same alias (Boot.cpp).
   std::string alias_reason;
   AliasRevision(*disc, &alias_reason);
   const u16 disc_revision = disc->GetRevision().value_or(0);
@@ -1026,7 +907,6 @@ bool PrepareLauncherBoot(Profile* profile, const std::string& executable_path,
     files.push_back({image, profile->sd_image_hash,
                      fmt::format("Orca: {} is missing or is not the SD card profile {} names", image,
                                  profile->game_id), profile->sd_image_size});
-    // Read-only, as before; a cache hit can run offline while its audit is pending.
     profile->sd_image_path = image;
   }
   profile->boot_audit = BootAudit::Audit::Start(std::move(files),
@@ -1061,8 +941,6 @@ bool SessionShaderModeAllowed(ShaderCompilationMode mode)
 
 bool SessionShaderThreadsAllowed(int threads)
 {
-  // Auto, or 1 to 4 compile threads (the app's choices): never 0 (the emulation thread), and never
-  // hundreds of threads from a hand-edited GFX.ini.
   return threads == -1 || (threads >= 1 && threads <= 4);
 }
 
@@ -1076,7 +954,6 @@ std::vector<Config::Location> UniversalForcedLocations()
 
 std::optional<std::string> VerifyForcedSettings(const Profile& profile)
 {
-  // The shader settings are the player's, but only within what a session allows.
   if (const ShaderCompilationMode mode = Config::Get(Config::GFX_SHADER_COMPILATION_MODE);
       !SessionShaderModeAllowed(mode))
   {
@@ -1160,4 +1037,4 @@ std::string DescribeGraphics()
       Config::Get(Config::GFX_BACKEND_MULTITHREADING),
       Config::Get(Config::GFX_ENHANCE_POST_SHADER));
 }
-}  // namespace Orca
+}

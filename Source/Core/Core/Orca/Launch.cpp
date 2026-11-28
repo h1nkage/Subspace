@@ -26,8 +26,6 @@ bool ValidProfileName(std::string_view v)
   });
 }
 
-// A relative path of plain components: no root, no "." or "..", no empty component, no backslash
-// or control character.
 bool ValidRelativePath(std::string_view v)
 {
   if (v.empty() || v.size() > MAX_PATH_CHARS || v.front() == '/')
@@ -45,7 +43,7 @@ bool ValidRelativePath(std::string_view v)
   }
   return true;
 }
-}  // namespace
+}
 
 std::optional<LaunchSpec> ParseLaunchIni(std::string_view text, std::string* error)
 {
@@ -139,9 +137,6 @@ std::optional<LaunchSpec> ReadLaunchIni(const std::string& folder, std::string* 
   if (!spec)
     return std::nullopt;
 
-  // The loader, symlinks resolved, must be a regular file inside the resolved folder. Use
-  // StringToPath/PathToString: fs::path(std::string) and .string() use the ANSI code page on
-  // Windows.
   namespace fs = std::filesystem;
   std::error_code ec;
   const fs::path root = fs::canonical(StringToPath(folder), ec);
@@ -160,4 +155,4 @@ std::optional<LaunchSpec> ReadLaunchIni(const std::string& folder, std::string* 
   spec->executable = PathToString(exe);
   return spec;
 }
-}  // namespace Orca
+}

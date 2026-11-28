@@ -53,7 +53,7 @@ TEST(OrcaBootPhase, OnceInArrivalOrderWithMonotonicMillisecondsAndExactLines)
   clock.Mark(Phase::EmuThread);
   clock.Mark(Phase::Audio);
   clock.Mark(Phase::FirstFrame);
-  clock.Mark(Phase::Config);  // All diagnostics stop after the first frame.
+  clock.Mark(Phase::Config);
   std::rewind(output);
   long long previous = 0;
   for (const Phase phase : {Phase::Main, Phase::EmuThread, Phase::Audio, Phase::FirstFrame})
@@ -254,4 +254,4 @@ TEST(OrcaBootPhase, SummaryNeedsNoOutputStream)
   std::rewind(output);
   EXPECT_EQ(std::fgetc(output), EOF);
 }
-}  // namespace
+}

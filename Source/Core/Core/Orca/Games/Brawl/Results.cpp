@@ -35,25 +35,18 @@ constexpr u32 PORT_STOCKS = 0x0A;
 constexpr u32 PORT_PLACE = 0x0E;
 constexpr u8 TYPE_HUMAN = 0;
 constexpr u8 TYPE_NONE = 3;
-// gmSetRule offsets: what the Rules menu sets.
 constexpr u32 RULE_MODE = 0x02;
 constexpr u32 RULE_STOCKS = 0x04;
 constexpr u32 RULE_HANDICAP = 0x05;
 constexpr u32 RULE_RATIO = 0x06;
 constexpr u32 RULE_STOCK_MINUTES = 0x08;
 constexpr u32 RULE_ITEMS = 0x0C;
-// The rule in RULE_MODE's low 3 bits (OnlineRules.cpp keeps the others): 1 a stock match.
 constexpr u8 RULE_MODE_MASK = 0x07;
 constexpr u8 RULE_MODE_STOCK = 1;
-// Handicap off, and a damage ratio of 1.0 (stored x10), as the online rules' locks set them.
 constexpr u8 HANDICAP_OFF = 0;
 constexpr u8 RATIO_ONE = 10;
-// gmGlobalRecord's menu data: the item frequency a match takes (u8, 0 None), as RSBE01.patches'
-// items group and OnlineRules.cpp's MENU_ITEM_FREQUENCY use it.
 constexpr u32 RECORD_ITEM_FREQUENCY = 0x9017BE50;
 constexpr u8 ITEMS_OFF = 0;
-// Readings waiting to become final. Far more than a rollback window or a joiner's catch-up, since
-// confirmations come every frame.
 constexpr size_t MAX_PENDING = 4096;
 
 bool Pointer(const GuestMemory& m, u32 p)
@@ -61,7 +54,6 @@ bool Pointer(const GuestMemory& m, u32 p)
   return p % 4 == 0 && m.Valid(p);
 }
 
-// The struct a g_GameGlobal field points to, or 0.
 u32 GlobalField(const GuestMemory& m, u32 field)
 {
   if (!Pointer(m, GAME_GLOBAL))
@@ -75,12 +67,6 @@ u32 GlobalField(const GuestMemory& m, u32 field)
 
 std::atomic<bool> s_rules_pending{false};
 
-// mod.json's rankedRules (Mod.h): the first rule this match was not played under, or empty: its
-// mod.json fields ("stocks", "timeMinutes", "items"), then two the engine fixes for every ranked
-// game ("handicap" off, "damageRatio" 1.0). Read on the results screen from the rules the fight
-// started with: gmSetRule, the block OnlineRules' locks write (mode, stocks, handicap, damage ratio,
-// the stock match's time limit), which only the Rules menu changes, and the record's item
-// frequency. A rule that can't be read differs.
 std::string_view DifferingRule(const GuestMemory& m, const Orca::Mod::RankedRules& rules)
 {
   const auto byte = [&m](u32 address) -> std::optional<u8> {
@@ -103,7 +89,7 @@ std::string_view DifferingRule(const GuestMemory& m, const Orca::Mod::RankedRule
     return "damageRatio";
   return {};
 }
-}  // namespace
+}
 
 GameResult FromRecord(const SetBlock::SetState& set, int index)
 {
@@ -113,7 +99,6 @@ GameResult FromRecord(const SetBlock::SetState& set, int index)
     g.why = "limit";
     return g;
   }
-  // A recorded game: the block, not the room's tally, ends its set (a "limit" game above never did).
   g.from_set_block = true;
   const SetBlock::GameRecord& r = set.records[index];
   const auto value = [](u8 v) { return v == 0xFF ? -1 : int(v); };
@@ -191,17 +176,12 @@ GameResult Judge(const ResultBlock& block, int frame)
     g.why = fmt::format("rules-{}", block.differing_rule);
     return g;
   }
-  // No contest: decision 9 is the fight's initial value, and quitting from pause leaves it. With
-  // no decision read, fall back to +0x0E..+0x0F != 1 (players tied for first, so a tied time-up
-  // is void too).
   if (block.decision == 9 || (block.decision == 0 && block.end != 1))
   {
     g.why = "nocontest";
     return g;
   }
   const auto& p = block.ports;
-  // Retained four-machine result dumps (friendlies-0348 case 3) identify +0x06 as the
-  // native team colour. Placement names the surviving winner, not necessarily their partner.
   if (p[2].present || p[3].present)
   {
     g.players = 4;
@@ -267,7 +247,6 @@ GameResult Judge(const ResultBlock& block, int frame)
     g.characters[i] = p[i].character;
     g.stocks[i] = p[i].stocks;
   }
-  // Out of time: a timed match always; a stock match when nobody ran out of stocks.
   g.timeout = block.mode == 0 || (p[0].stocks > 0 && p[1].stocks > 0);
   const bool first0 = p[0].place == 0, first1 = p[1].place == 0;
   if (first0 && first1)
@@ -323,7 +302,6 @@ void ResultsTracker::Store(int frame, const Reading& reading, u64 resyncs)
     m_started = true;
     m_resyncs = resyncs;
   }
-  // Final frames are never stored again: a rollback never reaches a confirmed frame.
   if (m_have_last && frame <= m_last_frame)
     return;
   m_pending[frame] = reading;
@@ -346,7 +324,6 @@ void ResultsTracker::Rebase(int frame, const Reading& reading, u64 resyncs)
   {
     m_have_set = true;
     m_set_games = reading.set->games;
-    // A fight already begun (fighters in) at the rebuilt frame was not this machine's to begin.
     if (reading.set->fight && (reading.set->fight_flags & SetBlock::FIGHT_SEEN))
     {
       m_have_fight = true;
@@ -355,8 +332,6 @@ void ResultsTracker::Rebase(int frame, const Reading& reading, u64 resyncs)
   }
   else if (reading.scene == Reading::Scene::Fight)
   {
-    // This fight is already underway, like FIGHT_SEEN above: do not begin it again, even if the
-    // next scene transition is sudden death. Rebuilt history never counts as a new game.
     m_scene_start = scene_start >= 0 ? scene_start : frame;
   }
   else if (reading.scene == Reading::Scene::Between && scene_start >= 0)
@@ -376,7 +351,6 @@ std::vector<GameResult> ResultsTracker::Confirm(int confirmed, int plug_frame,
   {
     const int frame = it->first;
     const Reading& r = it->second;
-    // A gap (frames this machine never read) ends whatever game was being followed.
     const bool follows = m_have_last && frame == m_last_frame + 1;
     if (!follows)
     {
@@ -387,14 +361,7 @@ std::vector<GameResult> ResultsTracker::Confirm(int confirmed, int plug_frame,
     const Scene before = follows ? m_last.scene : Scene::Other;
     if (r.set)
     {
-      // Ranked set: the match block (RankedSet.h) judges games inside the game. Report only games
-      // whose fight began after the opponent's plug frame, and none from before the first final
-      // reading.
       const SetBlock::SetState& set = *r.set;
-      // A game began once its fighters are in (FIGHT_SEEN, after the stage's loading image: a
-      // crash or a stall while it loads leaves the set void). The fight's first frame names it, as
-      // FromRecord's start does. A sudden death keeps the fight and its first frame, so it is the
-      // same game.
       if (set.fight && (set.fight_flags & SetBlock::FIGHT_SEEN))
       {
         const int start = static_cast<int>(set.fight_start & 0x7FFFFFFF);
@@ -439,12 +406,10 @@ std::vector<GameResult> ResultsTracker::Confirm(int confirmed, int plug_frame,
       {
         if (m_scene_start >= 0 && m_after_fight)
         {
-          // Back into the fight from between scenes (sudden death): the same game.
           m_after_fight = false;
         }
         else
         {
-          // A new game, counted only if the previous frame was read on both machines.
           m_in_game = follows && frame - 1 > plug_frame;
           m_after_fight = false;
           m_scene_start = frame;
@@ -476,7 +441,6 @@ std::vector<GameResult> ResultsTracker::Confirm(int confirmed, int plug_frame,
     case Scene::Other:
       if (m_in_game)
       {
-        // The fight ended without its results screen.
         GameResult g;
         g.frame = frame;
         g.start = m_scene_start;
@@ -503,8 +467,6 @@ ResultsTracker& Tracker()
 
 bool ResultsVerified()
 {
-  // Brawl rev 2 or a launcher booting its executable (Project+), whose scenes and result info
-  // match, while the module's addresses hold (BrawlGame.h).
   return Builtin().Active() && Builtin().Describe().results;
 }
 
@@ -515,8 +477,6 @@ void ReadResultsFrame(const Core::CPUThreadGuard& guard, int frame)
   GuardMemory memory(guard);
   const Orca::Mod::ModInfo* mod = Orca::Mod::ActiveMod();
   Reading reading = ReadResults(memory, mod ? mod->manifest.ranked_rules : std::nullopt);
-  // Only a game with a ruleset writes a ranked set into the match block; without one that memory
-  // is the game's own (brawl-rev2-results), whatever it holds.
   if (Builtin().Describe().ruleset != Orca::Engine::Ruleset::None)
   {
     if (const auto header = SetBlock::ReadHeader(memory);
@@ -533,7 +493,6 @@ void ReadResultsFrame(const Core::CPUThreadGuard& guard, int frame)
 
 void RequestQueueRules()
 {
-  // Vanilla Brawl's rules screen only, while its addresses hold: the module's answer.
   if (Builtin().ProfileRuleset() == Orca::Engine::Ruleset::Brawl)
     s_rules_pending = true;
 }
@@ -559,8 +518,6 @@ int WriteQueueRules(GuestMemory& memory)
 
 void ApplyQueueRules(const Core::CPUThreadGuard& guard, bool alone)
 {
-  // Only right after the host takes its room. A later write could land after a keyframe the
-  // joiner loads.
   if (!s_rules_pending.exchange(false))
     return;
   if (!alone)
@@ -575,4 +532,4 @@ void ApplyQueueRules(const Core::CPUThreadGuard& guard, bool alone)
                  "changed",
                  changed);
 }
-}  // namespace Orca::UX
+}

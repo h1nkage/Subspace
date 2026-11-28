@@ -11,7 +11,6 @@ namespace Orca::Engine
 {
 namespace
 {
-// A number literal's longest spelling (the site's limit too).
 constexpr size_t MAX_NUMBER_BYTES = 32;
 
 class Reader
@@ -93,7 +92,7 @@ private:
 
   bool Object(picojson::value* out, int depth)
   {
-    ++m_pos;  // {
+    ++m_pos;
     picojson::object object;
     SkipSpace();
     if (!AtEnd() && Peek() == '}')
@@ -140,7 +139,7 @@ private:
 
   bool Array(picojson::value* out, int depth)
   {
-    ++m_pos;  // [
+    ++m_pos;
     picojson::array array;
     SkipSpace();
     if (!AtEnd() && Peek() == ']')
@@ -199,7 +198,6 @@ private:
     }
   }
 
-  // Four hex digits after "\u".
   bool Hex4(u32* out)
   {
     if (m_text.size() - m_pos < 4)
@@ -224,8 +222,6 @@ private:
     return true;
   }
 
-  // One raw UTF-8 sequence starting at a byte >= 0x80: well formed, shortest form, no surrogates,
-  // at most U+10FFFF (what a fatal TextDecoder accepts).
   bool RawUtf8(std::string* out)
   {
     const unsigned char lead = Peek();
@@ -271,7 +267,7 @@ private:
 
   bool String(std::string* out)
   {
-    ++m_pos;  // opening quote
+    ++m_pos;
     while (true)
     {
       if (AtEnd())
@@ -353,11 +349,6 @@ private:
 
   static bool Digit(unsigned char c) { return c >= '0' && c <= '9'; }
 
-  // -?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?, the site's grammar, at most
-  // MAX_NUMBER_BYTES long, and as written an exact integer of magnitude at most 2^53 - 1 ("30",
-  // "30.0", "3e1", "3000e-2", "-0"). Anything else ("0.5", "1e-400", "1.0000000000000001") is
-  // refused here, not rounded: the value never depends on a host's decimal conversion, and the
-  // site applies the same rule to the same text (orca-ruleset-validate.ts).
   bool Number(picojson::value* out)
   {
     const size_t start = m_pos;
@@ -412,7 +403,6 @@ private:
     if (m_pos - start > MAX_NUMBER_BYTES)
       return Fail("number longer than " + std::to_string(MAX_NUMBER_BYTES) + " bytes");
     const bool negative = m_text[start] == '-';
-    // The significant digits, int part then fraction, and the power of ten they are scaled by.
     std::string digits(m_text.substr(negative ? start + 1 : start, int_end - (negative ? start + 1 : start)));
     digits.append(m_text.substr(frac_begin, frac_end - frac_begin));
     exponent -= static_cast<s64>(frac_end - frac_begin);
@@ -448,7 +438,7 @@ private:
   size_t m_pos = 0;
   std::string m_error;
 };
-}  // namespace
+}
 
 std::optional<picojson::value> ReadStrictJson(std::string_view text, size_t max_bytes,
                                               int max_depth, std::string* error)
@@ -469,4 +459,4 @@ std::optional<picojson::value> ReadStrictJson(std::string_view text, size_t max_
   }
   return out;
 }
-}  // namespace Orca::Engine
+}

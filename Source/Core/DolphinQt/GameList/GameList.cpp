@@ -306,8 +306,8 @@ void GameList::UpdateColumnVisibility()
 void GameList::MakeEmptyView()
 {
   const QString refreshing_msg = tr("Refreshing...");
-  const QString empty_msg = tr("Dolphin could not find any GameCube/Wii ISOs or WADs.\n"
-                               "Double-click here to set a games directory...");
+  const QString empty_msg =
+      tr("Drag your Brawl file here, or double-click to set a games directory.");
 
   m_empty = new QLabel(this);
   m_empty->setText(refreshing_msg);
@@ -318,6 +318,11 @@ void GameList::MakeEmptyView()
   m_empty->installEventFilter(event_filter);
   connect(event_filter, &DoubleClickEventFilter::doubleClicked, [this] {
     auto current_dir = QDir::currentPath();
+    const QString games =
+        QDir::fromNativeSeparators(QString::fromStdString(File::GetExeDirectory())) +
+        QStringLiteral("/Games");
+    if (QDir(games).exists())
+      current_dir = games;
     auto dir = DolphinFileDialog::getExistingDirectory(this, tr("Select a Directory"), current_dir);
     if (!dir.isEmpty())
       Settings::Instance().AddPath(dir);

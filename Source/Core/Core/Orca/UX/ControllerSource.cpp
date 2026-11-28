@@ -40,12 +40,9 @@ namespace
 {
 using Clock = std::chrono::steady_clock;
 
-// After the stream drops, input is neutral for this long, then falls back to Dolphin's mapping.
 constexpr auto DETACHED_FALLBACK = std::chrono::seconds(1);
 constexpr size_t TIMING_SAMPLES = 4096;
-// How often to log an input-age line.
 constexpr auto AGE_LOG_PERIOD = std::chrono::seconds(10);
-// Window for the fastest hop that hop jitter is measured against.
 constexpr auto HOP_FLOOR_PERIOD = std::chrono::seconds(1);
 
 double EpochMs()
@@ -55,7 +52,6 @@ double EpochMs()
       .count();
 }
 
-// Only accept a loopback bridge, so the token is never sent anywhere else.
 bool LoopbackBridge(std::string_view bridge)
 {
   constexpr std::string_view prefix = "http://127.0.0.1:";
@@ -74,7 +70,6 @@ std::string Env(const char* name)
   return v ? v : "";
 }
 
-// Ring buffer of the newest TIMING_SAMPLES values.
 class Samples
 {
 public:
@@ -102,7 +97,6 @@ struct Percentiles
   double p50 = 0, p95 = 0, p99 = 0, max = 0;
 };
 
-// Takes a copy so callers can sort outside their lock.
 Percentiles Summarize(std::vector<double> values)
 {
   Percentiles p;
@@ -119,7 +113,6 @@ Percentiles Summarize(std::vector<double> values)
   return p;
 }
 
-// Input-age numbers over a window of frames, plus their log line.
 struct AgeWindow
 {
   Clock::time_point start{};
@@ -127,7 +120,6 @@ struct AgeWindow
   u64 reports = 0;
   std::vector<double> age, helper, cache, hop;
 
-  // `hop_ms` < 0 means no hop for this read.
   void Add(double helper_ms, double cache_ms, double hop_ms)
   {
     if (age.size() >= TIMING_SAMPLES)
@@ -178,8 +170,6 @@ public:
   {
     m_thread = std::thread([this] { Run(); });
   }
-  // The stdio bridge's stream: no thread of its own; the app's snapshots arrive through Accept, on
-  // the stdin reader's thread (Orca/Bridge.h).
   Stream() = default;
   ~Stream()
   {
@@ -193,14 +183,10 @@ public:
   struct Cached
   {
     std::shared_ptr<const Snapshot> snapshot;
-    double age_ms = 0;  // time since we received it, on our steady clock
-    // Hop jitter: this snapshot's trip minus the fastest trip of the last HOP_FLOOR_PERIOD, or -1
-    // without an adapter report. The raw trip spans two processes' clocks and can't be trusted, but
-    // over one second the clock offset cancels out.
+    double age_ms = 0;
     double hop_ms = -1;
   };
 
-  // nullopt if never attached, or detached for longer than DETACHED_FALLBACK.
   std::optional<Cached> Latest() const
   {
     std::lock_guard lk(m_lock);
@@ -211,8 +197,6 @@ public:
                   m_latest_hop};
   }
 
-  // Records the input age for a frame's read (`choice` is null when the app gave no pad).
-  // CPU thread. Returns a log line when one is due, for the caller to log outside the locks.
   std::string NoteFrame(const Cached& cached, const LocalChoice* choice)
   {
     const auto now = Clock::now();
@@ -220,7 +204,6 @@ public:
     const u64 reports = m_reports - m_reports_at_frame;
     m_reports_at_frame = m_reports;
     const Snapshot& snapshot = *cached.snapshot;
-    // Only adapter reports carry a receive time; skip gamepads and neutral reads.
     if (!choice || choice->source != PadSource::Adapter || choice->neutral ||
         snapshot.received_at <= 0)
     {
@@ -236,8 +219,6 @@ public:
     const Orca::Net::Pad pad = Orca::Net::EncodePad(choice->pad);
     if (m_last_pad && *m_last_pad != pad)
     {
-      // Two spans, each timed on one clock: time in the helper and time in our cache. The
-      // cross-process hop is reported separately.
       const double helper = std::max(0.0, snapshot.sent_at - snapshot.received_at);
       const double cache = cached.age_ms;
       ++m_input.changes;
@@ -264,7 +245,6 @@ public:
     return m_input;
   }
 
-  // Input-age summary for the log when the stream stops (empty if no frame read the adapter).
   std::string RunSummary() const
   {
     AgeWindow run;
@@ -339,8 +319,7 @@ private:
   {
     auto* self = static_cast<Stream*>(user);
     if (self->m_done)
-      return 0;  // aborts the transfer
-    // SSE lines may end in LF, CRLF or CR; treat a lone CR as LF and drop the CR of a CRLF.
+      return 0;
     for (size_t i = 0; i < size * count; ++i)
     {
       const char c = data[i];
@@ -353,15 +332,13 @@ private:
       if (c == '\n' && self->m_after_cr)
       {
         self->m_after_cr = false;
-        continue;  // the LF of a CRLF
+        continue;
       }
       self->m_after_cr = false;
       self->m_pending.push_back(c);
     }
     if (self->m_pending.size() > 256 * 1024)
       return 0;
-    // A blank line ends an event. `data:` lines are joined with LF; keepalives and other fields
-    // are ignored.
     size_t end;
     while ((end = self->m_pending.find("\n\n")) != std::string::npos)
     {
@@ -395,7 +372,6 @@ private:
   void OnEvent(std::string_view json) { Accept(ParseSnapshotEvent(json)); }
 
 public:
-  // One snapshot from the app (nullopt: a malformed one), newest wins.
   void Accept(std::optional<Snapshot> parsed)
   {
     const auto arrived = Clock::now();
@@ -406,8 +382,6 @@ public:
       ++m_timing.refused;
       return;
     }
-    // Sequence numbers restart with each helper run, so only compare within one session.
-    // Sequence 0 is the app's own snapshot for an idle or failed helper and is never stale.
     if (m_latest && m_latest->session == parsed->session && parsed->sequence != 0 &&
         parsed->sequence < m_latest->sequence)
     {
@@ -428,9 +402,6 @@ public:
   }
 
 private:
-  // `trip` is arrival time minus sent_at, across two clocks. Returns it minus the fastest trip of
-  // the last HOP_FLOOR_PERIOD. Only adapter snapshots count, since only they use the helper's
-  // clock. Call under m_lock.
   double HopAboveFloor(Clock::time_point arrived, double trip)
   {
     while (!m_hop_floor.empty() && m_hop_floor.back().second >= trip)
@@ -451,7 +422,6 @@ private:
 
   void Run()
   {
-    // Local input arrives on this thread, so give it latency priority.
     Orca::PrioritizeThread(Orca::LatencyThread::Controllers);
     int backoff_ms = 500;
     while (!m_done)
@@ -472,11 +442,8 @@ private:
       curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 2000L);
       curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
       curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);
-      // Loopback: no proxy, and Nagle off so small events are sent at once.
       curl_easy_setopt(curl, CURLOPT_NOPROXY, "*");
       curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1L);
-      // Treat 30 s of silence as a hung bridge. A live helper sends every 100 ms, and reconnecting
-      // sooner would only respawn a failed one.
       curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
       curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 30L);
       const CURLcode result = curl_easy_perform(curl);
@@ -487,7 +454,6 @@ private:
       Detach();
       if (m_done)
         return;
-      // These won't succeed on retry.
       if (status == 401 || status == 403 || status == 404)
       {
         ERROR_LOG_FMT(CONTROLLERINTERFACE,
@@ -498,14 +464,13 @@ private:
       }
       int wait_ms;
       if (status == 409)
-        wait_ms = 1000;  // the previous stream is still closing, or another game holds it
+        wait_ms = 1000;
       else if (status == 503)
-        wait_ms = 5000;  // the app has no controller helper
+        wait_ms = 5000;
       else if (status == 200)
-        wait_ms = backoff_ms = 500;  // the app restarted the stream
+        wait_ms = backoff_ms = 500;
       else
         wait_ms = backoff_ms = std::min(backoff_ms * 2, 5000);
-      // Log only when the status changes.
       if (status != m_last_status || result != m_last_result)
       {
         WARN_LOG_FMT(CONTROLLERINTERFACE, "Orca: controller stream ended ({}, HTTP {})",
@@ -521,7 +486,7 @@ private:
   const std::string m_url;
   const std::string m_token;
   std::atomic<bool> m_done{false};
-  std::string m_pending;  // stream thread only
+  std::string m_pending;
   bool m_after_cr = false;
   long m_last_status = -1;
   CURLcode m_last_result = CURLE_OK;
@@ -529,36 +494,29 @@ private:
   mutable std::mutex m_lock;
   std::shared_ptr<const Snapshot> m_latest;
   Clock::time_point m_arrived{};
-  double m_latest_hop = -1;  // m_latest's Cached::hop_ms
-  // Monotonic queue of recent trips; the front is the fastest of the last HOP_FLOOR_PERIOD.
+  double m_latest_hop = -1;
   std::deque<std::pair<Clock::time_point, double>> m_hop_floor;
   Clock::time_point m_detached_at{};
   bool m_attached = false;
   double m_last_report = 0;
   ControllerTiming m_timing;
-  Samples m_samples;  // transport timing
-  // Distinct adapter reports received, and the count at the last frame's read.
+  Samples m_samples;
   u64 m_reports = 0;
   u64 m_reports_at_frame = 0;
-  // Input-age state.
   Orca::Events::InputAge m_input;
   Samples m_age, m_helper, m_cache, m_hop;
   AgeWindow m_window;
   std::optional<Orca::Net::Pad> m_last_pad;
 
-  std::thread m_thread;  // declared last so it starts after every member above is constructed
+  std::thread m_thread;
 };
 
 std::mutex s_stream_lock;
 std::unique_ptr<Stream> s_stream;
-// The stdio bridge's handler for the controller snapshots, while its stream runs.
 u64 s_bridge_token = 0;
 
-// Swaps the stream out and joins it outside the lock. `log` writes the input-age summary first;
-// skip it at static destruction, when the logger may be gone.
 void StopStream(bool log)
 {
-  // The stdin thread may be handing over a snapshot: this waits it out (no lock held here).
   Orca::Bridge::ClearControllersHandler(std::exchange(s_bridge_token, 0));
   std::unique_ptr<Stream> stream;
   {
@@ -571,13 +529,11 @@ void StopStream(bool log)
     NOTICE_LOG_FMT(ROLLBACK, "{}", summary);
 }
 
-// Joins the stream thread at exit.
 struct Teardown
 {
   ~Teardown() { StopStream(false); }
 } s_teardown;
 
-// LastLocalDevice, packed so one atomic holds it: the source in bit 16, the index below.
 constexpr int NO_DEVICE = -1;
 std::array<std::atomic<int>, MAX_LOCAL> s_local_devices{NO_DEVICE, NO_DEVICE};
 std::atomic<int> s_local_count{1};
@@ -588,13 +544,11 @@ int PackDevice(PadSource source, int index)
   return (source == PadSource::Gamepad ? 1 << 16 : 0) | (index & 0xffff);
 }
 
-// The pad from the newest snapshot; `for_frame` also records input age.
 std::optional<LocalChoice> Choose(int ordinal, bool for_frame)
 {
   std::optional<LocalChoice> choice;
   std::string age_line;
   {
-    // Hold the lock through the (quick) choice so the stream can't be torn down meanwhile.
     std::lock_guard lk(s_stream_lock);
     if (!s_stream)
       return std::nullopt;
@@ -612,14 +566,13 @@ std::optional<LocalChoice> Choose(int ordinal, bool for_frame)
     NOTICE_LOG_FMT(ROLLBACK, "{}", age_line);
   return choice;
 }
-}  // namespace
+}
 
 void StartControllerStream(const std::string& bridge, const std::string& token)
 {
   std::unique_ptr<Stream> next;
   if (!Common::OfflineReplay() && LoopbackBridge(bridge) && !token.empty())
   {
-    // Run libcurl's global init (via HttpRequest's once-only path) before the thread uses curl.
     { Common::HttpRequest init; }
     next = std::make_unique<Stream>(bridge, token);
   }
@@ -627,7 +580,7 @@ void StartControllerStream(const std::string& bridge, const std::string& token)
     std::lock_guard lk(s_stream_lock);
     next.swap(s_stream);
   }
-  next.reset();  // the old stream joins outside the lock
+  next.reset();
 }
 
 void StopControllerStream()
@@ -662,7 +615,6 @@ void StartControllerStreamFromStdio()
     s_stream = std::make_unique<Stream>();
   }
   s_bridge_token = Orca::Bridge::SetControllersHandler([](const picojson::value& event) {
-    // Parsed before the lock, so the CPU thread's read never waits on it.
     std::optional<Snapshot> parsed = ParseSnapshotEvent(event);
     std::lock_guard lk(s_stream_lock);
     if (s_stream)
@@ -672,7 +624,6 @@ void StartControllerStreamFromStdio()
 
 void StartControllerStreamFromEnvironment()
 {
-  // Under the app on the stdio bridge, the snapshots come on stdin.
   if (Orca::Bridge::Enabled())
   {
     StartControllerStreamFromStdio();
@@ -721,8 +672,6 @@ std::optional<GCPadStatus> OwnAdapterPad()
   static const u32 ports = OwnAdapterPorts();
   if (ports == 0)
     return std::nullopt;
-  // Each port's calibrated neutral position: the adapter hands it over once, on the first read
-  // after a controller is plugged in (marked PAD_GET_ORIGIN).
   static std::array<std::array<u8, 6>, 4> origins = [] {
     std::array<std::array<u8, 6>, 4> o;
     o.fill({128, 128, 128, 128, 0, 0});
@@ -768,7 +717,6 @@ std::optional<GCPadStatus> LocalPad(int ordinal, bool for_frame)
 {
   if (ordinal < 0 || ordinal >= MAX_LOCAL)
     return NeutralPad();
-  // Time the lead before the focus check, as in one-seat mode.
   const auto choice = Choose(ordinal, for_frame);
   if (for_frame)
   {
@@ -836,4 +784,4 @@ Orca::Events::InputAge GetInputAge()
   std::lock_guard lk(s_stream_lock);
   return s_stream ? s_stream->Input() : Orca::Events::InputAge{};
 }
-}  // namespace Orca::UX
+}

@@ -1,11 +1,6 @@
 // Copyright 2026 YouGame
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Jit64 against the interpreter for the double-precision ops that write ps0 and keep the
-// destination's ps1: every FPR (both halves) must match after a short guest program, with a
-// sentinel in each register's ps1. The cases vary which operands share a register with d and
-// whether the operands are already in host registers (a "bound" prelude) or read from memory.
-
 #include <array>
 #include <bit>
 #include <string>
@@ -34,7 +29,6 @@
 namespace
 {
 constexpr u32 BRANCH_TO_SELF = 0x48000000;
-// Each program gets its own address, so neither core reuses a block or a cache line.
 constexpr u32 CODE_BASE = 0x00010000;
 constexpr u32 CODE_STRIDE = 0x100;
 
@@ -46,7 +40,6 @@ constexpr u32 X_FORM(u32 xo, u32 d, u32 a, u32 b)
 {
   return (63u << 26) | (d << 21) | (a << 16) | (b << 11) | (xo << 1);
 }
-// ps_merge01 r,r,r leaves r as it is but makes Jit64 bind it to a host register.
 constexpr u32 BIND(u32 r)
 {
   return (4u << 26) | (r << 21) | (r << 16) | (r << 11) | (560u << 1);
@@ -56,7 +49,6 @@ u64 Ps0(int reg)
 {
   return std::bit_cast<u64>(1.5 + reg * 0.25);
 }
-// A sentinel that no op computes: a different normal double per register.
 u64 Ps1(int reg)
 {
   return std::bit_cast<u64>(-1000.0 - reg) | 0x5a5;
@@ -71,8 +63,8 @@ struct Fprs
 
 enum class Inputs
 {
-  Memory,  // operands are read from PowerPCState
-  Bound,   // a prelude puts d and the operands in host registers first
+  Memory,
+  Bound,
 };
 
 class Jit64Ps1 : public testing::Test
@@ -85,7 +77,6 @@ protected:
     UICommon::SetUserDirectory(s_user_dir);
     Config::Init();
     SConfig::Init();
-    // Plain loads and stores: no fastmem arena or fault handler in a unit test.
     Config::SetCurrent(Config::MAIN_FASTMEM, false);
     Config::SetCurrent(Config::MAIN_FASTMEM_ARENA, false);
     auto& system = Core::System::GetInstance();
@@ -110,8 +101,6 @@ protected:
     File::DeleteDirRecursively(s_user_dir);
   }
 
-  // Applies the settings and drops every compiled block, so the next run compiles with them.
-  // use_fma without host_fma is Jit64's software FMA (a call to std::fma).
   static void Configure(bool accurate_nans, bool use_fma, bool avx, bool host_fma)
   {
     Config::SetCurrent(Config::MAIN_ACCURATE_NANS, accurate_nans);
@@ -150,11 +139,8 @@ protected:
 
     if (jit)
     {
-      // The CPU isn't "running", so the dispatcher returns once the slice ends: the block runs
-      // once and the branch to itself idles out the rest.
       power_pc.SetMode(PowerPC::CoreMode::JIT);
       power_pc.SingleStep();
-      // Proof that Jit64 compiled the program rather than something else running it.
       auto* const jit_core = static_cast<JitBase*>(system.GetJitInterface().GetCore());
       EXPECT_NE(jit_core->GetBlockCache()->GetBlockFromStartAddress(address, ppc.feature_flags),
                 nullptr)
@@ -176,7 +162,6 @@ protected:
     return out;
   }
 
-  // Runs `op` on both cores after an optional binding prelude and compares every FPR.
   void Check(const std::string& name, u32 op, std::vector<u32> bind, Inputs inputs,
              const std::array<u64, 32>& ps0, bool compare_ps0 = true)
   {
@@ -219,8 +204,6 @@ protected:
 
     for (const Inputs inputs : {Inputs::Memory, Inputs::Bound})
     {
-      // fadd, fsub, fdiv: d = a op b. fmul: d = a * c. fmadd: d = a * c + b.
-      // Registers: d = 1, a = 2, b = 3, c = 4 unless shared.
       struct Binary
       {
         const char* name;
@@ -234,20 +217,16 @@ protected:
           return op.uses_c ? A_FORM(op.xo, d, a, 0, x) : A_FORM(op.xo, d, a, x, 0);
         };
         Check(fmt::format("{} d!=a,d!=x", op.name), encode(1, 2, 3), {1, 2, 3}, inputs, ps0);
-        // a from memory, x in a register: the reversible ops' AVX form with the operands swapped.
         Check(fmt::format("{} d!=a,d!=x, x bound", op.name), encode(1, 2, 3), {1, 3}, inputs, ps0);
         Check(fmt::format("{} d==a", op.name), encode(2, 2, 3), {2, 3}, inputs, ps0);
         Check(fmt::format("{} d==x", op.name), encode(3, 2, 3), {2, 3}, inputs, ps0);
         Check(fmt::format("{} d==a==x", op.name), encode(2, 2, 2), {2}, inputs, ps0);
       }
-      // The interpreter always fuses fmadd; with FMA off Jit64 rounds the product first, so ps0
-      // is compared only when both fuse (ps1 always).
       Check("fmadd d!=a,b,c", A_FORM(29, 1, 2, 3, 4), {1, 2, 3, 4}, inputs, ps0, use_fma);
       Check("fmadd d==a", A_FORM(29, 2, 2, 3, 4), {2, 3, 4}, inputs, ps0, use_fma);
       Check("fmadd d==b", A_FORM(29, 3, 2, 3, 4), {2, 3, 4}, inputs, ps0, use_fma);
       Check("fmadd d==c", A_FORM(29, 4, 2, 3, 4), {2, 3, 4}, inputs, ps0, use_fma);
 
-      // d = op(b): d = 1, b = 3, or d == b.
       struct Unary
       {
         const char* name;
@@ -268,7 +247,6 @@ protected:
       Check("mffs", X_FORM(583, 1, 0, 0), {1}, inputs, ps0);
     }
 
-    // With accurate NaNs, a NaN result takes HandleNaNs' path; ps1 must survive it too.
     if (accurate_nans)
     {
       std::array<u64, 32> nan_a = ps0;
@@ -291,17 +269,14 @@ protected:
   static inline bool s_host_avx = false;
   static inline bool s_host_fma = false;
 };
-}  // namespace
+}
 
 TEST_F(Jit64Ps1, MatchesInterpreter)
 {
   fmt::print("Jit64Ps1: host AVX {}, host FMA {}\n", s_host_avx, s_host_fma);
-  // AVX on and off where the host has it; SSE only otherwise (Rosetta 2 has no AVX).
   std::vector<bool> avx_modes{false};
   if (s_host_avx)
     avx_modes.push_back(true);
-  // FMA off (Jit64 multiplies then adds), software FMA (Jit64 calls std::fma: SESSION_USE_FMA on
-  // a host without FMA3, pretended here on any host), and hardware FMA where the host has it.
   struct FmaMode
   {
     bool use_fma;
@@ -316,7 +291,6 @@ TEST_F(Jit64Ps1, MatchesInterpreter)
     {
       for (const FmaMode& fma : fma_modes)
       {
-        // Hardware FMA is a VEX encoding; it comes only with AVX.
         if (fma.host_fma && !avx)
           continue;
         CheckAll(accurate_nans, fma.use_fma, avx, fma.host_fma);

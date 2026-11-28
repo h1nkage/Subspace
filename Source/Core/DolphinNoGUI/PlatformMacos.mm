@@ -999,7 +999,6 @@ void PlatformMacOS::SetupMenu()
                                                            action:nil
                                                     keyEquivalent:@""];
     [menuBar addItem:appMenuItem];
-    // Orca: sessions refuse save states, so hide the menu.
     if (!Orca::SessionActive())
       [menuBar addItem:stateMenuItem];
     [menuBar addItem:miscMenuItem];

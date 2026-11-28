@@ -83,7 +83,6 @@ class ScopedDeathStyle
 public:
   ScopedDeathStyle() : m_old(GTEST_FLAG_GET(death_test_style))
   {
-    // SConfig starts threads; a fresh process also permits macOS networking in the child.
     GTEST_FLAG_SET(death_test_style, "threadsafe");
   }
   ~ScopedDeathStyle() { GTEST_FLAG_SET(death_test_style, m_old); }
@@ -130,8 +129,6 @@ protected:
   }
   void MatchCacheToCurrentIdentity()
   {
-    // Model identical cached/current metadata while the bytes no longer match the expected hash.
-    // Changing ctime back is not portable, so write the current identity into the fixture record.
     const auto identity = Identify(path);
     ASSERT_TRUE(identity);
     Common::IniFile ini;
@@ -162,7 +159,7 @@ protected:
   }
   std::string dir, path, expected, cache, old_user, old_session;
 };
-}  // namespace
+}
 
 TEST_F(OrcaBootAudit, CacheRecordMatchesOnlyTheVerifiedIdentity)
 {
@@ -232,8 +229,6 @@ TEST_F(OrcaBootAudit, PathAndVolumeChangesAreMisses)
 
 TEST_F(OrcaBootAudit, AnotherSpellingOfThePathIsTheSameFile)
 {
-  // Windows identifies without canonical() (refused inside the app's AppContainer), so a path
-  // with ".." must still reach the same file.
   ASSERT_TRUE(File::CreateFullPath(dir + "/sub/"));
   const auto direct = Identify(path);
   std::string reason;
@@ -311,7 +306,6 @@ TEST_F(OrcaBootAudit, CancellationFinishesAtTheReadBoundaryAndPreservesAllRecord
                                                      const std::atomic<bool>& stop) {
       if (file == card)
       {
-        // Hold one in-flight read; cancellation must take effect before another chunk begins.
         ++reads;
         reading.set_value();
         if (chunk.wait_for(2s) != std::future_status::ready)
@@ -415,7 +409,6 @@ TEST_F(OrcaBootAudit, UnreadableCacheRecordIsAMiss)
   ASSERT_TRUE(Start()->Wait());
   const std::string record = CachePath();
   ASSERT_TRUE(File::Delete(record));
-  // A non-file at the record path is unopenable as a cache on every supported platform.
   ASSERT_TRUE(File::CreateDir(record));
   const auto audit = Start();
   EXPECT_FALSE(audit->CacheHit());
@@ -460,7 +453,6 @@ TEST_F(OrcaBootAuditDeathTest, FailureCompletedDuringInitializationStillEndsTheS
         Activate(failed);
         if (failed->Wait())
           std::_Exit(1);
-        // Registration after completion is the Core::Init race. No online start is needed.
         Orca::BootAudit::WatchSession(failed);
         Core::HostDispatchJobs(Core::System::GetInstance());
         std::_Exit(Orca::Status::ExitCode() == 1 && !Orca::Online::Transport() ? 0 : 1);
@@ -510,7 +502,6 @@ TEST_F(OrcaBootAudit, CompatibilityKeyUsesExpectedHashesWithOrWithoutTheCache)
 TEST_F(OrcaBootAuditDeathTest, FailedAuditRefusesStartAndStartRoomWithoutARoom)
 {
   const ScopedDeathStyle death_style;
-  // Isolate Status::Error's process-wide exit status from other tests.
   ASSERT_EXIT(
       {
         SetEnv("ORCA_SESSION", "1");
@@ -680,7 +671,6 @@ protected:
       playing.get();
       auto destroyed = std::async(std::launch::async, [&] { player.reset(); });
       EXPECT_EQ(destroyed.wait_for(500ms), std::future_status::ready);
-      // Always release the fixture, so a regression fails without hanging the suite.
       held->release.set_value(true);
       destroyed.get();
       EXPECT_TRUE(audit->Wait());
@@ -721,7 +711,7 @@ protected:
   std::string url, old_site, old_game, old_room, old_direct;
   bool configured = false;
 };
-}  // namespace
+}
 
 TEST_F(OrcaBootAuditRoom, StartCannotRequestATicketUntilTheAuditPasses)
 {
@@ -818,7 +808,7 @@ TEST_F(OrcaBootAuditRoomDeathTest, ChangedBytesWithMatchingCacheIdentityRefuseBe
         const auto pending = Request("/state/auditpass");
         if (pending.get("tickets").get<double>() != 0 || pending.get("connects").get<double>() != 0)
           std::_Exit(1);
-        held->release.set_value(true);  // Full HashFile over the actual changed bytes.
+        held->release.set_value(true);
         start.get();
         Orca::Online::StartRoom("auditpass", false);
         Core::HostDispatchJobs(Core::System::GetInstance());
@@ -835,7 +825,6 @@ TEST_F(OrcaBootAuditRoomDeathTest, ChangedBytesWithMatchingCacheIdentityRefuseBe
       },
       testing::ExitedWithCode(0), "");
 }
-
 
 TEST_F(OrcaBootAudit, MissingFileReasonKeepsTheRefusalPrefix)
 {
@@ -902,7 +891,6 @@ TEST_F(OrcaBootAudit, ChangedFileReasonKeepsTheRefusalPrefix)
   EXPECT_FALSE(audit->Wait());
   EXPECT_EQ(audit->Error(), Entry().refusal + " (changed while being verified)");
 }
-
 
 TEST_F(OrcaBootAudit, InjectedOpenFailureCarriesItsReason)
 {

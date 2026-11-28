@@ -64,8 +64,6 @@ bool BootCore(Core::System& system, std::unique_ptr<BootParameters> boot,
 
   SConfig& StartUp = SConfig::GetInstance();
 
-  // Orca: the bundle this boot plays, if any (Core/Orca/Bundle.h), decided before anything
-  // reads a game setting (mod mode leaves the player's game INIs out). Once per process.
   {
     const auto* executable = std::get_if<BootParameters::Executable>(&boot->parameters);
     // A launcher is checked as the bytes its reader already holds: those are what run.
@@ -111,7 +109,6 @@ bool BootCore(Core::System& system, std::unique_ptr<BootParameters> boot,
     }
   }
 
-  // Orca rollback session: force the universal and the game profile's settings on both players.
   std::optional<Orca::Profile> orca_profile;
   Common::ScopeGuard cancel_audit([&] {
     if (orca_profile && orca_profile->boot_audit)
@@ -128,7 +125,7 @@ bool BootCore(Core::System& system, std::unique_ptr<BootParameters> boot,
     if (Orca::Mod::Requested())
     {
       // Mod mode (a tree bundle in ORCA_MOD_DIR, or a verified flat bundle): the game comes from
-      // the bundle, never from Data/Sys/Orca, and ORCA_PROFILE is ignored.
+      // the bundle, never from Data/Sys/Subspace, and ORCA_PROFILE is ignored.
       if (const Orca::Mod::FlatBundle* flat = Orca::Mod::ResolvedFlat())
         orca_profile = Orca::LoadFlatProfile(*flat, &error);
       else if (Orca::Mod::ResolvedKind() == Orca::Mod::BundleKind::Refused)
@@ -298,7 +295,6 @@ bool BootCore(Core::System& system, std::unique_ptr<BootParameters> boot,
     }
   }
 
-  // Orca: nothing set after the forced layer may outrank it.
   if (orca_profile)
   {
     if (const auto problem = Orca::VerifyForcedSettings(*orca_profile))

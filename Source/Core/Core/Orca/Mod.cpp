@@ -39,7 +39,6 @@ namespace Orca::Mod
 namespace
 {
 constexpr auto FORCED_ALLOWLIST = std::to_array<std::string_view>({
-    // A later pinned clock than the universal one (Project+ needs 2025-01-01: PPLUS32.ini).
     "Dolphin.Core.CustomRTCValue",
 });
 constexpr auto OFFERABLE_CAPS = std::to_array<std::string_view>({"results", "locks", "queue2"});
@@ -90,7 +89,6 @@ bool CheckLocalPackFile(const std::string& dir, const std::string& name, std::st
   return true;
 }
 
-// A JSON integer (picojson keeps numbers as doubles: exact up to 2^53) within [min, max].
 std::optional<u64> Integer(const picojson::value& v, u64 min, u64 max)
 {
   if (!v.is<double>())
@@ -104,7 +102,6 @@ std::optional<u64> Integer(const picojson::value& v, u64 min, u64 max)
   return static_cast<u64>(d);
 }
 
-// "0x" and 1-8 hex digits.
 std::optional<u32> HexWord(const picojson::value& v)
 {
   if (!v.is<std::string>())
@@ -118,8 +115,6 @@ std::optional<u32> HexWord(const picojson::value& v)
   return static_cast<u32>(std::stoul(s.substr(2), nullptr, 16));
 }
 
-// Whether brackets outside strings nest deeper than MAX_JSON_DEPTH. picojson recurses once per level
-// with no limit of its own: 20 KB of brackets overflow Windows' 1 MiB main-thread stack.
 bool TooDeep(std::string_view json)
 {
   int depth = 0;
@@ -146,8 +141,6 @@ bool TooDeep(std::string_view json)
   return false;
 }
 
-// One JSON value of at most max_bytes and MAX_JSON_DEPTH levels, and nothing after it but whitespace
-// (picojson's string parse ignores the rest).
 std::string ParseWhole(picojson::value* root, std::string_view json, u64 max_bytes)
 {
   if (json.size() > max_bytes)
@@ -162,7 +155,6 @@ bool InMem1Word(u32 address)
   return address >= 0x80000000 && address <= 0x817FFFFC && address % 4 == 0;
 }
 
-// The object's keys are exactly among `allowed` (nullopt) or the first that isn't.
 std::optional<std::string> UnknownKey(const picojson::object& o,
                                       std::initializer_list<std::string_view> allowed)
 {
@@ -176,7 +168,6 @@ std::optional<std::string> UnknownKey(const picojson::object& o,
 
 bool IsVersion(std::string_view s)
 {
-  // <major>.<minor>.<patch>, decimal.
   int dots = 0;
   bool digit = false;
   for (char c : s)
@@ -200,7 +191,6 @@ bool IsVersion(std::string_view s)
   return dots == 2 && digit && s.size() <= 20;
 }
 
-// A version's three numbers as written (IsVersion), without leading zeros ("007" is "7").
 std::array<std::string_view, 3> VersionParts(std::string_view s)
 {
   std::array<std::string_view, 3> parts{};
@@ -214,7 +204,7 @@ std::array<std::string_view, 3> VersionParts(std::string_view s)
   }
   return parts;
 }
-}  // namespace
+}
 
 #ifndef ORCA_ENGINE_VERSION
 #error "ORCA_ENGINE_VERSION (CMake's ORCA_VERSION) is set for this file in Source/Core/Core/CMakeLists.txt"
@@ -229,7 +219,6 @@ bool VersionAtLeast(std::string_view version, std::string_view minimum)
   const auto have = VersionParts(version), need = VersionParts(minimum);
   for (size_t i = 0; i < have.size(); ++i)
   {
-    // Decimal digits without leading zeros: the longer number is the larger, else by digit.
     if (have[i].size() != need[i].size())
       return have[i].size() > need[i].size();
     if (have[i] != need[i])
@@ -237,8 +226,6 @@ bool VersionAtLeast(std::string_view version, std::string_view minimum)
   }
   return true;
 }
-
-// --- The tree ----------------------------------------------------------------------------------
 
 const TreeFile* Tree::Find(std::string_view path) const
 {
@@ -281,7 +268,6 @@ std::optional<std::string> PathProblem(std::string_view path)
       return "a component that starts with a dot";
     if (part.back() == '.' || part.back() == ' ')
       return "a component that ends in a dot or a space";
-    // Windows device names, with or without an extension.
     std::string base = ToLowerAscii(part.substr(0, part.find('.')));
     while (!base.empty() && base.back() == ' ')
       base.pop_back();
@@ -305,8 +291,6 @@ std::optional<std::string> FlatNameProblem(std::string_view name)
     return "an empty name";
   if (name.size() > MAX_PATH_BYTES)
     return fmt::format("longer than {} bytes", MAX_PATH_BYTES);
-  // The desktop app's runtime file names (desktop orca-policy.ts FILE_RE), which are what lands in
-  // the folder.
   const auto plain = [](char c) {
     return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '+' ||
            c == ' ' || c == '(' || c == ')' || c == '_' || c == '-';
@@ -320,7 +304,6 @@ std::optional<std::string> FlatNameProblem(std::string_view name)
     return "\"..\"";
   if (name.front() == ' ')
     return "a name that starts with a space";
-  // A Windows device name, or a name ending in a dot or a space.
   if (const auto problem = PathProblem(name))
     return problem;
   const std::string lower = ToLowerAscii(name);
@@ -424,7 +407,6 @@ std::optional<Tree> ParseTree(std::string_view json, std::string* error)
       return fail(fmt::format("{} differs from another path only in case", file.path));
     tree.files.push_back(std::move(file));
   }
-  // Never both a file and a folder (also without case).
   for (const TreeFile& f : tree.files)
   {
     const std::string l = ToLowerAscii(f.path);
@@ -438,8 +420,6 @@ std::optional<Tree> ParseTree(std::string_view json, std::string* error)
     return fail("\"tree\" is not the hash of the files listed");
   return tree;
 }
-
-// --- mod.json ----------------------------------------------------------------------------------
 
 std::optional<Builtin> BuiltinFromName(std::string_view name)
 {
@@ -503,8 +483,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
     return it == o.end() ? nullptr : &it->second;
   };
 
-  // A pack for a newer Subspace says so before anything else it holds that this build may not
-  // know (keys, builtins, limits): the player's message, as the session's error.
   if (const picojson::value* v = get("engine"); v && v->is<picojson::object>())
   {
     const picojson::object& e = v->get<picojson::object>();
@@ -518,8 +496,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
   }
 
   Manifest m;
-  // format: 1, a tree bundle (ORCA_MOD_DIR with tree.json); 2, a flat bundle (Bundle.h). It decides
-  // which keys there may be.
   {
     const picojson::value* v = get("format");
     const auto format = v ? Integer(*v, 1, 2) : std::nullopt;
@@ -541,7 +517,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
   if (unknown)
     return fail(fmt::format("unknown key {} (format {})", *unknown, m.format));
 
-  // engine
   {
     const picojson::value* v = get("engine");
     if (!v || !v->is<picojson::object>())
@@ -566,7 +541,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
     m.min_orca = e.at("minOrca").get<std::string>();
   }
 
-  // title
   if (const picojson::value* v = get("title"))
   {
     if (!v->is<std::string>())
@@ -580,7 +554,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
     m.title = t;
   }
 
-  // disc
   {
     const picojson::value* v = get("disc");
     if (!v || !v->is<picojson::object>())
@@ -604,7 +577,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
     m.disc_revision = static_cast<u16>(*revision);
   }
 
-  // launcher
   if (const picojson::value* v = get("launcher"))
   {
     if (!v->is<std::string>())
@@ -626,7 +598,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
     m.launcher = l;
   }
 
-  // sd
   if (const picojson::value* v = get("sd"))
   {
     if (!v->is<picojson::object>())
@@ -642,8 +613,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
                               SD_ALIGN, SD_MIN_BYTES, SD_MAX_BYTES));
     }
     m.sd_bytes = *bytes;
-    // The volume's geometry, for a card that must read as another (P+'s official image: 2 KiB
-    // clusters, two FATs). Absent: FatFs's cluster for the size, one FAT.
     if (s.contains("clusterBytes"))
     {
       const auto cluster = Integer(s.at("clusterBytes"), 512, 32768);
@@ -658,7 +627,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
         return fail("sd.fats must be 1 or 2");
       m.sd_fats = static_cast<u8>(*fats);
     }
-    // FAT32 needs more than 65,525 clusters (FatFs's f_mkfs, as it lays the volume out).
     if (m.sd_cluster_bytes != 0)
     {
       const u64 sectors = *bytes / 512, per_cluster = m.sd_cluster_bytes / 512;
@@ -668,7 +636,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
     }
   }
 
-  // frameHook
   {
     const picojson::value* v = get("frameHook");
     if (!v || !v->is<picojson::object>())
@@ -686,7 +653,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
     m.frame_hook_word = *word;
   }
 
-  // Frames
   const auto frame = [&](const char* key, u64 min, u64 max) -> std::optional<std::optional<u32>> {
     const picojson::value* v = get(key);
     if (!v)
@@ -700,9 +666,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
   if (!boot_nand)
     return fail("bootNandFrame must be an integer from 1 to 1000000");
   m.boot_nand_frame = *boot_nand;
-  // Not below today's 300: a boot's first frames can run differently on a machine whose JIT holds
-  // other blocks (Project+'s 3-9; Rollback/OnlineMatch.cpp FIRST_KEYFRAME_FRAME), and a joiner's
-  // always does.
   const auto first_keyframe = frame("firstKeyframeFrame", DEFAULT_FIRST_KEYFRAME_FRAME, 36'000);
   if (!first_keyframe)
     return fail("firstKeyframeFrame must be an integer from 300 to 36000");
@@ -712,7 +675,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
     return fail("jitClearFrame must be an integer from 0 to 1000000");
   m.jit_clear_frame = *jit_clear;
 
-  // origin: a start point declared by the pack, verified from local RAM at boot.
   if (const picojson::value* v = get("origin"))
   {
     if (!v->is<picojson::object>())
@@ -767,7 +729,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
     m.origin = std::move(decl);
   }
 
-  // keepGameCode
   if (const picojson::value* v = get("keepGameCode"))
   {
     if (!v->is<picojson::array>() || v->get<picojson::array>().size() > 64)
@@ -793,7 +754,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
     }
   }
 
-  // saveTitle: only the disc's own.
   if (const picojson::value* v = get("saveTitle"))
   {
     u64 title = 0;
@@ -810,7 +770,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
     m.save_title = title;
   }
 
-  // forced
   if (const picojson::value* v = get("forced"))
   {
     if (!v->is<picojson::object>())
@@ -819,7 +778,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
     {
       if (std::ranges::find(FORCED_ALLOWLIST, key) == FORCED_ALLOWLIST.end())
         return fail(fmt::format("forced.{} is not a setting a mod may force", key));
-      // Every allowed key so far is a 32-bit unsigned integer.
       const auto n = Integer(value, 0, 0xFFFFFFFFu);
       if (!n)
         return fail(fmt::format("forced.{} must be an integer from 0 to 4294967295", key));
@@ -827,7 +785,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
     }
   }
 
-  // builtin
   if (const picojson::value* v = get("builtin"))
   {
     const auto builtin = v->is<std::string>() ? BuiltinFromName(v->get<std::string>()) : std::nullopt;
@@ -839,7 +796,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
     m.builtin = *builtin;
   }
 
-  // Only flat packs may relocate the three pairs; their instruction words stay engine constants.
   if (const picojson::value* v = get("pplusGuards"))
   {
     if (m.builtin != Builtin::BrawlRev2PPlus)
@@ -895,7 +851,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
       m.origin->frame < m.first_keyframe_frame)
     return fail("origin.frame must be at least firstKeyframeFrame with a builtin");
 
-  // rulesets
   if (const picojson::value* v = get("rulesets"))
   {
     if (!v->is<picojson::array>() || v->get<picojson::array>().size() > 16)
@@ -916,7 +871,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
     }
   }
 
-  // offers
   if (const picojson::value* v = get("offers"))
   {
     if (!v->is<picojson::array>())
@@ -935,8 +889,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
     if (!m.offers.empty() && m.builtin == Builtin::None)
       return fail("a mod with no builtin has no logic to offer caps with");
   }
-  // Without declared rules a results-only game would count whatever Brawl's rules menu holds (its
-  // defaults: a 2-minute timed match, items on): it reads no results, so it offers none.
   if (m.builtin == Builtin::BrawlRev2Results && !m.ranked_rules &&
       std::ranges::find(m.offers, "results") != m.offers.end())
   {
@@ -946,7 +898,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
   if (!flat)
     return m;
 
-  // Format 2. listing: the service listing the bundle is for (desktop orca-policy.ts SLUG_RE).
   {
     const picojson::value* v = get("listing");
     const auto slug = [](const std::string& l) {
@@ -958,7 +909,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
       return fail("\"listing\" must be a listing's slug (a-z 0-9 -, at most 80)");
     m.listing = v->get<std::string>();
   }
-  // serial: the bundle's number, raised with every bundle signed for the listing.
   {
     const picojson::value* v = get("serial");
     const auto serial = v ? Integer(*v, 1, u64{1} << 53) : std::nullopt;
@@ -966,8 +916,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
       return fail("\"serial\" must be an integer from 1");
     m.serial = *serial;
   }
-  // Every file a name at the bundle's root.
-  // sdImage: the card used as it is, pinned by size and chunked SHA-256 (Bundle.h SD_HASH_HEADER).
   if (const picojson::value* v = get("sdImage"))
   {
     if (!v->is<picojson::object>())
@@ -994,7 +942,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
     image.sha256 = s.at("sha256").get<std::string>();
     m.sd_image = std::move(image);
   }
-  // patches: the game patches, applied in this order.
   if (const picojson::value* v = get("patches"))
   {
     if (!v->is<picojson::array>() || v->get<picojson::array>().size() > FLAT_MAX_PATCHES)
@@ -1014,7 +961,6 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
       m.patches.push_back(name);
     }
   }
-  // jitwarm: the JIT seed (host-only).
   if (const picojson::value* v = get("jitwarm"))
   {
     if (!v->is<std::string>())
@@ -1023,10 +969,8 @@ std::optional<Manifest> ParseManifest(std::string_view json, std::string* error)
       return fail(fmt::format("jitwarm: {}", *problem));
     m.jitwarm = v->get<std::string>();
   }
-  // textures: the engine's own pack, the only kind so far.
   if (const picojson::value* v = get("textures"); v && (!v->is<std::string>() || v->get<std::string>() != "engine"))
     return fail("\"textures\" must be \"engine\" (a flat bundle can't carry a texture pack yet)");
-  // Each file once (also without case: Windows and macOS folders), and few enough to be a listing's.
   const std::vector<std::string> files = m.FlatFiles();
   std::set<std::string> lower;
   for (const std::string& file : files)
@@ -1062,8 +1006,6 @@ std::string ModInfo::JitWarmPath() const
   return tree.Find("orca/jitwarm") ? dir + "orca/jitwarm" : std::string{};
 }
 
-// --- The session -------------------------------------------------------------------------------
-
 bool Requested()
 {
   if (!SessionActive())
@@ -1097,7 +1039,6 @@ u32 FirstKeyframeFrame()
 
 namespace
 {
-// A name for this process's temporary files (host-only: never reaches the game).
 u64 ProcessId()
 {
   static const u64 id = [] {
@@ -1107,8 +1048,6 @@ u64 ProcessId()
   return id;
 }
 
-// Keeps the newest `keep` cached images (by mtime) in `dir`, and drops the rest with their notes;
-// also what a build killed midway left (a .part over an hour old) and notes without an image.
 void PruneSdCache(const std::string& dir, size_t keep)
 {
   namespace fs = std::filesystem;
@@ -1119,7 +1058,6 @@ void PruneSdCache(const std::string& dir, size_t keep)
   for (const auto& entry : fs::directory_iterator(StringToPath(dir), ec))
   {
     const std::string name = PathToString(entry.path().filename());
-    // <64 hex>-<builder>.raw[.xxh3][.<pid>.part]
     if (name.size() < 70 || !IsLowerHex(std::string_view(name).substr(0, 64), 64) ||
         name[64] != '-')
     {
@@ -1154,7 +1092,7 @@ void PruneSdCache(const std::string& dir, size_t keep)
     NOTICE_LOG_FMT(BOOT, "Orca mod: dropped the cached SD image {}", PathToString(images[i].second));
   }
 }
-}  // namespace
+}
 
 bool BuildSdImage(std::span<const SdSource> files, u64 bytes, const std::string& out_path,
                   std::string* error, u32 cluster_bytes, u8 fats)
@@ -1195,7 +1133,6 @@ std::optional<SdImage> PrepareSdImage(const ModInfo& mod, const std::string& cac
       fmt::format("{}{}-{}.raw", dir, SdTreeHash(mod.tree, bytes, cluster, fats), SD_BUILDER);
   const std::string note = image.path + ".xxh3";
 
-  // A cached image is reused while it hashes as when it was built (a damaged one is built again).
   if (File::Exists(image.path) && File::GetSize(image.path) == bytes)
   {
     std::string recorded;
@@ -1219,7 +1156,6 @@ std::optional<SdImage> PrepareSdImage(const ModInfo& mod, const std::string& cac
         return std::nullopt;
       }
       files.push_back({f->path.substr(3), mod.dir + f->path, f->bytes});
-      // The tree's sizes were checked at load; checked again here, as the bytes go in.
       if (File::GetSize(files.back().source_path) != f->bytes)
       {
         *error = fmt::format("Orca mod: {} is not the size tree.json names", f->path);
@@ -1229,8 +1165,6 @@ std::optional<SdImage> PrepareSdImage(const ModInfo& mod, const std::string& cac
     const auto start = std::chrono::steady_clock::now();
     std::string why;
     File::Delete(note, File::IfAbsentBehavior::NoConsoleWarning);
-    // Built under this process's own name (two Orcas sharing the cache may build the same card),
-    // then hashed and moved into place, its hash recorded last.
     const std::string building = fmt::format("{}.{:016x}.part", image.path, ProcessId());
     if (!BuildSdImage(files, bytes, building, &why, cluster, fats))
     {
@@ -1256,7 +1190,6 @@ std::optional<SdImage> PrepareSdImage(const ModInfo& mod, const std::string& cac
                        .count(),
                    image.path);
   }
-  // Newest first by use: this one is the newest.
   std::error_code ec;
   std::filesystem::last_write_time(StringToPath(image.path),
                                    std::filesystem::file_time_type::clock::now(), ec);
@@ -1264,44 +1197,28 @@ std::optional<SdImage> PrepareSdImage(const ModInfo& mod, const std::string& cac
   return image;
 }
 
-// --- Builtins and their guards -----------------------------------------------------------------
-
 namespace
 {
-// Brawl rev 2's executable (main.dol, NTSC-U), as every builtin module reads it: the frame boundary,
-// the small-data base (r13) and the code that loads the globals the modules follow through it (the
-// scene manager, g_GameGlobal, the pad system), and the message buffer's vtable (NativeText). Words of
-// the DOL's text and data, never written while the game runs: the same in vanilla and Project+ at
-// every frame boundary from the hook's first (picked from RAM at frame 1,000 of both, 2026-10-05).
 constexpr auto BRAWL_REV2_GUARDS = std::to_array<GuardWord>({
-    {0x80017504, 0x90170100},  // the frame loop's end: stw r0,0x100(r23)
-    {0x8000422C, 0x3DA0805A},  // __init_registers: lis r13,0x805A
-    {0x80004230, 0x61AD4420},  // ori r13,r13,0x4420
-    {0x8002D018, 0x806DBC40},  // gfSceneManager::getInstance: lwz r3,-0x43C0(r13) (0x805A0060)
-    {0x8000D8F4, 0x806DBCC0},  // lwz r3,-0x4340(r13): g_GameGlobal (0x805A00E0)
-    {0x80017538, 0x83EDBC20},  // the frame loop: lwz r31,-0x43E0(r13): gfPadSystem (0x805A0040)
-    {0x804540E8, 0x80069820},  // the message buffer's vtable (0x804540E0), +8
-    {0x804540EC, 0x8004755C},  // and +C
+    {0x80017504, 0x90170100},
+    {0x8000422C, 0x3DA0805A},
+    {0x80004230, 0x61AD4420},
+    {0x8002D018, 0x806DBC40},
+    {0x8000D8F4, 0x806DBCC0},
+    {0x80017538, 0x83EDBC20},
+    {0x804540E8, 0x80069820},
+    {0x804540EC, 0x8004755C},
 });
-// Project+ v3.2 adds its codeset's code that reads and writes the stage select data RankedPPlus and
-// the online rules use (Source/Netplay/Net-Random.asm: the data at 0x8042C4E8, its page index at
-// 0x8042C821, the current page at 0x80496000). Flat packs can relocate these instruction pairs
-// with pplusGuards; the referenced data and the exact instruction words stay the same.
 constexpr auto PPLUS_GUARDS = std::to_array<GuardWord>({
-    {0x80553594, 0x3CA08042},  // lis r5,0x8042
-    {0x80553598, 0x60A5C4E8},  // ori r5,r5,0xC4E8: the stage select data
-    {0x80554320, 0x3C608042},  // lis r3,0x8042
-    {0x80554324, 0x6063C821},  // ori r3,r3,0xC821: its page index
-    {0x805518D0, 0x3E008049},  // lis r16,0x8049
-    {0x805518D4, 0x62106000},  // ori r16,r16,0x6000: the current page
+    {0x80553594, 0x3CA08042},
+    {0x80553598, 0x60A5C4E8},
+    {0x80554320, 0x3C608042},
+    {0x80554324, 0x6063C821},
+    {0x805518D0, 0x3E008049},
+    {0x805518D4, 0x62106000},
 });
-// Vanilla's own: a word of Brawl's code that Project+'s codes rewrite in frame 1 and Orca's own
-// RSBE01.patches never touches (PPLUS32 keepGameCode: RAM holds Project+'s word, only instruction
-// fetches see Brawl's), so the vanilla modules (BrawlStages' stage flow, the rules screen) never run
-// on Project+. Not Brawl's v-sync call (0x80023B88): since 0.3.33 RSBE01.patches moves it as
-// Project+ does, so it reads the same in both.
 constexpr auto VANILLA_GUARDS = std::to_array<GuardWord>({
-    {0x8001CD24, 0x38631198},  // addi r3,r3,0x1198 (Project+: lwz r3,0x11A0(r3))
+    {0x8001CD24, 0x38631198},
 });
 template <size_t A, size_t B>
 constexpr std::array<GuardWord, A + B> Join(const std::array<GuardWord, A>& a,
@@ -1312,7 +1229,6 @@ constexpr std::array<GuardWord, A + B> Join(const std::array<GuardWord, A>& a,
   std::ranges::copy(b, all.begin() + A);
   return all;
 }
-// pplusGuards' defaults are these pairs' first words (Mod.h).
 static_assert(PPlusGuardAddresses{}.rss_exdata == PPLUS_GUARDS[0].address &&
               PPlusGuardAddresses{}.page_index == PPLUS_GUARDS[2].address &&
               PPlusGuardAddresses{}.current_page == PPLUS_GUARDS[4].address);
@@ -1343,7 +1259,7 @@ std::string BuiltinLogName(const Manifest& manifest)
   }
   return std::string(BuiltinName(manifest.builtin));
 }
-}  // namespace
+}
 
 std::span<const GuardWord> BuiltinGuards(Builtin builtin)
 {
@@ -1375,13 +1291,7 @@ bool GuardsHold(Builtin builtin, const std::function<std::optional<u32>(u32)>& r
 
 namespace
 {
-// Whether the builtin's modules run: 1 while the guards hold in memory as it is now, else 0 (failed
-// for the caps) or -1 (not decided yet). A pure function of memory, first runs and re-runs alike.
 std::atomic<int> s_guards{-1};
-// For the caps only (Offers, GuardsDecided): the guards held at some frame since boot, or failed
-// for the rest of the boot. Never what the modules do: a joiner replays frame 1 from the starting
-// snapshot after its own frames held, and must run it as the host did (off, Project+'s codes not
-// landed yet).
 std::atomic<bool> s_guards_failed{false};
 std::atomic<bool> s_held_once{false};
 
@@ -1403,7 +1313,7 @@ void LogFirstBrokenGuard(const Core::CPUThreadGuard& guard, const Manifest& mani
     }
   }
 }
-}  // namespace
+}
 
 void ResetGuards()
 {
@@ -1418,7 +1328,6 @@ void RefreshGuards(const Core::CPUThreadGuard& guard, std::optional<int> frame)
   const ModInfo* mod = profile && profile->mod ? &*profile->mod : nullptr;
   if (!mod || mod->manifest.builtin == Builtin::None)
     return;
-  // Before the game's code is live (a launcher still running), the modules stay off.
   if (!FrameHookLive(guard, *profile))
   {
     s_guards = -1;
@@ -1430,14 +1339,12 @@ void RefreshGuards(const Core::CPUThreadGuard& guard, std::optional<int> frame)
       return std::nullopt;
     return PowerPC::MMU::HostRead<u32>(guard, address);
   }, mod->manifest.pplus_guards);
-  // Logged once each per boot: memory may go back and forth (a join's replay of frame 1).
   const bool held_before = s_held_once, failed_before = s_guards_failed;
   NoteGuards(held, frame);
   if (!held_before && s_held_once)
   {
     NOTICE_LOG_FMT(BOOT, "Orca mod: builtin {} on (its guard words hold)",
                    BuiltinLogName(mod->manifest));
-    // pplusGuards moves the guards only (ORCA.md "P+ fork guards"): the data stays v3.2's.
     if (mod->manifest.pplus_guards)
     {
       WARN_LOG_FMT(BOOT, "Orca mod: pplusGuards: known limits on a fork: a locked header's "
@@ -1460,10 +1367,6 @@ void NoteGuards(bool held, std::optional<int> frame)
     s_held_once = true;
     return;
   }
-  // Not holding: the modules are off for this frame. For the caps it is a failure (for the rest of
-  // the boot: what they withdrew stays withdrawn) only at or after the first frame a friend could
-  // join from. Earlier frames are a loader's codes still landing (Project+'s in frame 1), or a
-  // join's or a rollback's re-run of them; the input gate's calls carry no frame and never decide.
   if (frame && *frame >= static_cast<int>(mod->manifest.first_keyframe_frame))
     s_guards_failed = true;
   s_guards = s_guards_failed ? 0 : -1;
@@ -1495,22 +1398,17 @@ bool GuardsFailed()
 bool Offers(std::string_view cap)
 {
   const ModInfo* mod = ActiveMod();
-  // Only the builtin's supported caps, once its guards have held and never after failure.
   return !LocalPackRequested() && mod && mod->manifest.builtin != Builtin::None && s_held_once &&
          !s_guards_failed && (mod->manifest.builtin != Builtin::BrawlRev2Results ||
           (cap == "results" && mod->manifest.ranked_rules)) &&
          std::ranges::find(mod->manifest.offers, cap) != mod->manifest.offers.end();
 }
-}  // namespace Orca::Mod
-
-// --- The profile -------------------------------------------------------------------------------
+}
 
 namespace Orca
 {
 namespace
 {
-// A bundle file the session reads whole (to parse or hash it), refused when over max_bytes: a tree
-// may list files up to MAX_FILE_BYTES, and only the card's are streamed.
 bool ReadBounded(const std::string& dir, const std::string& name, u64 max_bytes, std::string* out,
                  std::string* why)
 {
@@ -1537,13 +1435,10 @@ bool ReadBounded(const std::string& dir, const std::string& name, u64 max_bytes,
   return true;
 }
 
-// The profile a bundle's validated mod.json makes, a tree bundle's or a flat one's.
 std::optional<Profile> ProfileFromManifest(const std::string& dir, Mod::Tree tree,
                                            Mod::Manifest manifest, std::string* error)
 {
   Profile profile;
-  // The room's mode and the boot log name it as the legacy profile its builtin replaces, so a
-  // bundle of Brawl or Project+ plays in the same modes as before.
   switch (manifest.builtin)
   {
   case Mod::Builtin::BrawlRev2:
@@ -1566,7 +1461,6 @@ std::optional<Profile> ProfileFromManifest(const std::string& dir, Mod::Tree tre
   for (const Mod::KeptWord& k : manifest.keep_game_code)
     profile.kept_code.push_back({k.address, k.game, k.loader});
   profile.save_title = manifest.save_title;
-  // The card is in exactly when mod.json has one (never a forced key of its own).
   if (manifest.sd_bytes || manifest.sd_image)
     profile.forced.emplace_back(Config::Location{Config::System::Main, "Core", "WiiSDCard"}, "True");
   for (const auto& [key, value] : manifest.forced)
@@ -1596,7 +1490,7 @@ std::optional<Profile> ProfileFromManifest(const std::string& dir, Mod::Tree tre
   profile.mod = Mod::ModInfo{dir, std::move(tree), std::move(manifest), {}};
   return profile;
 }
-}  // namespace
+}
 
 std::optional<Profile> LoadModProfile(const std::string& dir_in, std::string* error)
 {
@@ -1617,8 +1511,6 @@ std::optional<Profile> LoadModProfile(const std::string& dir_in, std::string* er
   std::optional<Mod::Tree> tree = Mod::ParseTree(text, error);
   if (!tree)
     return std::nullopt;
-  // Every file there, at the size tree.json names (its content is the app's sha256 check at
-  // download, and for the SD card the built image's hash in the key).
   for (const Mod::TreeFile& f : tree->files)
   {
     const std::string path = dir + f.path;
@@ -1634,7 +1526,6 @@ std::optional<Profile> LoadModProfile(const std::string& dir_in, std::string* er
       return std::nullopt;
     }
   }
-  // mod.json: hashed against tree.json and parsed from the same bytes.
   const Mod::TreeFile* mod_file = tree->Find("mod.json");
   if (!mod_file)
   {
@@ -1667,10 +1558,6 @@ std::optional<Profile> LoadModProfile(const std::string& dir_in, std::string* er
     *error = fmt::format("Orca mod: mod.json's launcher {} is not in the bundle", manifest->launcher);
     return std::nullopt;
   }
-  // What else reaches the game besides the SD card (whose built image's hash is in the key) is
-  // checked against tree.json's sha256 too: the launcher and any other .dol or .elf at the root
-  // (any case), and the game patches. Small files; a run folder edited in place since the app laid
-  // it out is refused rather than desyncing.
   for (const Mod::TreeFile& f : tree->files)
   {
     const std::string lower = Mod::ToLowerAscii(f.path);
@@ -1693,8 +1580,6 @@ std::optional<Profile> LoadModProfile(const std::string& dir_in, std::string* er
     }
   }
 
-  // Game patches (orca/patches/<name>.patches): every file must parse, or the session is refused
-  // here rather than running without them.
   for (const Mod::TreeFile* f : tree->Under("orca/patches/"))
   {
     if (!f->path.ends_with(".patches") ||
@@ -1728,7 +1613,7 @@ std::optional<Profile> LoadFlatProfile(const Mod::FlatBundle& bundle, std::strin
   mod.sd_image_hash = bundle.sd_image_hash;
   return profile;
 }
-}  // namespace Orca
+}
 
 namespace Orca
 {
@@ -1746,8 +1631,6 @@ bool PrepareModBoot(Profile* profile, const std::string* executable_path,
       *error = "Orca mod: this mod boots its disc, not a loader";
       return false;
     }
-    // Exactly the bundle's launcher (the app lays it out at <run folder>/<launcher>).
-    // By name too: a loader's game ID (which game INIs apply to it) comes from its file name.
     std::error_code ec;
     if (PathToFileName(*executable_path) != m.launcher ||
         !std::filesystem::equivalent(StringToPath(*executable_path),
@@ -1765,8 +1648,6 @@ bool PrepareModBoot(Profile* profile, const std::string* executable_path,
                            DiscOpenProblem(default_disc));
       return false;
     }
-    // The boot inserts the disc with the same alias (Boot.cpp SetDefaultDisc): Brawl's Rev 1 dump
-    // reads as Rev 2, as for a legacy launcher profile (Profile.cpp).
     AliasRevision(*disc);
     const u16 revision = disc->GetRevision().value_or(0);
     if (disc->GetGameID() != m.disc_id || revision != m.disc_revision)
@@ -1795,8 +1676,6 @@ bool PrepareModBoot(Profile* profile, const std::string* executable_path,
   BootPhase::Mark(BootPhase::Phase::Disc);
   if (m.sd_image)
   {
-    // A flat bundle's card, used as it is: its size and chunked SHA-256 were checked as the bundle
-    // was verified (Bundle.cpp), once per process.
     if (mod.sd_image_hash.empty())
     {
       *error = "Orca mod: the SD image was not verified";
@@ -1811,15 +1690,12 @@ bool PrepareModBoot(Profile* profile, const std::string* executable_path,
         Mod::PrepareSdImage(mod, GetEnv("ORCA_SD_CACHE"), error);
     if (!image)
       return false;
-    // The session's config layer points the SD card at this image, read-only (writes and folder
-    // sync are forced off), as for a legacy launcher profile's sd.raw.
     profile->sd_image_path = image->path;
     profile->sd_image_hash = image->hash;
     mod.sd_image_hash = image->hash;
   }
-  // A tree image is hashed in full even when the image itself was reused.
   if (!mod.flat && (m.sd_bytes || !m.launcher.empty()))
     BootPhase::Mark(BootPhase::Phase::HashFull);
   return true;
 }
-}  // namespace Orca
+}

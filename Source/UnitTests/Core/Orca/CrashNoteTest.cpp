@@ -25,13 +25,10 @@
 
 namespace
 {
-// The panic alert the Mac shows at the same point of the same boot (bug reports c60426c4 and
-// b5ef88b5, Project+ on Orca 0.3.29).
 constexpr std::string_view ALERT =
     "Invalid write to 0x000002c8, PC = 0x801e17bc.\n\nThe game probably would have crashed on real "
     "hardware. Enable MMU in advanced settings to accurately emulate game crashes.";
 
-// A stream that takes no bytes, unbuffered like stderr on Windows.
 class RefusingStream
 {
 public:
@@ -62,26 +59,21 @@ void Put32(std::vector<u8>& image, size_t at, s32 value)
   std::memcpy(image.data() + at, &value, sizeof(value));
 }
 
-// A TypeDescriptor: two pointers (vftable, spare), then the decorated name.
 void PutName(std::vector<u8>& image, size_t at, std::string_view name)
 {
   std::memcpy(image.data() + at + 2 * sizeof(void*), name.data(), name.size());
 }
-}  // namespace
+}
 
 TEST(OrcaCrashNote, AlertToAStreamThatRefusesWritesDoesNotThrow)
 {
   RefusingStream stream;
   ASSERT_NE(stream.get(), nullptr);
-  // What 0.3.29 printed alerts with fails on a short write: it throws where Orca is built with
-  // exceptions (Windows), and from the CPU thread inside JIT code that exception can't unwind
-  // (exit 0xE06D7363, nothing on stderr). Mac and Linux builds have no exceptions, so it aborts.
 #if defined(__cpp_exceptions) || defined(_CPPUNWIND)
   EXPECT_THROW(fmt::print(stream.get(), "{}\n", ALERT), std::system_error);
 #else
   EXPECT_DEATH(fmt::print(stream.get(), "{}\n", ALERT), "cannot write to file");
 #endif
-  // The alert writer says it failed and goes on.
   EXPECT_FALSE(Orca::CrashNote::WriteLine(stream.get(), ALERT));
   EXPECT_FALSE(Orca::CrashNote::WriteLine(nullptr, ALERT));
 }
@@ -107,7 +99,6 @@ TEST(OrcaCrashNote, TypeNames)
   EXPECT_EQ(TypeName(".?AVformat_error@v12@fmt@@"), "fmt::v12::format_error");
   EXPECT_EQ(TypeName(".?AVhresult_error@winrt@@"), "winrt::hresult_error");
   EXPECT_EQ(TypeName(".?AUplain@@"), "plain");
-  // Forms it doesn't read come back as they are.
   EXPECT_EQ(TypeName(".?AV?$basic_string@DU?$char_traits@D@std@@@std@@"),
             ".?AV?$basic_string@DU?$char_traits@D@std@@@std@@");
   EXPECT_EQ(TypeName(".H"), ".H");
@@ -117,8 +108,6 @@ TEST(OrcaCrashNote, TypeNames)
 
 TEST(OrcaCrashNote, ReadThrowInfoListsTheTypesAndFindsStdException)
 {
-  // A thrown std::system_error as MSVC lays it out: _ThrowInfo at 0, its _CatchableTypeArray at
-  // 0x20, a _CatchableType per type at 0x40/0x60/0x80, TypeDescriptors at 0x100/0x140/0x180.
   std::vector<u8> image(0x200);
   Put32(image, 0x0C, 0x20);
   Put32(image, 0x20, 3);
@@ -129,8 +118,8 @@ TEST(OrcaCrashNote, ReadThrowInfoListsTheTypesAndFindsStdException)
   for (const auto& [catchable, descriptor] : types)
   {
     Put32(image, catchable + 4, static_cast<s32>(descriptor));
-    Put32(image, catchable + 8, catchable == 0x80 ? 0x10 : 0);  // mdisp
-    Put32(image, catchable + 12, -1);                           // pdisp: not a virtual base
+    Put32(image, catchable + 8, catchable == 0x80 ? 0x10 : 0);
+    Put32(image, catchable + 12, -1);
   }
   PutName(image, 0x100, ".?AVsystem_error@std@@");
   PutName(image, 0x140, ".?AVruntime_error@std@@");
@@ -144,7 +133,6 @@ TEST(OrcaCrashNote, ReadThrowInfoListsTheTypesAndFindsStdException)
   ASSERT_TRUE(thrown.std_exception_offset.has_value());
   EXPECT_EQ(*thrown.std_exception_offset, 0x10);
 
-  // A type that isn't a std::exception has no offset.
   Put32(image, 0x20, 1);
   const Orca::CrashNote::ThrownTypes first =
       Orca::CrashNote::ReadThrowInfo(image.data(), image.data());
@@ -185,7 +173,6 @@ TEST(OrcaCrashNote, FixedLineCutsToFitAndStaysTerminated)
   full.Hex(0xFFFFFFFFFFFFFFFFull);
   EXPECT_STREQ(wide, "0xFFFFFFFFFFFFFFFF");
 
-  // Nothing to write into: nothing written, no crash.
   Orca::CrashNote::FixedLine none(nullptr, 0);
   none << "text";
   EXPECT_EQ(none.Length(), 0u);
@@ -196,7 +183,6 @@ TEST(OrcaCrashNote, FaultNamesOnlyTheFatalCodes)
   EXPECT_STREQ(Orca::CrashNote::FaultName(0xC0000005), "access violation");
   EXPECT_STREQ(Orca::CrashNote::FaultName(0x80000003), "breakpoint");
   EXPECT_STREQ(Orca::CrashNote::FaultName(0xC00000FD), "stack overflow");
-  // A C++ throw (the throw reporter's), thread naming and OutputDebugString are left alone.
   EXPECT_EQ(Orca::CrashNote::FaultName(0xE06D7363), nullptr);
   EXPECT_EQ(Orca::CrashNote::FaultName(0x406D1388), nullptr);
   EXPECT_EQ(Orca::CrashNote::FaultName(0x40010006), nullptr);
@@ -235,7 +221,6 @@ TEST(OrcaCrashNote, FaultStackLimitsFramesAndKeepsCompleteTokensWithinAppLimit)
   const size_t capped = FormatFaultStack(out, sizeof(out), frames);
   EXPECT_LE(capped + 1, MAX_FAULT_STACK_LINE);
   EXPECT_TRUE(std::string_view(out).ends_with("subspace.exe+0x123456789ABCDEF0 ..."));
-  // Don't print half a module/offset when the caller's buffer is smaller.
   char small[32];
   FormatFaultStack(small, sizeof(small), frames);
   EXPECT_STREQ(small, "Orca: exception stack ...");
@@ -254,7 +239,6 @@ TEST(OrcaCrashNote, FaultStackLimitsFramesAndKeepsCompleteTokensWithinAppLimit)
 
 TEST(OrcaCrashNote, FaultLineNamesTheModuleOffsetAndGraphicsDevice)
 {
-  // The 0.3.39 crashes: an access violation a moment after the device hung.
   Orca::CrashNote::Fault fault;
   fault.code = 0xC0000005;
   fault.address = 0x7FFA12345678;
@@ -272,7 +256,6 @@ TEST(OrcaCrashNote, FaultLineNamesTheModuleOffsetAndGraphicsDevice)
             "on thread 4242; graphics device: lost (D3D11: device hung, 0x887A0006) at a 16x16x1 "
             "texture");
 
-  // A write in JIT code (no module), before any graphics device.
   fault.module = {};
   fault.access_kind = 1;
   fault.access_address = 0;
@@ -281,15 +264,12 @@ TEST(OrcaCrashNote, FaultLineNamesTheModuleOffsetAndGraphicsDevice)
   EXPECT_STREQ(out, "Orca: exception 0xC0000005 (access violation writing 0x0) at 0x7FFA12345678 "
                     "(in no module) on thread 4242; graphics device: none");
 
-  // Said by the CPU thread's vectored handler as it was raised: tagged, since a driver may still
-  // catch it and the run go on.
   fault.first_chance = true;
   Orca::CrashNote::FormatFault(out, sizeof(out), fault);
   EXPECT_STREQ(out, "Orca: exception 0xC0000005 (access violation writing 0x0) (first chance) at "
                     "0x7FFA12345678 (in no module) on thread 4242; graphics device: none");
   fault.first_chance = false;
 
-  // A failed assert's breakpoint (the 0x80000003 exits): no access.
   Orca::CrashNote::Fault breakpoint;
   breakpoint.code = 0x80000003;
   breakpoint.module = "Orca.exe";
@@ -300,7 +280,6 @@ TEST(OrcaCrashNote, FaultLineNamesTheModuleOffsetAndGraphicsDevice)
   EXPECT_STREQ(out, "Orca: exception 0x80000003 (breakpoint) at Orca.exe+0x4F00 on thread 7; "
                     "graphics device: D3D11 running");
 
-  // Cut to fit a small buffer, still terminated.
   char small[16];
   EXPECT_EQ(Orca::CrashNote::FormatFault(small, sizeof(small), breakpoint), 15u);
   EXPECT_STREQ(small, "Orca: exception");
@@ -311,7 +290,6 @@ namespace
 {
 __declspec(noinline) void RaiseStackTestFault()
 {
-  // A synthetic exception, without damaging memory. Keep a native caller frame in release builds.
   RaiseException(0xC0000374, 0, 0, nullptr);
   volatile int returned = 1;
   (void)returned;
@@ -334,11 +312,10 @@ void PrepareStackTestFault()
   SetUnhandledExceptionFilter(nullptr);
   Orca::CrashNote::InstallFaultReporter();
 }
-}  // namespace
+}
 
 TEST(OrcaCrashNoteDeathTest, WorkerFaultIncludesNativeCaller)
 {
-  // Before stack capture this produces only the exception/address line, so the regex fails.
   EXPECT_EXIT(
       {
         PrepareStackTestFault();

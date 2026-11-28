@@ -54,11 +54,6 @@ void Jit64::ps_sum(UGeckoInstruction inst)
   ADDPD(tmp, Rb);    // {a.ps0 + b.ps0, a.ps0 + b.ps1}
   if (m_accurate_nans)
   {
-    // Orca: x86-64 picks among NaN inputs as PowerPC does for an addition (a.ps0 first), but
-    // inf - inf makes x86's default NaN, which is negative, where PowerPC's is positive. So a NaN
-    // a.ps0 + b.ps1 is redone by PowerPC's rules: a.ps0 or else b.ps1 made quiet, or the positive
-    // default NaN. (HandleNaNs can't: its paired form pairs each output lane with the same lane of
-    // the inputs.)
     MOVHLPS(XMM0, tmp);
     UCOMISD(XMM0, R(XMM0));
     FixupBranch handle_nan = J_CC(CC_P, Jump::Near);

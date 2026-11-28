@@ -37,16 +37,12 @@ std::atomic<bool> s_online_withdrawn{false};
 std::atomic<bool> s_stopping{false};
 std::atomic<bool> s_shortcuts_available{false};
 std::FILE* s_out = nullptr;
-// Capability readers run on the room/controller threads. Never keep this lock during output.
 std::mutex s_caps_mutex;
 std::set<std::string, std::less<>> s_app_caps;
-// The last `orca caps` list printed (nullopt: none yet), under s_mutex.
 std::optional<std::string> s_printed_caps;
-// The app's last `caps` line, and the offer s_app_caps was last agreed against (under s_mutex).
 std::string s_app_list;
 std::string s_offer_seen;
 
-// Both lists' names (under s_mutex).
 std::set<std::string, std::less<>> Agreed(std::string_view offered, std::string_view app)
 {
   std::set<std::string, std::less<>> ours;
@@ -63,8 +59,6 @@ std::set<std::string, std::less<>> Agreed(std::string_view offered, std::string_
   return both;
 }
 
-// Called under s_mutex to preserve agreement ordering; publish without holding the capability
-// lock across Print, whose stream can wait for the desktop app to drain its pipe.
 void AgreeCaps(std::string_view offered, std::string_view app)
 {
   auto agreed = Agreed(offered, app);
@@ -72,7 +66,6 @@ void AgreeCaps(std::string_view offered, std::string_view app)
   s_app_caps = std::move(agreed);
 }
 
-// When CapsSettled was first asked (host clock: when "ready" waits, never what the game computes).
 std::optional<std::chrono::steady_clock::time_point> s_settle_asked;
 void (*s_error_listener)(std::string_view, std::string_view) = nullptr;
 void (*s_first_frame_listener)() = nullptr;
@@ -84,7 +77,6 @@ void Print(const std::string& line)
   std::fflush(out);
 }
 
-// One line per status: a sentence can't break the protocol.
 std::string OneLine(std::string_view text)
 {
   std::string out(text);
@@ -95,7 +87,7 @@ std::string OneLine(std::string_view text)
   }
   return out;
 }
-}  // namespace
+}
 
 void State(std::string_view state)
 {
@@ -130,7 +122,6 @@ void Result(std::string_view json)
   if (!SessionActive() || !Cap(RESULTS_CAP))
     return;
   std::string line = fmt::format("orca result {}", HarnessReport(OneLine(json)));
-  // The app forwards at most 300 characters of a line.
   if (line.size() > 300)
     return;
   std::lock_guard lock(s_mutex);
@@ -150,7 +141,6 @@ void Report(std::string_view code, std::string_view sentence)
   bool app_reports;
   {
     std::lock_guard lock(s_mutex);
-    // The app's protocol support survives withdrawal of this boot's online features.
     app_reports = Agreed("join", s_app_list).contains("join");
   }
   if (!app_reports)
@@ -180,10 +170,6 @@ std::string OfferedCaps()
   }
   if (Music::Supported())
     caps += fmt::format(" {}", MUSIC_CAP);
-  // Mod mode (Core/Orca/Mod.h): besides the music switch above (host-only, the same rule in both
-  // modes), what mod.json offers and its builtin carries, only once the builtin's guard words have
-  // held and never after they failed (Mod::Offers). The pick caps go with "locks", as for a legacy
-  // ruleset profile.
   if (Mod::ActiveMod())
   {
     for (const char* cap : {RESULTS_CAP, LOCKS_CAP, QUEUE2_CAP})
@@ -196,16 +182,12 @@ std::string OfferedCaps()
   }
   else
   {
-    // What the game module says (Engine/Module.h): results where it reads them while its addresses
-    // hold, the locks with a ruleset.
     Orca::Engine::Module& game = UX::Game();
     if (game.Active() && game.Describe().results)
       caps += fmt::format(" {}", RESULTS_CAP);
     if (game.ProfileRuleset() != Orca::Engine::Ruleset::None)
       caps += fmt::format(" {} {} {}", LOCKS_CAP, QUEUE2_CAP, PICK_CAPS);
   }
-  // Engine caps, like "music": every profile, legacy or mod, whatever its builtin or guards. Last,
-  // so an app that reads fewer words drops them before any other.
   caps += fmt::format(" {} {}", TALK_CAP, RUMBLE_CAP);
   if (Rollback::ReplayStream::ProductMode())
   {
@@ -215,10 +197,8 @@ std::string OfferedCaps()
 #endif
   }
   caps += fmt::format(" {} {}", RECORD_CAP, HOSTUI_CAP);
-  // Append-only: old desktop builds read at most 24 words.
   if (SessionActive() && GetEnv("ORCA_COSEATS") != "0")
     caps += " coseats";
-  // Casual queue doubles also works with one seat per computer, without co-seats.
   if (SessionActive())
     caps += " qdoubles rdoubles";
   if (s_shortcuts_available)
@@ -254,7 +234,6 @@ bool CapsSettled()
 
 void UpdateCaps()
 {
-  // Legacy profiles offer the same caps for the whole run: nothing to follow.
   if (!SessionActive() || (!Mod::ActiveMod() && !s_online_withdrawn))
     return;
   const std::string caps = OfferedCaps();
@@ -262,8 +241,6 @@ void UpdateCaps()
   if (s_offer_seen == caps)
     return;
   s_offer_seen = caps;
-  // What is on follows the offer at once (a withdrawn cap off, a cap the app already listed on),
-  // before any new answer from the app.
   AgreeCaps(caps, s_app_list);
   if (s_printed_caps && *s_printed_caps != caps)
   {
@@ -283,8 +260,6 @@ void ResetOnline()
   s_online_withdrawn = false;
   const std::string caps = OfferedCaps();
   std::lock_guard lock(s_mutex);
-  // Legacy profiles do not pass through UpdateCaps after a reboot. Restore the agreement here
-  // against the app's existing list, without waiting for another caps command.
   AgreeCaps(caps, s_app_list);
   s_offer_seen.clear();
 }
@@ -382,7 +357,6 @@ int Finish()
 {
   if (!SessionActive())
     return 0;
-  // The activity lines' last one, if the game ran and nothing printed it yet.
   Activity::Finish();
   bool stuck;
   {
@@ -395,4 +369,4 @@ int Finish()
   State("ended");
   return ExitCode();
 }
-}  // namespace Orca::Status
+}

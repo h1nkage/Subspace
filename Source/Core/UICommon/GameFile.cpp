@@ -20,6 +20,7 @@
 
 #include "Common/BitUtils.h"
 #include "Common/ChunkFile.h"
+#include "Common/ColorUtil.h"
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
 #include "Common/Crypto/SHA1.h"
@@ -411,6 +412,24 @@ bool GameFile::WiiBannerChanged()
   m_pending.volume_banner.buffer =
       DiscIO::WiiSaveBanner(m_title_id)
           .GetBanner(&m_pending.volume_banner.width, &m_pending.volume_banner.height);
+
+  if (m_pending.volume_banner.buffer.empty() && !m_game_id.empty())
+  {
+    constexpr u32 width = DiscIO::WiiSaveBanner::BANNER_WIDTH;
+    constexpr u32 height = DiscIO::WiiSaveBanner::BANNER_HEIGHT;
+    constexpr u64 header_size = 0xA0;
+    File::IOFile file(File::GetSysDirectory() + "Subspace/Saves/" + m_game_id + "/data/banner.bin",
+                      "rb");
+    std::vector<u16> data(width * height);
+    if (file && file.Seek(header_size, File::SeekOrigin::Begin) &&
+        file.ReadArray(data.data(), data.size()))
+    {
+      m_pending.volume_banner.buffer.resize(width * height);
+      Common::Decode5A3Image(m_pending.volume_banner.buffer.data(), data.data(), width, height);
+      m_pending.volume_banner.width = width;
+      m_pending.volume_banner.height = height;
+    }
+  }
 
   // We only reach here if the old banner was empty, so if the new banner isn't empty,
   // the new banner is guaranteed to be different from the old banner

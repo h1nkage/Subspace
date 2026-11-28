@@ -578,8 +578,6 @@ ResultCode HostFileSystem::Rename(Uid uid, Gid gid, const std::string& old_path,
   {
     return ResultCode::InUse;
   }
-  // Orca rollback: replacing a file that is still open would leave its handles writing to an
-  // unlinked file the journal can't see (and fail outright on Windows), so a session refuses it.
   if (m_journal_active && (IsFileOpened(new_path) || IsDirectoryInUse(new_path)))
     return ResultCode::InUse;
 

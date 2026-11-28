@@ -622,13 +622,13 @@ void MenuBar::AddViewMenu()
 
 void MenuBar::AddOptionsMenu()
 {
-  auto* const options_menu{new QtUtils::NonAutodismissibleMenu(tr("&Options"), this)};
+  auto* const options_menu{new QtUtils::NonAutodismissibleMenu(tr("&Settings"), this)};
   addMenu(options_menu);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 4, 0)
-  options_menu->addAction(tr("Co&nfiguration"), QKeySequence::Preferences, this,
+  options_menu->addAction(tr("Ge&neral Settings"), QKeySequence::Preferences, this,
                           &MenuBar::Configure);
 #else
-  options_menu->addAction(tr("Co&nfiguration"), this, &MenuBar::Configure,
+  options_menu->addAction(tr("Ge&neral Settings"), this, &MenuBar::Configure,
                           QKeySequence::Preferences);
 #endif
   options_menu->addSeparator();
@@ -636,6 +636,7 @@ void MenuBar::AddOptionsMenu()
   options_menu->addAction(tr("&Audio Settings"), this, &MenuBar::ConfigureAudio);
   m_controllers_action =
       options_menu->addAction(tr("&Controller Settings"), this, &MenuBar::ConfigureControllers);
+  options_menu->addAction(tr("Net&Play Settings"), this, &MenuBar::ConfigureNetPlay);
   options_menu->addAction(tr("&Hotkey Settings"), this, &MenuBar::ConfigureHotkeys);
   options_menu->addAction(tr("&Free Look Settings"), this, &MenuBar::ConfigureFreelook);
 

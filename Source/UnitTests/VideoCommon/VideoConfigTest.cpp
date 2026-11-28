@@ -73,4 +73,4 @@ TEST_F(VideoConfigValidity, DeferredUnsupportedAAIsClampedWhenReady)
   config.VerifyValidity();
   EXPECT_EQ(config.iMultisamples, 1u);
 }
-}  // namespace
+}

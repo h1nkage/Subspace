@@ -49,9 +49,6 @@ picojson::value Json(const char* text)
   return value;
 }
 
-// Orcas in this process, each with its DirectLink, signalling through the test as the room carries
-// it (peer messages, in order). No STUN, no TURN: nothing leaves this machine. Loopback candidates
-// too, in case the host's LAN addresses refuse a send to themselves.
 class Mesh
 {
 public:
@@ -91,7 +88,6 @@ public:
 
   Node& At(int i) { return m_nodes[static_cast<size_t>(i)]; }
 
-  // Signalling from each node to the others, and what each received.
   void Pump()
   {
     for (Node& from : m_nodes)
@@ -124,7 +120,6 @@ public:
     return done();
   }
 
-  // How node `i` sees node `j`'s link.
   DirectStats Stats(int i, int j) { return At(i).link->Stats(At(j).id).value_or(DirectStats{}); }
   bool Up(int i, int j) { return Stats(i, j).kind != LinkKind::Relay; }
   bool AllUp()
@@ -152,11 +147,10 @@ int Count(const std::vector<DirectLink::Received>& received, const std::string& 
   return static_cast<int>(std::count_if(received.begin(), received.end(),
                                         [&](const auto& r) { return r.payload == payload; }));
 }
-}  // namespace
+}
 
 TEST(OrcaDirectLink, ParsesTheTicketsIceServers)
 {
-  // As the service's ticket route hands out Cloudflare's (web/src/lib/turn.ts).
   IceConfig c;
   ASSERT_TRUE(ParseIce(Json(R"([{"urls":["stun:stun.cloudflare.com:3478",
       "turn:turn.cloudflare.com:3478?transport=udp","turn:turn.cloudflare.com:3478?transport=tcp",
@@ -169,7 +163,6 @@ TEST(OrcaDirectLink, ParsesTheTicketsIceServers)
   EXPECT_EQ(c.turn_user, "u1");
   EXPECT_EQ(c.turn_pass, "p1");
 
-  // `urls` as one string; TURN on 53 when that is all there is.
   IceConfig d;
   ASSERT_TRUE(ParseIce(Json(R"([{"urls":"stun:s.example:19302"},
       {"urls":"turn:t.example:53?transport=udp","username":"x","credential":"y"}])"),
@@ -179,7 +172,6 @@ TEST(OrcaDirectLink, ParsesTheTicketsIceServers)
   EXPECT_EQ(d.turn_host, "t.example");
   EXPECT_EQ(d.turn_port, 53);
 
-  // TURN over TCP or TLS only, or without credentials: no TURN (the room's relay covers that).
   IceConfig e;
   ASSERT_TRUE(ParseIce(Json(R"([{"urls":["turn:t.example:3478?transport=tcp",
       "turns:t.example:5349"],"username":"x","credential":"y"},{"urls":"turn:t.example"}])"),
@@ -206,19 +198,13 @@ TEST(OrcaDirectLink, KeysDifferPerDirectionGenerationRoomAndPair)
 
 TEST(OrcaDirectLink, OneLanNeedsASharedPublicAddress)
 {
-  // Two homes on the same router default (192.168.1.x): the same /24, but STUN saw two public
-  // addresses. Not one LAN: no "upgrade" teardown of their working cross-home link.
   const std::vector<std::string> mine{"192.168.1.20"}, theirs{"192.168.1.35"};
   EXPECT_FALSE(OneLan(mine, theirs, {"203.0.113.7"}, {"198.51.100.40"}));
-  // Behind one NAT: one public address, each on a port of its own (and maybe more than one).
   EXPECT_TRUE(OneLan(mine, theirs, {"203.0.113.7"}, {"198.51.100.40", "203.0.113.7"}));
   EXPECT_TRUE(OneLan(mine, theirs, {"203.0.113.7"}, {"203.0.113.7"}));
-  // A side STUN never answered: no proof, no upgrade.
   EXPECT_FALSE(OneLan(mine, theirs, {}, {"203.0.113.7"}));
   EXPECT_FALSE(OneLan(mine, theirs, {"203.0.113.7"}, {}));
-  // One public address, but no subnet in common (a guest network behind the same NAT).
   EXPECT_FALSE(OneLan({"192.168.1.20"}, {"192.168.2.35"}, {"203.0.113.7"}, {"203.0.113.7"}));
-  // IPv6: the same /64 counts as a subnet.
   EXPECT_TRUE(OneLan({"2001:db8:1:2::10"}, {"2001:db8:1:2::20"}, {"203.0.113.7"},
                      {"203.0.113.7"}));
   EXPECT_FALSE(OneLan({"2001:db8:1:2::10"}, {"2001:db8:1:3::20"}, {"203.0.113.7"},
@@ -245,23 +231,18 @@ TEST(OrcaDirectLink, DatagramsAuthenticateAndRefuseReplays)
   EXPECT_EQ(got.counter, 9u);
   EXPECT_EQ(got.echo, 5u);
   EXPECT_EQ(got.hold, 12);
-  // Unreadable on the wire.
   const std::string clear = "inputs";
   EXPECT_EQ(std::search(datagram.begin(), datagram.end(), clear.begin(), clear.end()),
             datagram.end());
-  // Another key (another pair, direction or generation): refused.
   EXPECT_FALSE(DirectCrypto::Open(KeyOf(8), datagram.data(), datagram.size(), &got));
-  // Any byte changed, the header included: refused.
   for (size_t i = 0; i < datagram.size(); ++i)
   {
     std::vector<u8> tampered = datagram;
     tampered[i] ^= 0x10;
     EXPECT_FALSE(DirectCrypto::Open(key, tampered.data(), tampered.size(), &got)) << "byte " << i;
   }
-  // Cut short, or empty.
   EXPECT_FALSE(DirectCrypto::Open(key, datagram.data(), datagram.size() - 1, &got));
   EXPECT_FALSE(DirectCrypto::Open(key, datagram.data(), 0, &got));
-  // Counter 0 and payloads past one datagram are never sealed.
   header.counter = 0;
   EXPECT_TRUE(DirectCrypto::Seal(key, header, "x").empty());
   header.counter = 10;
@@ -269,7 +250,6 @@ TEST(OrcaDirectLink, DatagramsAuthenticateAndRefuseReplays)
   EXPECT_EQ(DirectCrypto::Seal(key, header, std::string(DirectLink::MAX_PAYLOAD, 'x')).size(),
             DirectLink::MAX_DATAGRAM);
 
-  // The replay window: each counter once, out of order within the last 64.
   DirectCrypto::ReplayWindow window;
   EXPECT_FALSE(window.Fresh(0));
   EXPECT_TRUE(window.Fresh(1));
@@ -299,9 +279,7 @@ TEST(OrcaDirectLink, DirectPacketsOnlyForTheSendersSeat)
   ASSERT_TRUE(DecodeDirectPacket(EncodePacket(packet), 1, &got));
   EXPECT_EQ(got.sequence, 4);
   EXPECT_EQ(got.pads, packet.pads);
-  // A friend's link speaks for its own seat only.
   EXPECT_FALSE(DecodeDirectPacket(EncodePacket(packet), 2, &got));
-  // History travels through the relay alone.
   packet.history_seat = 2;
   packet.history_first = 0;
   packet.history.resize(1);
@@ -309,20 +287,15 @@ TEST(OrcaDirectLink, DirectPacketsOnlyForTheSendersSeat)
   EXPECT_FALSE(DecodeDirectPacket("{not json", 1, &got));
 }
 
-// Two Orcas link over this machine: the lower id offers, the link comes up on host candidates,
-// packets go both ways, the round trip is measured from the datagrams, and three rebuilds each
-// bring a new generation back up with nothing refused.
 TEST(OrcaDirectLink, TwoOrcasLinkAndRebuild)
 {
   Mesh mesh(2);
   ASSERT_TRUE(mesh.WaitFor([&] { return mesh.AllUp(); })) << mesh.Stats(0, 1).reason;
   EXPECT_EQ(mesh.Stats(0, 1).kind, LinkKind::Direct);
-  // A host or loopback path (libjuice may name it peer-reflexive), never a relayed one.
   EXPECT_EQ(mesh.Stats(0, 1).pair.find("relay"), std::string::npos) << mesh.Stats(0, 1).pair;
   std::printf("[ pair ] %s / %s\n", mesh.Stats(0, 1).pair.c_str(), mesh.Stats(1, 0).pair.c_str());
   EXPECT_EQ(mesh.Stats(0, 1).generation, 1);
   EXPECT_EQ(mesh.Stats(1, 0).generation, 1);
-  // The offer came from the lower id, and carried no ICE server credentials.
   ASSERT_FALSE(mesh.Signals().empty());
   EXPECT_EQ(mesh.Signals().front().at("k").get<std::string>(), "dl");
 
@@ -334,13 +307,11 @@ TEST(OrcaDirectLink, TwoOrcasLinkAndRebuild)
   EXPECT_EQ(mesh.At(1).received.front().from, mesh.At(0).id);
   EXPECT_EQ(mesh.At(1).received.front().slot, 0);
   EXPECT_EQ(mesh.At(0).received.front().slot, 1);
-  // Keepalives echo: a round trip of about nothing on one machine.
   ASSERT_TRUE(mesh.WaitFor([&] { return mesh.Stats(0, 1).rtt_ms >= 0; }, 3s));
   EXPECT_LE(mesh.Stats(0, 1).rtt_ms, 20);
 
   for (int i = 0; i < 3; ++i)
   {
-    // A request from the answering side waits out the offering side's second between builds.
     std::this_thread::sleep_for(1100ms);
     const int before = mesh.Stats(0, 1).generation;
     mesh.At(i % 2).link->Test("rebuild");
@@ -359,8 +330,6 @@ TEST(OrcaDirectLink, TwoOrcasLinkAndRebuild)
   }
 }
 
-// A networking fix for Windows: an oversized datagram is dropped, the link stays up.
-// macOS/Linux silently truncate the datagram, so this passes there with upstream libjuice too.
 TEST(OrcaDirectLink, AnOversizedDatagramLeavesTheLinkUp)
 {
   Mesh mesh(2);
@@ -443,7 +412,6 @@ TEST(OrcaDirectLink, AnOversizedDatagramLeavesTheLinkUp)
   EXPECT_EQ(mesh.Stats(1, 0).kind, LinkKind::Direct);
 }
 
-// Six loopback pairs, including recipient-specific input fan-out.
 TEST(OrcaDirectLink, FourFriendsSendOnlyToTheRequestedSeat)
 {
   Mesh mesh(4);
@@ -487,7 +455,6 @@ TEST(OrcaDirectLink, FourFriendsSendOnlyToTheRequestedSeat)
   EXPECT_EQ(Count(mesh.At(2).received, "remaining pair"), 0);
 }
 
-// Three Orcas: a link per pair, each packet to both others.
 TEST(OrcaDirectLink, ThreeOrcasLinkEveryPair)
 {
   Mesh mesh(3);
@@ -497,14 +464,10 @@ TEST(OrcaDirectLink, ThreeOrcasLinkEveryPair)
     return Count(mesh.At(0).received, "from b") == 1 && Count(mesh.At(2).received, "from b") == 1;
   }));
   EXPECT_EQ(Count(mesh.At(1).received, "from b"), 0);
-  // The peer the link belongs to, never another.
   for (const auto& r : mesh.At(2).received)
     EXPECT_EQ(r.slot, r.from == mesh.At(0).id ? 0 : 1);
 }
 
-// Blocked datagrams (ORCA_DIRECT_BLOCK, `test-direct off`) leave the inputs on the relay until
-// they flow again; relayed candidates only (ORCA_DIRECT_FORCE=turn) offer no host address at all,
-// and with no TURN server here no link opens.
 TEST(OrcaDirectLink, BlockedOrTurnOnlyStaysOnTheRelay)
 {
   {
@@ -528,14 +491,8 @@ TEST(OrcaDirectLink, BlockedOrTurnOnlyStaysOnTheRelay)
   }
 }
 
-// The test delay (ORCA_TEST_NET_DELAY_MS) holds each datagram on the way out and again on the way
-// in, as the room does for relayed messages: 30 ms on both machines is 60 ms each way, a round
-// trip of 120 ms on the link.
 TEST(OrcaDirectLink, TestDelayCoversTheLinkBothWays)
 {
-  // The link thread releases held datagrams on its own wake-ups. Orca asks Windows for 1 ms timers
-  // once emulation starts (SystemTimers); without that, each of the four holds can overshoot by a
-  // 15.6 ms tick. A no-op elsewhere.
   Common::Timer::IncreaseResolution();
   struct Restore
   {
@@ -543,13 +500,9 @@ TEST(OrcaDirectLink, TestDelayCoversTheLinkBothWays)
   } restore;
   Mesh mesh(2, [](DirectOptions& o, int) { o.net_delay_ms = 30; });
   ASSERT_TRUE(mesh.WaitFor([&] { return mesh.AllUp(); }));
-  // The median of about ten keepalive round trips (one each 200 ms), not the first one alone: one
-  // late wake-up on a busy machine is not the delay.
   ASSERT_TRUE(mesh.WaitFor([&] { return mesh.Stats(0, 1).received >= 12; }))
       << mesh.Stats(0, 1).received;
   const int rtt = mesh.Stats(0, 1).rtt_ms;
-  // Under 110: the delay is missing on one way. Windows' ceiling leaves room for a test process
-  // the PC runs at below-normal priority next to other work.
 #ifdef _WIN32
   constexpr int CEILING_MS = 200;
 #else
@@ -559,9 +512,6 @@ TEST(OrcaDirectLink, TestDelayCoversTheLinkBothWays)
   EXPECT_LE(rtt, CEILING_MS);
 }
 
-// A peer sending far faster than an honest one (one a frame; while it stalls, one every 4 ms) gets
-// a burst of 64 and 300 a second through to Receive, the rest dropped and counted (its packets
-// still come through the relay); once it slows down, the link delivers everything again.
 TEST(OrcaDirectLink, AFloodingPeerIsHeldToTheRate)
 {
   Mesh mesh(2);
@@ -575,7 +525,6 @@ TEST(OrcaDirectLink, AFloodingPeerIsHeldToTheRate)
         return mesh.Stats(1, 0).floods > 0 && Count(mesh.At(1).received, "flood") >= 64;
       },
       2s);
-  // Everything that made it through the sockets is in by now.
   std::this_thread::sleep_for(300ms);
   mesh.Pump();
   const double seconds =
@@ -587,7 +536,6 @@ TEST(OrcaDirectLink, AFloodingPeerIsHeldToTheRate)
   EXPECT_GE(got, 64);
   EXPECT_LE(got, 64 + static_cast<int>(300 * seconds) + 1);
   EXPECT_GT(dropped, 0u);
-  // An honest pace afterwards: every packet delivered.
   std::this_thread::sleep_for(300ms);
   for (int i = 0; i < 30; ++i)
   {
@@ -605,15 +553,10 @@ TEST(OrcaDirectLink, AFloodingPeerIsHeldToTheRate)
   EXPECT_EQ(mesh.Stats(1, 0).floods, dropped);
 }
 
-// One side starts over while the other keeps its count (a seat change, or links turned off and on
-// on one side only): the offering side's new link must go past the generation the answering side
-// holds, and an answering side with none asks at once. Both come back up in a few seconds, not
-// after the backoff climbs past the old count or libjuice's 30 s consent timeout.
 TEST(OrcaDirectLink, OneSideStartingOverCatchesUp)
 {
   Mesh mesh(2);
   ASSERT_TRUE(mesh.WaitFor([&] { return mesh.AllUp(); }));
-  // A few builds first: the answering side holds generation 4.
   for (int i = 0; i < 3; ++i)
   {
     std::this_thread::sleep_for(600ms);
@@ -625,8 +568,6 @@ TEST(OrcaDirectLink, OneSideStartingOverCatchesUp)
   const int held = mesh.Stats(1, 0).generation;
   ASSERT_EQ(held, 4);
 
-  // The offering side starts over: its first offer (generation 1) is refused with the answering
-  // side's generation, and its next one goes past it.
   auto start = std::chrono::steady_clock::now();
   mesh.At(0).link->RemovePeer(mesh.At(1).id);
   mesh.At(0).link->AddPeer(mesh.At(1).id, 1);
@@ -639,8 +580,6 @@ TEST(OrcaDirectLink, OneSideStartingOverCatchesUp)
               mesh.Stats(0, 1).generation,
               std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
 
-  // The answering side starts over: it has no link and no generation, asks (`dlr` 0) once its
-  // wait for an offer runs out, and the offering side builds at once.
   std::this_thread::sleep_for(1100ms);
   const int before = mesh.Stats(0, 1).generation;
   start = std::chrono::steady_clock::now();
@@ -656,9 +595,6 @@ TEST(OrcaDirectLink, OneSideStartingOverCatchesUp)
   ASSERT_TRUE(mesh.WaitFor([&] { return Count(mesh.At(1).received, "after both restarts") == 1; }));
 }
 
-// Fresh ICE credentials that can't be minted (no ticket: the site is down) are not asked for again
-// on every build, each of which would hold the link thread up to 10 s: one try, then a wait. The
-// links meanwhile build with what they have.
 TEST(OrcaDirectLink, AFailedIceMintBacksOff)
 {
   std::array<std::atomic<int>, 2> mints{};
@@ -678,7 +614,6 @@ TEST(OrcaDirectLink, AFailedIceMintBacksOff)
     ASSERT_TRUE(mesh.WaitFor([&] { return mesh.Stats(1, 0).generation > before && mesh.AllUp(); }))
         << "rebuild " << i;
   }
-  // Four builds on each side, one mint each.
   EXPECT_EQ(mesh.Stats(0, 1).builds, 4);
   EXPECT_EQ(mints[0].load(), 1);
   EXPECT_EQ(mints[1].load(), 1);

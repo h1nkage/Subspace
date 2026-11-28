@@ -39,13 +39,11 @@ const char* OutcomeName(Outcome out)
   }
 }
 
-// 0 at `from`, 1 `length` later.
 double Progress(double now, double from, double length)
 {
   return length > 0 ? std::clamp((now - from) / length, 0.0, 1.0) : 1.0;
 }
 
-// An entrance: from 86% up, a little past full size, settling at it.
 float Entrance(double t)
 {
   if (t >= 1)
@@ -54,22 +52,18 @@ float Entrance(double t)
   return static_cast<float>(0.86 + 0.14 * eased + 0.05 * std::sin(std::numbers::pi * t));
 }
 
-// Fades in over ENTER_MS from `at` (from a quarter: the entrance's scale does the rest).
 float FadeIn(double now, double at)
 {
   return static_cast<float>(0.25 + 0.75 * Progress(now, at, Model::ENTER_MS));
 }
 
-// Fades in over ENTER_MS from `at`, out over FADE_MS before `end`.
 float Alpha(double now, double at, double end)
 {
   const double in = FadeIn(now, at);
   const double out = end > now ? std::clamp((end - now) / Model::FADE_MS, 0.0, 1.0) : 0.0;
   return static_cast<float>(std::min(in, out));
 }
-}  // namespace
-
-// ---- RatingCount ----
+}
 
 void RatingCount::Start(int before, double now)
 {
@@ -99,7 +93,6 @@ void RatingCount::Arrive(int after, double now, int before)
   }
   if (after == m_after)
     return;
-  // A different number: count on from where the count stands.
   m_from = At(now).shown;
   m_after = after;
   m_arrived = now;
@@ -145,14 +138,12 @@ RatingCount::View RatingCount::At(double now) const
   }
   v.phase = Phase::Landed;
   v.shown = m_after;
-  // A change pops as it lands; no change (or no number before) just shows.
   const bool moved = v.has_delta && v.delta != 0;
   const double u = Progress(now, land, POP_MS);
   if (moved && u < 1)
   {
     const double s = std::sin(std::numbers::pi * u);
     v.pop = static_cast<float>(1 + POP_SCALE * s);
-    // The change grows in to its full size and past it, then settles.
     v.badge_pop = static_cast<float>(u < 0.4 ? (u / 0.4) * (1 + POP_SCALE) :
                                                1 + POP_SCALE * (1 - (u - 0.4) / 0.6));
   }
@@ -166,8 +157,6 @@ int SecondsLeft(double deadline_ms, double now_ms)
     return 0;
   return static_cast<int>(std::ceil(left / 1000 - 1e-9));
 }
-
-// ---- Model ----
 
 std::string Model::Name() const
 {
@@ -254,7 +243,7 @@ void Model::BlockSetOver(u32 key, bool won, int mine, int theirs, int rating_bef
   m_stall_at.reset();
   m_dropped = false;
   if (m_panel && m_panel_ranked)
-    return;  // the room's verdict came first
+    return;
   OpenPanel(true, won ? Outcome::Won : Outcome::Lost, mine, theirs, false, rating_before, now);
   NOTICE_LOG_FMT(ROLLBACK, "Set end: {} {}–{} against {} (the match block), rating {} going in",
                  won ? "VICTORY" : "DEFEAT", mine, theirs, Name(), rating_before);
@@ -287,7 +276,6 @@ void Model::SetVerdict(Outcome out, bool forfeit, int mine, int theirs, int befo
   }
   if (forfeit && out == Outcome::Won)
   {
-    // "<name> forfeited · You win the set" first, then the panel.
     m_forfeited_at = now;
     OpenPanel(true, out, mine, theirs, true, rating_before, now + FORFEITED_MS);
   }
@@ -297,7 +285,6 @@ void Model::SetVerdict(Outcome out, bool forfeit, int mine, int theirs, int befo
   }
   else
   {
-    // The match block already opened the panel. The room's score and outcome take precedence.
     m_out = out;
     if (mine < 0 || theirs < 0 || m_mine < 0 || m_theirs < 0 || mine + theirs > 0)
     {
@@ -339,7 +326,6 @@ void Model::QueueRating(int rating, double now)
   {
     return;
   }
-  // The app resends the old rating when it searches again. Ignore it.
   if (!m_rating.Arrived() && rating == m_rating.Before())
     return;
   if (m_rating.At(now).phase == RatingCount::Phase::Gone)
@@ -409,7 +395,6 @@ void Model::RoomHold(std::optional<double> deadline_ms)
   m_room_hold = deadline_ms;
   if (deadline_ms)
   {
-    // A room hold must never promise a forfeit. Only SetVerdict chooses the outcome.
     m_left_at.reset();
     m_stall_at.reset();
     m_dropped = false;
@@ -443,7 +428,6 @@ void Model::CasualOpponentLeft(double now)
 void Model::SelfLeft(bool no_show, double now)
 {
   std::lock_guard lk(m_lock);
-  // Shown once: a no-show's "Time's up" stays when the leave that follows says it again.
   if (m_self_left_at >= 0 && now - m_self_left_at < NOTICE_MS)
     return;
   m_ranked_live = false;
@@ -451,7 +435,6 @@ void Model::SelfLeft(bool no_show, double now)
   m_stall_at.reset();
   m_dropped = false;
   m_panel = false;
-  // The room voids a set left before its first game (a no-show always is) and rates nobody.
   const char* const counts = m_game_began ? "This set counts as a loss" : "This set doesn't count";
   m_note_title = no_show ? "Time's up" : "You left";
   m_note_line = no_show ? fmt::format("You didn't pick in time · {}", counts) : std::string(counts);
@@ -484,7 +467,6 @@ void Model::SetOver(double now)
   if (m_set_over)
     return;
   m_set_over = true;
-  // The set is decided, so any forfeit countdown is over.
   m_ranked_live = false;
   m_left_at.reset();
   m_stall_at.reset();
@@ -497,7 +479,6 @@ void Model::OpponentLeftAfterSet(double now)
   std::lock_guard lk(m_lock);
   if (!m_set_over || m_set_over_leaving)
     return;
-  // No second line: the leave hint below says how to leave.
   m_note_title = fmt::format("{} left", Name());
   m_note_line.clear();
   m_note_tone = Widgets::Tone::Neutral;
@@ -523,7 +504,6 @@ void Model::LeavingSetRoom(double now)
   m_set_over_leaving = true;
   m_hint = false;
   m_hint_progress = 0;
-  // "<name> left" is over: this player is on the way out too.
   if (m_note_at >= 0 && m_note_after_set)
     m_note_at = -1;
 }
@@ -561,8 +541,6 @@ std::optional<Notice> Model::NoticeAt(double now, bool* hides_waiting) const
   }
   if (m_ranked_live && (m_left_at || m_stall_at))
   {
-    // After a leave, the room's grace period sets the forfeit. A stall alone uses the session's
-    // limit.
     const bool left = m_left_at.has_value();
     const double total = left ? LEAVE_FORFEIT_MS : STALL_FORFEIT_MS;
     const double deadline = (left ? *m_left_at : *m_stall_at) + total;
@@ -572,7 +550,6 @@ std::optional<Notice> Model::NoticeAt(double now, bool* hides_waiting) const
       n.title = fmt::format("{} disconnected", Name());
       n.seconds = SecondsLeft(deadline, now);
       char clock[16];
-      // Before the set's first game the room voids it instead: no contest.
       const char* const what = m_game_began ? "They forfeit" : "No contest";
       n.line = n.seconds > 0 ? fmt::format("{} in {}", what, Widgets::ClockText(n.seconds, clock)) :
                                fmt::format("{} now", what);
@@ -649,7 +626,6 @@ View Model::At(double now) const
   {
     Hint h;
     h.progress = m_hint_progress;
-    // The same words while B is held: the bar under them fills.
     h.text = m_hint_alone ? "Press Start to continue · Hold B to leave" : "Hold B to leave";
     v.hint = std::move(h);
   }
@@ -669,8 +645,6 @@ double NowMs()
       .count();
 }
 
-// ---- Drawing (styling lives in Widgets.h) ----
-
 namespace
 {
 using Widgets::Tone;
@@ -680,7 +654,6 @@ Tone ToneOf(Outcome out)
   return out == Outcome::Won ? Tone::Win : out == Outcome::Lost ? Tone::Loss : Tone::Neutral;
 }
 
-// The panel, its top at `top`. Returns its bottom.
 float DrawPanel(ImDrawList* dl, float unit, float cx, float top, const Panel& p)
 {
   const float u = unit * p.scale;
@@ -697,7 +670,6 @@ float DrawPanel(ImDrawList* dl, float unit, float cx, float top, const Panel& p)
   const ImVec2 detail_s = p.ranked && !p.detail.empty() ?
                               Widgets::Measure(Widgets::LINE_SIZE * u, p.detail) :
                               ImVec2(0, 0);
-  // The rating row: the number, and the change beside it once it is in.
   const float number_h = Widgets::MeasureNumber(u, "0").y;
   const float small_h = Widgets::Measure(Widgets::SMALL_SIZE * u, "R").y;
   float height = pad + title_h + 0.4f * u + score_s.y;
@@ -705,7 +677,7 @@ float DrawPanel(ImDrawList* dl, float unit, float cx, float top, const Panel& p)
     height += 0.3f * u + detail_s.y;
   if (p.show_rating)
   {
-    height += 1.6f * u + 0.3f * u;  // the rule
+    height += 1.6f * u + 0.3f * u;
     if (p.rating.shown >= 0)
       height += number_h;
     if (p.rating.phase == RatingCount::Phase::Updating)
@@ -745,8 +717,6 @@ float DrawPanel(ImDrawList* dl, float unit, float cx, float top, const Panel& p)
       char digits[16];
       std::snprintf(digits, sizeof(digits), "%d", r.shown);
       const float number_w = Widgets::MeasureNumber(u, digits).x;
-      // Centre the number and the change together, keeping them apart as both swell. The number
-      // dims while it waits.
       const float gap = badge ? 2.0f * u : 0;
       const float left = cx - (number_w + gap + badge_s.x) / 2;
       const float na = r.phase == RatingCount::Phase::Updating ? a * 0.55f : a;
@@ -770,7 +740,6 @@ float DrawPanel(ImDrawList* dl, float unit, float cx, float top, const Panel& p)
   return max.y;
 }
 
-// The notice, its top at `top`. Returns its bottom.
 float DrawNotice(ImDrawList* dl, float unit, float cx, float top, const Notice& n)
 {
   const float u = unit * n.scale;
@@ -789,7 +758,6 @@ float DrawNotice(ImDrawList* dl, float unit, float cx, float top, const Notice& 
   const float height = inner_h + 2 * pad;
   const ImVec2 min(cx - width / 2, top), max(cx + width / 2, top + height);
   Widgets::Panel(dl, min, max, u, n.tone, a);
-  // The text block on the left (centred when there is no ring), the ring on the right.
   const float block_w = text_w + gap + 2 * r;
   const float text_cx = ring ? cx - block_w / 2 + text_w / 2 : cx;
   float y = top + pad + (inner_h - text_h) / 2;
@@ -804,7 +772,7 @@ float DrawNotice(ImDrawList* dl, float unit, float cx, float top, const Notice& 
   }
   return max.y;
 }
-}  // namespace
+}
 
 void Draw(ImDrawList* dl, float unit, float pic_x, float pic_y, float pic_w, float pic_h,
           const View& view)
@@ -821,19 +789,15 @@ void Draw(ImDrawList* dl, float unit, float pic_x, float pic_y, float pic_w, flo
   }
   if (view.notice)
   {
-    // Under the panel when there is one, else a little above the picture's middle.
     const float top = panel_bottom >= 0 ? panel_bottom + 2 * unit : pic_min.y + pic_size.y * 0.30f;
     DrawNotice(dl, unit, cx, top, *view.notice);
   }
   if (view.hint)
   {
-    // Near the bottom, under the game's own results.
     Widgets::Hint(dl, cx, pic_min.y + pic_size.y * 0.88f, unit, view.hint->text,
                   view.hint->progress, 1.0f);
   }
 }
-
-// ---- The demo (tests only) ----
 
 double DemoFrame(double now)
 {
@@ -849,7 +813,6 @@ double DemoFrame(double now)
     return now;
   if (s_demo_at >= 0)
   {
-    // Use game frames as the clock, starting at the requested frame.
     const int frame = Rollback::Harness::ShownFrame();
     if (frame < s_demo_at)
       return now;
@@ -868,10 +831,8 @@ double DemoFrame(double now)
     s_loop = loop;
     s_step = 0;
     m.MatchBegan(s_demo != "casual", "bo", now);
-    // Each ranked screen shows a set that reached its first game.
     m.GameBegan(now);
   }
-  // Each step once per loop, at its time.
   const auto at = [&](int step, double when) {
     if (s_step == step && t >= when)
     {
@@ -911,7 +872,6 @@ double DemoFrame(double now)
   }
   else if (s_demo == "stay")
   {
-    // After the set on the results screen: VICTORY, the hint, B held, the opponent leaving.
     if (at(0, 500))
     {
       m.BlockSetOver(static_cast<u32>(loop + 1), true, 2, 1, 1532, now);
@@ -928,4 +888,4 @@ double DemoFrame(double now)
   }
   return now;
 }
-}  // namespace Orca::UX::SetEnd
+}

@@ -46,8 +46,6 @@ std::unique_ptr<GLX11Window> GLX11Window::Create(Display* display, Window parent
                     vi->depth, InputOutput, vi->visual, CWColormap | CWBorderPixel, &attribs);
   XSelectInput(display, parent_window, StructureNotifyMask);
   XMapWindow(display, window);
-  // Orca: not discarding the queue. This runs on the emulation thread, on the connection the
-  // frontend's main loop reads its own window's events from (DolphinNoGUI/PlatformX11.cpp).
   XSync(display, False);
 
   return std::make_unique<GLX11Window>(display, parent_window, color_map, window,

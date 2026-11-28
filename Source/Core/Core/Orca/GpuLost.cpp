@@ -24,8 +24,6 @@ constexpr size_t STATE_SIZE = 200;
 
 std::atomic<bool> s_lost{false};
 
-// The device state, a seqlock: odd while a writer copies, so a reader (a crash note, maybe on
-// another thread) retries or gives up rather than read half of it. Writers take the mutex.
 std::mutex s_state_writer;
 std::atomic<u32> s_state_seq{0};
 std::atomic<size_t> s_state_length{0};
@@ -33,17 +31,15 @@ std::array<std::atomic<char>, STATE_SIZE> s_state{};
 
 using Line = CrashNote::FixedLine;
 
-// "D3D11: device hung, 0x887A0006"
 void Cause(Line& line, std::string_view backend, u32 reason)
 {
   line << backend << ": " << ReasonName(reason) << ", ";
   line.Hex(reason, 8);
 }
-}  // namespace
+}
 
 const char* ReasonName(u32 hr)
 {
-  // DXGI_ERROR_* and the common HRESULTs a failed D3D call returns (winerror.h).
   switch (hr)
   {
   case 0x887A0005:
@@ -88,7 +84,6 @@ bool Report(std::string_view backend, u32 reason, std::string_view where)
   CrashNote::WriteLine(stderr, std::string_view(text, length));
 
   {
-    // "lost (D3D11: device hung, 0x887A0006) at a 16x16x1 texture"
     Line state(text, sizeof(text));
     state << "lost (";
     Cause(state, backend, reason);
@@ -96,16 +91,12 @@ bool Report(std::string_view backend, u32 reason, std::string_view where)
     SetDeviceState(std::string_view(text, state.Length()));
   }
 
-  // Nothing to stop (no game yet, or a test), or already stopping (the app's quit, the end of a
-  // match): the line says it, and the run ends as it was going to.
   auto& system = Core::System::GetInstance();
   const Core::State core = Core::GetState(system);
   if (core == Core::State::Uninitialized || core == Core::State::Stopping)
     return true;
 
   Status::Error(CODE, SENTENCE);
-  // The host thread stops the core, as for a desync (OnlineMatch.cpp StopEmulation): the CPU
-  // thread may be deep in the JIT here, where nothing can unwind.
   Core::QueueHostJob([](Core::System& host_system) { Core::Stop(host_system); });
   return true;
 }
@@ -151,7 +142,6 @@ size_t DeviceState(char* out, size_t size)
 {
   if (!size)
     return 0;
-  // A few tries: a writer holds the state for a few hundred instructions at most.
   for (int attempt = 0; attempt < 64; ++attempt)
   {
     const u32 before = s_state_seq.load(std::memory_order_acquire);
@@ -171,4 +161,4 @@ size_t DeviceState(char* out, size_t size)
   out[0] = '\0';
   return 0;
 }
-}  // namespace Orca::GpuLost
+}

@@ -48,8 +48,6 @@ static ComPtr<ID3D11Buffer> AllocateConstantBuffer(u32 size)
 
 static void UpdateConstantBuffer(ID3D11Buffer* const buffer, const void* data, u32 data_size)
 {
-  // Orca: never write through a map that failed, or into a buffer a lost device couldn't make
-  // (D3DCommon/DeviceLost.h): that was an access violation.
   if (!buffer || D3DCommon::IsDeviceLost())
     return;
   D3D11_MAPPED_SUBRESOURCE map;
@@ -261,8 +259,6 @@ void VertexManager::CommitBuffer(u32 num_vertices, u32 vertex_stride, u32 num_in
   *out_base_vertex = vertex_stride > 0 ? (cursor / vertex_stride) : 0;
   *out_base_index = (cursor + vertexBufferSize) / sizeof(u16);
 
-  // Orca: never write through a map that failed (a lost device's: D3DCommon/DeviceLost.h). The
-  // draw that follows draws nothing on a lost device (Gfx::DrawIndexed).
   if (D3DCommon::IsDeviceLost())
     return;
   const HRESULT hr = D3D::context->Map(m_buffers[m_current_buffer].Get(), 0, MapType, 0, &map);

@@ -268,8 +268,6 @@ void Interpreter::fmrx(Interpreter& interpreter, UGeckoInstruction inst)
 void Interpreter::fabsx(Interpreter& interpreter, UGeckoInstruction inst)
 {
   auto& ppc_state = interpreter.m_ppc_state;
-  // Orca: bitwise, as fneg and fnabs are (and PowerPC is): the host's FABS keeps a NaN's sign on
-  // ARM64 under FPCR.AH.
   ppc_state.ps[inst.FD].SetPS0(ppc_state.ps[inst.FB].PS0AsU64() & ~(UINT64_C(1) << 63));
 
   // This is a binary instruction. Does not alter FPSCR

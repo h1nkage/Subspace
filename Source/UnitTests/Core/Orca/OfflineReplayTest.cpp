@@ -58,7 +58,7 @@ public:
     return wiimote.Write({{}, report});
   }
 };
-}  // namespace WiimoteReal
+}
 
 namespace
 {
@@ -116,11 +116,10 @@ public:
 private:
   std::optional<std::string> m_old;
 };
-}  // namespace
+}
 
 TEST(OrcaOfflineReplay, BalanceBoardReadAndWriteNeverSendFilePlaybackDatagrams)
 {
-  // File playback must stand on its own, without the separate local-input switch.
   const char* old_input = std::getenv("ORCA_NO_LOCAL_INPUT");
   const std::optional<std::string> old_input_value =
       old_input ? std::make_optional<std::string>(old_input) : std::nullopt;
@@ -166,7 +165,6 @@ TEST(OrcaOfflineReplay, BalanceBoardReadAndWriteNeverSendFilePlaybackDatagrams)
         size_t received = 0;
         std::optional<sf::IpAddress> sender;
         unsigned short port = 0;
-        // Allow delivery to settle before asserting silence, including the first socket creation.
         (void)selector.wait(sf::milliseconds(50));
         const auto status = receiver.receive(bytes.data(), bytes.size(), received, sender, port);
         EXPECT_EQ(status, offline ? sf::Socket::Status::NotReady : sf::Socket::Status::Done)
@@ -208,12 +206,11 @@ TEST(OrcaOfflineReplay, OnlyProductFileSourcesDisableNetworking)
 
 TEST(OrcaOfflineReplay, HttpWebSocketAndTelemetryNeverConnectEvenToLoopback)
 {
-  // A listening endpoint distinguishes a refusal before connect from a failed request after it.
   sf::TcpListener listener;
   ASSERT_EQ(listener.listen(0, sf::IpAddress::LocalHost), sf::Socket::Status::Done);
   listener.setBlocking(false);
   const std::string origin = "127.0.0.1:" + std::to_string(listener.getLocalPort());
-  Common::HttpRequest http(50ms);  // Also covers a client constructed before playback mode.
+  Common::HttpRequest http(50ms);
   const ReplaySource replay("saved.ssr");
   EXPECT_FALSE(http.Get("http://" + origin));
   EXPECT_FALSE(http.Post("http://" + origin, "report"));
@@ -256,7 +253,6 @@ TEST(OrcaOfflineReplay, DirectLinkRefusesBeforeStartingItsWorker)
   Orca::Net::DirectLink direct;
   EXPECT_FALSE(direct.Start(options));
   EXPECT_TRUE(direct.TakeSignals().empty());
-  // Refusing the start must leave the object unstarted. A live watch can still start normally.
   ReplaySource::Set("wss://rooms.invalid/watch/match");
   EXPECT_TRUE(direct.Start(options));
   direct.Stop();
@@ -525,7 +521,6 @@ TEST(OrcaOfflineReplay, SingleSeatMachinesReplayFileMatchesPreCoSeatsBytes)
     entry.clear_ready = frame == 6;
     archive.frames.push_back(entry);
   }
-  // Fixed provenance makes the entire file comparable across build revisions.
   ReplayStreamInfo info;
   info.compat = "single-seat-golden";
   info.build = "80448a9e1f";
@@ -551,7 +546,6 @@ TEST(OrcaOfflineReplay, SingleSeatMachinesReplayFileMatchesPreCoSeatsBytes)
   std::string actual;
   for (const u8 byte : bytes)
     actual += fmt::format("{:02x}", byte);
-  // Captured as a file using the replay codec from detached 80448a9e1f.
   const std::string_view expected =
       "5353525301000000a60000007b226275696c64223a2238303434386139653166222c22636f6d706174223a2273696e67"
       "6c652d736561742d676f6c64656e222c2266697273745f6672616d65223a3130302c2267616d65223a22525342453031"

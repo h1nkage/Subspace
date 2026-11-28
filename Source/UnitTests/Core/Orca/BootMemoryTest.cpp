@@ -23,11 +23,10 @@ void EnableOrcaSession()
   setenv("ORCA_SESSION", "1", 1);
 #endif
 }
-}  // namespace
+}
 
 TEST(OrcaBootMemoryDeathTest, ThrowingBootStepReportsLowMemoryAndEnds)
 {
-  // Isolate the process-wide first-frame/error state, just like a fresh NoGUI boot.
   ASSERT_EXIT(
       {
         EnableOrcaSession();
@@ -40,7 +39,6 @@ TEST(OrcaBootMemoryDeathTest, ThrowingBootStepReportsLowMemoryAndEnds)
           Common::ScopeGuard cleanup([&] { cleaned = true; });
           throw std::bad_alloc{};
         });
-        // A later failure must not replace or repeat the boot error.
         Orca::Status::Error("boot", "Could not start");
         const int code = Orca::Status::Finish();
         std::rewind(out);

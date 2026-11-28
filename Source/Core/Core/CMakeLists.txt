@@ -626,6 +626,8 @@ add_library(core
   Orca/UX/GamePatches.h
   Orca/UX/Kit.cpp
   Orca/UX/Kit.h
+  Orca/UX/NameRaster.cpp
+  Orca/UX/NameRaster.h
   Orca/UX/MenuEvents.cpp
   Orca/UX/MenuEvents.h
   Orca/Games/Brawl/SetBlock.cpp

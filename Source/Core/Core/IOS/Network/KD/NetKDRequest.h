@@ -59,9 +59,6 @@ private:
     return std::nullopt;
   }
 
-  // Orca: in a rollback session, a WiiConnect24 job fails at once instead of running on a host thread
-  // (its reply and the memory it writes would land at a host-dependent emulated time, and its result
-  // would depend on each machine's network). Null outside a session.
   std::optional<IPCReply> RefuseInSession(const IOCtlRequest& request);
 
   enum class CurrentFunction : u32

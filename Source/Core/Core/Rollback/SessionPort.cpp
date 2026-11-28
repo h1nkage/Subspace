@@ -23,15 +23,13 @@ namespace
 {
 RingPort* s_active = nullptr;
 
-// How long a time-sync wait holds this machine: one NTSC (60 Hz) frame.
 constexpr std::chrono::microseconds FRAME_PERIOD{16'667};
-}  // namespace
+}
 
 RingPort::RingPort(Core::System& system, int max_rollback, bool unthrottled)
     : m_system(system), m_ring(static_cast<std::size_t>(max_rollback) + 2),
       m_unthrottled(unthrottled)
 {
-  // Until the session sets them, every port reads as connected with nothing pressed.
   m_pads.fill(Orca::Net::DecodePad(Orca::Net::Pad{}));
   s_active = this;
   if (m_unthrottled)
@@ -55,7 +53,6 @@ RingPort* RingPort::Active()
 
 bool RingPort::Save(int frame)
 {
-  // A stalled boundary asks for the same frame again; nothing has run since.
   if (m_saved_since_run == frame)
     return true;
   const auto start = std::chrono::steady_clock::now();
@@ -64,8 +61,6 @@ bool RingPort::Save(int frame)
       std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
   if (Diag::SnapTime())
     Diag::AddPortSave(ms);
-  // A slot's first use allocates ~100 MB, so it is not a representative sample. Otherwise blend in
-  // 1/8 of each sample, capped at 4x the estimate so one slow save barely moves it.
   if (!allocated)
   {
     if (m_save_ms > 0)
@@ -78,8 +73,6 @@ bool RingPort::Save(int frame)
 
 bool RingPort::Load(int frame)
 {
-  // Loading re-anchors the throttle. Keep the current reference so the time the rollback takes is
-  // made up afterwards.
   if (!m_resimulating && !m_reference_before_load)
     m_reference_before_load = m_system.GetCoreTiming().GetThrottleReference();
   m_saved_since_run = -1;
@@ -96,8 +89,6 @@ bool RingPort::Load(int frame)
 void RingPort::SetPads(int frame, const Orca::Net::Pads& pads)
 {
   Orca::Net::ReplayRecordingScope::RecordPads(frame, pads);
-  // Called once for every frame about to run. `pads` is by seat; the game reads ports, and each
-  // seat plays on the port Subspace's seat-to-port table gives it (Orca::Online::SeatPort).
   for (std::size_t seat = 0; seat < pads.size(); ++seat)
     m_pads[Orca::Online::SeatPort(static_cast<int>(seat))] = Orca::Net::DecodePad(pads[seat]);
   m_saved_since_run = -1;
@@ -124,7 +115,6 @@ bool RingPort::LoadImage(MachineImage image, int frame)
 
 void RingPort::SetResimulating(bool resimulating)
 {
-  // While re-running, emulation is unthrottled, rendering is skipped and audio is dropped.
   m_resimulating = resimulating;
   Rollback::SetResimulating(resimulating || m_catching_up);
   if (!resimulating && m_reference_before_load)
@@ -187,7 +177,6 @@ Orca::Net::Step StepSession(Orca::Net::Session& session, Orca::Net::Game& game, 
   };
   sample();
   bool waited = false;
-  // From the end of the first call that said wait or stall to the start of the last call.
   std::optional<std::chrono::steady_clock::time_point> wait_from;
   const auto end_wait = [&](std::chrono::steady_clock::time_point until) {
     if (waited_time && wait_from && until > *wait_from)
@@ -202,9 +191,6 @@ Orca::Net::Step StepSession(Orca::Net::Session& session, Orca::Net::Game& game, 
     return result;
   };
   std::chrono::steady_clock::time_point last_poll;
-  // Whether this call has held the emulator longer than give_up_after. A gap of over a second
-  // between polls means this process was suspended (e.g. the computer slept), not that the other
-  // side went away, so the timer restarts.
   const auto held_too_long = [&] {
     const auto now = std::chrono::steady_clock::now();
     if (!held_since || now - last_poll > std::chrono::seconds(1))
@@ -246,8 +232,6 @@ Orca::Net::Step StepSession(Orca::Net::Session& session, Orca::Net::Game& game, 
     }
     if (step.kind == Orca::Net::StepKind::Wait)
     {
-      // Time sync: this machine is ahead. Hold one frame, then pace from now so the throttle
-      // doesn't race to make up the held frame.
       if (stopping() || budget_too_long(std::chrono::steady_clock::now(), step_start) ||
           held_too_long())
       {
@@ -256,7 +240,6 @@ Orca::Net::Step StepSession(Orca::Net::Session& session, Orca::Net::Game& game, 
       }
       std::this_thread::sleep_for(FRAME_PERIOD);
       waited = true;
-      // The session decides a wait before sampling, so the frame uses the pad read now.
       sample();
       continue;
     }
@@ -279,4 +262,4 @@ Orca::Net::Step StepSession(Orca::Net::Session& session, Orca::Net::Game& game, 
       std::this_thread::sleep_for(stall_wait);
   }
 }
-}  // namespace Rollback
+}

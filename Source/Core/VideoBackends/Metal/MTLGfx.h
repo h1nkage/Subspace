@@ -86,8 +86,6 @@ private:
   u32 m_staging_texture_counter = 0;
   std::array<u32, 4> m_shader_counter = {};
 
-  // Orca: background drawable acquire, used when nextDrawable would block the game (see
-  // AcquireDrawable in MTLGfx.mm).
   struct DrawableProbe;
   std::shared_ptr<DrawableProbe> m_drawable_probe;
   // Why drawables come from a background acquire (No: plain nextDrawable on the CPU thread).

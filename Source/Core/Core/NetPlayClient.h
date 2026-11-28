@@ -118,6 +118,7 @@ public:
   // Rollback play: start this player's engine (called on the NetPlay thread). Front ends without
   // an engine to start ignore it.
   virtual void LaunchOrca(const OrcaLaunch& launch) {}
+  virtual void OrcaDelay(u32 frames, s32 at) {}
 };
 
 class Player
@@ -293,7 +294,6 @@ private:
   bool Connect();
   void SendGameStatus();
   void ComputeGameDigest(const SyncIdentifier& sync_identifier);
-  void DisplayPlayersPing();
   u32 GetPlayersMaxPing() const;
 
   void OnData(sf::Packet& packet);

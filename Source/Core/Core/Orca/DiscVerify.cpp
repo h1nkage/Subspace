@@ -29,10 +29,6 @@ namespace
 {
 using Severity = DiscIO::VolumeVerifier::Severity;
 
-// Problems only in Brawl's Masterpiece partitions, matched on VolumeVerifier.cpp's English strings
-// (nogui never loads translations): GetPartitionName's "{0} (Masterpiece)", the partition's name in
-// CheckPartition's and Finish's problems, and CheckPartitions' "The Masterpiece partitions are
-// missing."
 bool OnlyMasterpieces(std::string_view text)
 {
   return text.find("(Masterpiece)") != std::string_view::npos ||
@@ -72,7 +68,7 @@ std::string OneLine(std::string_view text)
     line.pop_back();
   return line;
 }
-}  // namespace
+}
 
 std::optional<std::string> TakeArgument(std::vector<char*>* argv, std::string* error)
 {
@@ -144,7 +140,6 @@ std::string VerdictLine(std::size_t damage)
 
 std::string UnreadableLine(std::string_view path)
 {
-  // The path as given, on one line.
   std::string line = fmt::format("orca verify unreadable {}", path);
   for (char& c : line)
   {
@@ -189,7 +184,6 @@ int Run(const std::string& path, std::FILE* out)
     return EXIT_UNREADABLE;
   }
 
-  // No Redump lookup and no whole-disc hashes: the Wii hash tree is the integrity check.
   DiscIO::VolumeVerifier verifier(*volume, false, {});
   verifier.Start();
   ProgressPacer pacer;
@@ -229,7 +223,6 @@ bool ProcessAlive(u64 pid)
 
 std::size_t ClearStaleNands(const std::string& dir, const std::function<bool(u64 pid)>& alive)
 {
-  // Error codes throughout: Mac and Linux builds have no exceptions, and a throw would abort.
   std::vector<std::filesystem::path> stale;
   std::error_code ec;
   for (std::filesystem::directory_iterator it(StringToPath(dir), ec), end; !ec && it != end;
@@ -238,7 +231,6 @@ std::size_t ClearStaleNands(const std::string& dir, const std::function<bool(u64
     const std::string name = PathToString(it->path().filename());
     if (!name.starts_with(NAND_PREFIX))
       continue;
-    // "<pid>-<n>": the pid, then a dash.
     const char* const first = name.data() + NAND_PREFIX.size();
     const char* const last = name.data() + name.size();
     u64 pid = 0;
@@ -280,7 +272,6 @@ std::string MakeNand()
     if (std::filesystem::create_directory(nand, ec))
     {
 #ifdef _WIN32
-      // Dolphin's paths use forward slashes (File::SetUserPath, File::CreateTempDir).
       return ReplaceAll(PathToString(nand), "\\", "/");
 #else
       return PathToString(nand);
@@ -291,4 +282,4 @@ std::string MakeNand()
   }
   return {};
 }
-}  // namespace Orca::DiscVerify
+}

@@ -336,7 +336,6 @@ static void CpuThread(Core::System& system, const std::optional<std::string>& sa
     Common::SetCurrentThreadName("CPU thread");
   else
     Common::SetCurrentThreadName("CPU-GPU thread");
-  // Orca: a session samples and applies the pads in this thread's frame hook (Profile.h).
   Orca::PrioritizeThread(Orca::LatencyThread::Cpu);
 
   // This needs to be delayed until after the video backend is ready.
@@ -719,8 +718,6 @@ void SetState(Core::System& system, State state, bool report_state_change,
       if (!override_achievement_restrictions && !AchievementManager::GetInstance().CanPause())
         return;
 #endif  // USE_RETRO_ACHIEVEMENTS
-      // Orca: a session pauses only while this player is alone in it. With a friend, the other
-      // game keeps running and the CPU thread may be blocked waiting on the room.
       if (Orca::SessionActive() && !Rollback::OnlineMatch::BeginPause())
         return;
       // NOTE: GetState() will return State::Paused immediately, even before anything has
@@ -926,7 +923,6 @@ void Callback_NewField(Core::System& system)
 
 void UpdateTitle(Core::System& system)
 {
-  // Orca: a player in a session sees "Orca — <game> — <room status>", not build details.
   if (Orca::SessionActive())
   {
     Host_UpdateTitle(Orca::WindowTitle());
@@ -938,7 +934,7 @@ void UpdateTitle(Core::System& system)
       "{} {} | {} | {}", system.GetPowerPC().GetCPUName(), system.IsDualCoreMode() ? "DC" : "SC",
       g_video_backend->GetDisplayName(), Config::Get(Config::MAIN_DSP_HLE) ? "HLE" : "LLE");
 
-  std::string message = fmt::format("{} | {}", Common::GetScmRevStr(), SSettings);
+  std::string message = fmt::format("{} | {}", Common::GetScmDescStr(), SSettings);
   if (Config::Get(Config::MAIN_SHOW_ACTIVE_TITLE))
   {
     const std::string& title = SConfig::GetInstance().GetTitleDescription();

@@ -52,8 +52,6 @@ void SetSession(const std::string& value)
 #endif
 }
 
-// Real GC device state with null graphics and a temporary user root. No disc, IOS, audio device,
-// controller backend, or room server is needed to exercise the local snapshot and boundary paths.
 class OrcaSnapshot : public testing::Test
 {
 protected:
@@ -137,7 +135,7 @@ protected:
   std::FILE* m_out = nullptr;
   bool m_wii = false, m_hw = false, m_video = false, m_cpu_thread = false;
 };
-}  // namespace
+}
 
 TEST_F(OrcaSnapshot, GameCubeCaptureRestoreAndKeyframeLoadWithoutIos)
 {
@@ -163,7 +161,6 @@ TEST_F(OrcaSnapshot, GameCubeCaptureRestoreAndKeyframeLoadWithoutIos)
   EXPECT_EQ(memory.GetL1Cache()[456], 17);
   EXPECT_EQ(cpu.gpr[3], 0x12345678u);
 
-  // The wire keyframe contains a replay; rebuilding starts from this process's own GC image.
   Orca::Net::ReplayArchive replay;
   replay.first_frame = 100;
   replay.origin_hash = hash;
@@ -213,7 +210,6 @@ TEST_F(OrcaSnapshot, BoundarySwitchesRuleBeforeTheFirstKeyframeHook)
         [&](int) { return Orca::Net::EncodePad(pressed); },
         [&](int frame, bool, const auto&, bool) {
           EXPECT_EQ(frame, boundary);
-          // These checks run before the module hook has refreshed any guard verdict.
           EXPECT_EQ(Orca::Mod::GuardsFailed(), frame >= 3);
           EXPECT_EQ(Orca::Mod::GuardsDecided(), frame >= 3);
         });
@@ -272,7 +268,6 @@ TEST_F(OrcaSnapshot, LabeledReplaySkipsHashesWithAndWithoutViewNames)
     for (size_t i = 0; i <= shown.size(); ++i)
       memory.Write8(0x1000 + static_cast<u32>(i),
                                    i < shown.size() ? static_cast<u8>(shown[i]) : 0);
-    // Model game-owned copies/glyph data beyond the name writer's destination.
     memory.Write8(0x3000, shown.empty() ? 0 : static_cast<u8>(shown.back()));
     memory.Write32(0x2000, static_cast<u32>(frame));
   };

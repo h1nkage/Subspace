@@ -17,7 +17,6 @@ class VolumeDisc;
 
 namespace Orca
 {
-// A standalone, read-only view. All decrypted buffers remain in memory.
 class StandardBlob final : public DiscIO::BlobReader
 {
 public:
@@ -47,4 +46,4 @@ private:
   std::shared_ptr<State> m_state;
   DiscIO::WiiEncryptionCache m_cache;
 };
-}  // namespace Orca
+}

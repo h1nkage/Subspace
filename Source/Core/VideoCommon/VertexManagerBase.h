@@ -120,7 +120,6 @@ public:
 
   void Flush();
   bool HasSendableVertices() const { return !m_is_flushed && !m_cull_all; }
-  // Orca: true when no vertex batch is pending.
   bool IsFlushed() const { return m_is_flushed; }
 
   void DoState(PointerWrap& p);

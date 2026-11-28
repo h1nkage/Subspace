@@ -25,8 +25,6 @@ BroadcastFrame::BroadcastFrame()
       }
       else
       {
-        // Producer does only atomic stores. Event::Set takes a mutex, which could let a
-        // descheduled worker stall rendering; bounded polling keeps that cost off capture.
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
       }
     }
@@ -35,7 +33,7 @@ BroadcastFrame::BroadcastFrame()
 BroadcastFrame::~BroadcastFrame()
 {
   m_stop.store(true, std::memory_order_release);
-  m_worker.join();  // Shutdown only; Capture never joins or waits.
+  m_worker.join();
   if (m_work)
     m_work->texture->Unmap();
 }
@@ -62,12 +60,10 @@ void BroadcastFrame::Capture(const AbstractTexture* texture, const MathUtil::Rec
   {
     if (&readback == m_work || !readback.timestamp)
       continue;
-    // Age is independent of readiness: a fence that never signals must not occupy every slot.
     if (now - readback.timestamp > 100000)
     {
       Broadcast::VideoDrop();
       readback.timestamp = 0;
-      // Backends defer GPU resource destruction. Do not reuse a still-pending readback.
       readback.texture.reset();
       continue;
     }
@@ -93,8 +89,6 @@ void BroadcastFrame::Capture(const AbstractTexture* texture, const MathUtil::Rec
   {
     if (m_job.load(std::memory_order_acquire) == 0 && newest->texture->Map())
     {
-      // Map/Unmap stay on the GPU thread. No pixel copy here; the worker owns this slot
-      // until its release store, so neither reuse nor age expiry can invalidate the pointer.
       m_work = newest;
       m_pointer = reinterpret_cast<const u8*>(newest->texture->GetMappedPointer());
       m_stride = newest->texture->GetMappedStride();
@@ -110,8 +104,6 @@ void BroadcastFrame::Capture(const AbstractTexture* texture, const MathUtil::Rec
 
   if (now < m_next)
     return;
-  // Advance the cadence, rather than rounding each deadline up to the next emulated frame.
-  // The latter can turn 60fps with a little jitter into only 20 captured frames per second.
   m_next = m_next ? m_next + 1000000 / Broadcast::FPS : now + 1000000 / Broadcast::FPS;
   if (m_next <= now)
     m_next = now + 1000000 / Broadcast::FPS;
@@ -137,7 +129,6 @@ void BroadcastFrame::Capture(const AbstractTexture* texture, const MathUtil::Rec
       readback.texture = g_gfx->CreateStagingTexture(StagingTextureType::Readback, config);
     if (!readback.texture)
       break;
-    // Preserve the VI/display aspect, including 4:3 games, without depending on window size.
     if (!std::isfinite(aspect_ratio) || aspect_ratio <= 0)
       aspect_ratio = static_cast<float>(Broadcast::WIDTH) / Broadcast::HEIGHT;
     int width = Broadcast::WIDTH, height = Broadcast::HEIGHT;

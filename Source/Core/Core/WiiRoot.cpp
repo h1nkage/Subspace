@@ -130,7 +130,6 @@ static void InitializeDeterministicWiiSaves(FS::FileSystem* session_fs,
 {
   auto& movie = Core::System::GetInstance().GetMovie();
   u64 title_id = SConfig::GetInstance().GetTitleID();
-  // Orca: a launcher profile boots a loader (title 0) that boots the game; seed the game's save.
   if (const Orca::Profile* profile = Orca::ActiveProfile(); profile && profile->save_title)
     title_id = *profile->save_title;
   const auto configured_fs = FS::MakeFileSystem(FS::Location::Configured);
@@ -148,8 +147,6 @@ static void InitializeDeterministicWiiSaves(FS::FileSystem* session_fs,
     }
   }
 
-  // Orca: mod sessions start clean. Legacy sessions keep the save prepared in the session's
-  // user directory (or, in Orca.app, none). Hash the resulting seed exactly as before.
   if (Orca::SessionActive())
   {
     if (Orca::SeedSessionSave())
@@ -388,7 +385,6 @@ void InitializeWiiFileSystemContents(
 
 void CleanUpWiiFileSystemContents(const BootSessionData& boot_session_data)
 {
-  // Orca: the session NAND is thrown away; nothing goes back to the player's own NAND.
   if (Orca::SessionActive())
     return;
 

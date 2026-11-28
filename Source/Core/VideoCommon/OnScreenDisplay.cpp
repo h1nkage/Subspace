@@ -34,7 +34,6 @@ constexpr float MESSAGE_DROP_TIME = 5000.f;  // Ms to drop OSD messages that has
 
 static std::atomic<int> s_obscured_pixels_left = 0;
 static std::atomic<int> s_obscured_pixels_top = 0;
-// Orca: see MessagesBottom().
 static std::atomic<float> s_messages_bottom = 0;
 
 struct Message

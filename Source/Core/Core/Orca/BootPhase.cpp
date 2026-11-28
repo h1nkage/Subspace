@@ -87,14 +87,12 @@ void Clock::LogPendingLocked()
   while (m_logged < m_count)
   {
     const auto& record = m_records[m_logged++];
-    // Records only ever hold named phases (Mark); the check keeps gcc's -Wformat-truncation sure.
     const char* const name = Name(record.phase);
     if (!name)
       continue;
     std::array<char, 128> line{};
     std::snprintf(line.data(), line.size(), "orca boot phase %s %lld %lld", name, record.elapsed,
                   record.delta);
-    // Like BootMemory, these few diagnostics reach the normal listeners even with BOOT off.
     logs->LogWithFullPath(Common::Log::LogLevel::LNOTICE, Common::Log::LogType::BOOT,
                           "Orca/BootPhase.cpp", 0, line.data());
   }
@@ -142,4 +140,4 @@ void LogPending()
 {
   ProcessClock().LogPending();
 }
-}  // namespace Orca::BootPhase
+}

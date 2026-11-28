@@ -76,8 +76,6 @@ void Platform::UpdateRunningFlag()
     const auto& system = Core::System::GetInstance();
     const auto ios = system.GetIOS();
     const auto stm = ios ? ios->GetDeviceByName("/dev/stm/eventhook") : nullptr;
-    // Orca: a session stops at once. The power button would reach only this player's game, which
-    // can't answer it while the session waits for the room.
     if (!Orca::SessionActive() && !m_tried_graceful_shutdown.IsSet() && stm &&
         std::static_pointer_cast<IOS::HLE::STMEventHookDevice>(stm)->HasHookInstalled())
     {

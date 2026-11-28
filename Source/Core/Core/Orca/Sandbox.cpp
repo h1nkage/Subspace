@@ -60,7 +60,6 @@
 
 namespace Orca::Sandbox
 {
-// BEGIN Linux pack jail policy (also compiled verbatim by the standalone device harness).
 namespace
 {
 std::optional<std::string> JailRead(const std::string& path)
@@ -92,7 +91,7 @@ std::string JailLogName(std::string_view name)
                 static_cast<char>(c) : '_';
   return safe;
 }
-}  // namespace
+}
 
 std::string PackJailResult::Status() const
 {
@@ -113,7 +112,6 @@ PackJailResult CheckLinuxPackJail(const std::string& root, const PackJailProbes&
   PackJailResult result;
   const auto passwd_home = probes.passwd_home();
   result.passwd_present = passwd_home.has_value();
-  // PID 1 is diagnostic only: bwrap, sh and other names all qualify. Read failures fail closed.
   const auto comm = JailRead(root + "/proc/1/comm");
   if (comm)
   {
@@ -177,8 +175,6 @@ PackJailResult CheckLinuxPackJail(const std::string& root, const PackJailProbes&
     return fail("root-fs");
   std::vector<std::string> homes;
   const auto placeholder = [&](const std::string& path) {
-    // Profile binds create parents on the jail root. A host bind, symlink, regular file,
-    // or unreadable entry must never qualify as one of those placeholder directories.
     const auto directory = probes.directory(path);
     const auto root_device = probes.root_device();
     return directory && root_device && directory->device == *root_device &&
@@ -252,8 +248,6 @@ PackJailResult CheckLinuxPackJail(const std::string& root, const PackJailProbes&
   if (!connected || !*connected)
     return fail("x11-own");
 
-  // The jail binds the host's sysfs for GPU enumeration, so /sys/class/net shows host
-  // interfaces. Its fresh procfs reports this process's own network namespace instead.
   const auto network = JailRead(root + "/proc/self/net/dev");
   if (!network)
     return fail("network");
@@ -415,7 +409,6 @@ PackJailProbes LinuxPackJailProbes()
   return probes;
 }
 #endif
-// END Linux pack jail policy.
 
 NetMode ParseNetMode(std::string_view text, bool* known)
 {
@@ -435,7 +428,6 @@ NetMode ParseNetMode(std::string_view text, bool* known)
 #ifdef _WIN32
 namespace
 {
-// Whether this process runs in an AppContainer (the app's sandbox on Windows).
 bool AppContainer()
 {
   static const bool app_container = [] {
@@ -452,7 +444,6 @@ bool AppContainer()
   return app_container;
 }
 
-// Whether the AppContainer was given a capability, by its fixed SID (S-1-15-3-<n>).
 bool HasCapability(const wchar_t* sid_text)
 {
   PSID wanted = nullptr;
@@ -479,15 +470,13 @@ bool HasCapability(const wchar_t* sid_text)
   LocalFree(wanted);
   return found;
 }
-}  // namespace
+}
 #endif
 
 NetMode NetModeFromEnv()
 {
   const std::string text = GetEnv("ORCA_NET");
 #ifdef _WIN32
-  // An AppContainer the app's launcher didn't describe: what its token allows. Loopback never;
-  // the LAN with privateNetworkClientServer (S-1-15-3-3).
   if (text.empty() && AppContainer())
     return HasCapability(L"S-1-15-3-3") ? NetMode::InternetLan : NetMode::Internet;
 #endif
@@ -535,12 +524,10 @@ bool LanAddress(std::string_view address)
     static constexpr std::array<u8, 16> LOOPBACK{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
     if (std::memcmp(b, LOOPBACK.data(), LOOPBACK.size()) == 0)
       return true;
-    // fe80::/10 link-local, fc00::/7 unique-local.
     if (b[0] == 0xfe && (b[1] & 0xc0) == 0x80)
       return true;
     if ((b[0] & 0xfe) == 0xfc)
       return true;
-    // An IPv4-mapped address (::ffff:a.b.c.d) is its IPv4 address.
     static constexpr std::array<u8, 12> MAPPED{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
     if (std::memcmp(b, MAPPED.data(), MAPPED.size()) == 0)
       return LanAddress(fmt::format("{}.{}.{}.{}", b[12], b[13], b[14], b[15]));
@@ -590,9 +577,6 @@ bool PackJailed()
 #ifdef _WIN32
   return AppContainer();
 #elif defined(__APPLE__)
-  // The app applies the sandbox before launching Orca. Ask the OS about this process, including
-  // inherited profiles. A null operation queries whether a sandbox is applied. Resolve the
-  // system entry point at runtime; an unavailable query cannot authorize a pack.
   void* library = dlopen("/usr/lib/libsandbox.dylib", RTLD_LAZY | RTLD_LOCAL);
   if (!library)
     return false;
@@ -602,8 +586,6 @@ bool PackJailed()
   dlclose(library);
   return jailed;
 #elif defined(__linux__)
-  // Enabled() is the boot's room intent, before Start() creates a transport. File replays
-  // never start a room; SessionActive() alone also includes unsigned local packs.
   const bool online = NetPlay::IsNetPlayRunning() ||
                       (Online::Enabled() && !Common::OfflineReplay());
   const auto result = CheckLinuxPackJail("", LinuxPackJailProbes(), online);
@@ -684,4 +666,4 @@ bool WriteDenied(const std::string& dir)
   return errno == EACCES || errno == EPERM;
 #endif
 }
-}  // namespace Orca::Sandbox
+}

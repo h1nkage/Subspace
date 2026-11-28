@@ -88,7 +88,7 @@ protected:
     ASSERT_FALSE(m_root.empty()) << "mkdtemp: " << std::strerror(errno);
     m_player = m_root + "/User/Load/Textures/RSBE01";
     m_bundle = m_root + "/pack/orca/textures";
-    m_engine = m_root + "/Sys/Orca/Textures/RSBE01";
+    m_engine = m_root + "/Sys/Subspace/Textures/RSBE01";
     for (const auto& path : {m_player + "/tex1_player_arb.png",
                              m_player + "/tex1_player_arb_mip1.png",
                              m_player + "/tex1_shared.png", m_player + "/notes.png",
@@ -129,7 +129,7 @@ private:
   std::optional<Orca::Profile> m_profile;
   bool m_seed = true;
 };
-}  // namespace
+}
 
 TEST_F(OrcaSessionTextures, ModSessionsUseOnlyBundleOrEngineTextureFiles)
 {
@@ -157,7 +157,6 @@ TEST_F(OrcaSessionTextures, RequestedModIgnoresPlayerFilesBeforeProfileSelection
 
 TEST_F(OrcaSessionTextures, LegacySessionSeedAndTextureFileListAreByteIdentical)
 {
-  // These bytes pin the pre-isolation ordering, paths, arbitrary-mipmap flag and pack ownership.
   const std::string expected = TrustedOnly(m_engine) + PlayerOnly();
   for (const std::string game : {"RSBE01", "PPLUS32", "PPLUS321"})
   {

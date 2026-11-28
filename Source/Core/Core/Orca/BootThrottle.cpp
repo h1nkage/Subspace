@@ -36,4 +36,4 @@ void FinishAtFirstFrame()
   Finish(Rollback::RingPort::Active() ||
          (Rollback::Harness::Active() && !Online::Enabled() && !Rollback::Diag::KeepThrottle()));
 }
-}  // namespace Orca::BootThrottle
+}

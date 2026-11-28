@@ -161,18 +161,18 @@ class RealMapTests(unittest.TestCase):
 
     def test_known_paths(self):
         expect = {
-            "Data/Sys/Orca/RSBE01.patches": ("game-data", False),
+            "Data/Sys/Subspace/RSBE01.patches": ("game-data", False),
             # Profiles carry forced settings and owner-only fields.
-            "Data/Sys/Orca/PPLUS32.ini": ("engine-sensitive", False),
-            "Data/Sys/Orca/RSBE01.ini": ("engine-sensitive", False),
-            "Data/Sys/Orca/RSBE01.jitwarm": ("game-data", False),
-            "Data/Sys/Orca/Textures/RSBE01/x.png": ("game-data", False),
-            "Data/Sys/Orca/Fonts/Roboto-Medium.ttf": ("engine", False),
-            # A new kind of file under Data/Sys/Orca is engine until it is named.
-            "Data/Sys/Orca/mod.json": ("engine", False),
-            "Data/Sys/Orca/scripts/x.luau": ("engine", False),
-            "Data/Sys/Orca/lib/evil.dylib": ("engine", False),
-            "Data/Sys/Orca/Textures/RSBE01/x.dll": ("engine", False),
+            "Data/Sys/Subspace/PPLUS32.ini": ("engine-sensitive", False),
+            "Data/Sys/Subspace/RSBE01.ini": ("engine-sensitive", False),
+            "Data/Sys/Subspace/RSBE01.jitwarm": ("game-data", False),
+            "Data/Sys/Subspace/Textures/RSBE01/x.png": ("game-data", False),
+            "Data/Sys/Subspace/Fonts/Roboto-Medium.ttf": ("engine", False),
+            # A new kind of file under Data/Sys/Subspace is engine until it is named.
+            "Data/Sys/Subspace/mod.json": ("engine", False),
+            "Data/Sys/Subspace/scripts/x.luau": ("engine", False),
+            "Data/Sys/Subspace/lib/evil.dylib": ("engine", False),
+            "Data/Sys/Subspace/Textures/RSBE01/x.dll": ("engine", False),
             "Data/Sys/GameSettings/RSBE01.ini": ("engine-sensitive", False),
             "Data/Sys/GameSettings/GALE01.ini": ("engine", False),
             "Source/Core/Core/Orca/Games/Brawl/OnlineRules.cpp": ("game-logic", False),
@@ -231,7 +231,7 @@ class RealMapTests(unittest.TestCase):
             "Source/UnitTests/Core/Orca/RoomTest.cpp": ("engine", True),
             "Tools/orca/queue-e2e.mjs": ("engine", True),
             "Tools/orca/inputs/bf-dropin.txt": ("game-data", True),
-            "Tools/orca/textures/make-labels.py": ("engine", True),
+            "Tools/orca/textures/sd-make-labels.py": ("engine", True),
             "Tools/orca/layers.txt": ("engine-sensitive", True),
             "Tools/orca/layer-of-diff": ("engine-sensitive", True),
             "Tools/orca/layerlib.py": ("engine-sensitive", True),
@@ -342,8 +342,8 @@ class DiffParseTests(unittest.TestCase):
     def test_malformed_diff_fails_closed(self):
         # The first hunk claims more lines than it has: the next file's header would be read as
         # context, hiding an engine-sensitive file.
-        hidden = ("diff --git a/Data/Sys/Orca/RSBE01.patches b/Data/Sys/Orca/RSBE01.patches\n"
-                  "--- a/Data/Sys/Orca/RSBE01.patches\n+++ b/Data/Sys/Orca/RSBE01.patches\n"
+        hidden = ("diff --git a/Data/Sys/Subspace/RSBE01.patches b/Data/Sys/Subspace/RSBE01.patches\n"
+                  "--- a/Data/Sys/Subspace/RSBE01.patches\n+++ b/Data/Sys/Subspace/RSBE01.patches\n"
                   "@@ -1,9 +1,9 @@\n-a\n+b\n"
                   "diff --git a/Source/Core/Core/Orca/Session/Room.cpp b/Source/Core/Core/Orca/Session/Room.cpp\n"
                   "--- a/Source/Core/Core/Orca/Session/Room.cpp\n+++ b/Source/Core/Core/Orca/Session/Room.cpp\n"
@@ -553,7 +553,7 @@ class EndToEndTests(unittest.TestCase):
         with open(rules, "w") as f:
             f.write(text)
         self.write("Source/Core/Core/Orca/Games/Brawl/Queue.cpp", "void Frame() {}\n")
-        self.write("Data/Sys/Orca/RSBE01.patches", "x\n")
+        self.write("Data/Sys/Subspace/RSBE01.patches", "x\n")
         self.git("add", "Source", "Data")
         self.git("commit", "-qm", "orca")
         bl = os.path.join(self.tmp, "bl.txt")
@@ -562,7 +562,7 @@ class EndToEndTests(unittest.TestCase):
         self.assertEqual(code, 0, err)
 
         # A data-only change.
-        self.write("Data/Sys/Orca/RSBE01.patches", "x\ny\n")
+        self.write("Data/Sys/Subspace/RSBE01.patches", "x\ny\n")
         self.git("commit", "-qam", "data")
         code, out, err = self.run_tool("layer-of-diff", "--rules", rules, "--json", "HEAD")
         self.assertEqual(code, 0, err)

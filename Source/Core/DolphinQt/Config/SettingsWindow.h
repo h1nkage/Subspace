@@ -50,6 +50,7 @@ enum class SettingsWindowPaneIndex : int
   GameCube,
   Wii,
   Triforce,
+  NetPlay,
   Advanced,
 };
 

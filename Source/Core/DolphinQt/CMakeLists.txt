@@ -391,6 +391,8 @@ add_executable(dolphin-emu
   Settings/GeneralPane.h
   Settings/InterfacePane.cpp
   Settings/InterfacePane.h
+  Settings/NetPlayPane.cpp
+  Settings/NetPlayPane.h
   Settings/OnScreenDisplayPane.cpp
   Settings/OnScreenDisplayPane.h
   Settings/PathPane.cpp
@@ -538,6 +540,12 @@ if (NOT APPLE AND NOT ANDROID)
       -Dtarget="${CMAKE_SOURCE_DIR}/LICENSES"
       -Dlink="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Licenses"
       -P="${CMAKE_SOURCE_DIR}/CMake/DolphinSymlinkOrCopy.cmake"
+  )
+
+  add_custom_command(TARGET dolphin-emu POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Games"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/Games"
+      "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Games"
   )
 endif()
 if (WIN32)

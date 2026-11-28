@@ -19,11 +19,8 @@
 #include "VideoCommon/ShaderGenCommon.h"
 #include "VideoCommon/VideoConfig.h"
 
-// Which settings a session takes from the player (the app's -C, GFX.ini) and which it forces,
-// whatever comes from outside. See ORCA.md, "Graphics".
 namespace
 {
-// A layer kept in memory: GFX.ini and Dolphin.ini (Base), the app's -C (CommandLine), a game INI.
 class MemoryLayer final : public Config::ConfigLayerLoader
 {
 public:
@@ -47,19 +44,16 @@ protected:
     m_profile.revision = 2;
   }
   void TearDown() override { Config::Shutdown(); }
-  // The app's -C.
   template <typename T, typename V>
   static void CommandLine(const Config::Info<T>& info, const V& value)
   {
     Config::Set(Config::LayerType::CommandLine, info, value);
   }
-  // The player's own GFX.ini or Dolphin.ini.
   template <typename T, typename V>
   static void Ini(const Config::Info<T>& info, const V& value)
   {
     Config::SetBase(info, value);
   }
-  // The session boots: Orca's layer goes on top of everything else.
   void Boot() { Config::AddLayer(Orca::GenerateConfigLoader(m_profile)); }
   std::optional<std::string> Verify() const { return Orca::VerifyForcedSettings(m_profile); }
 
@@ -70,11 +64,10 @@ bool Has(const std::vector<Config::Location>& locations, const Config::Location&
 {
   return std::find(locations.begin(), locations.end(), location) != locations.end();
 }
-}  // namespace
+}
 
 TEST_F(OrcaGraphicsSettings, GameAffectingSettingsFromOutsideAreIgnored)
 {
-  // Everything a player or a modified app could pass to get an edge or break the match.
   CommandLine(Config::MAIN_EMULATION_SPEED, 0.5f);
   CommandLine(Config::MAIN_GDB_PORT, 2345);
   CommandLine(Config::MAIN_DEBUG_JIT_OFF, true);
@@ -181,8 +174,6 @@ TEST_F(OrcaGraphicsSettings, DrawingOnlySettingsAreThePlayers)
 
 TEST_F(OrcaGraphicsSettings, ShaderModesThatStallTheOtherPlayerAreRefused)
 {
-  // Synchronous compiles at a pipeline's first draw on the emulation thread; so does a thread
-  // count of 0.
   CommandLine(Config::GFX_SHADER_COMPILATION_MODE, ShaderCompilationMode::Synchronous);
   CommandLine(Config::GFX_SHADER_COMPILER_THREADS, 0);
   Boot();
@@ -202,8 +193,6 @@ TEST_F(OrcaGraphicsSettings, SyncUberIsRefusedToo)
 
 TEST_F(OrcaGraphicsSettings, NothingPassedMeansWhatSessionsForcedBefore)
 {
-  // An old app passes neither; Dolphin's defaults are Synchronous and one thread. Sessions keep
-  // what they forced before the player could choose: AsyncUber and Auto (-1).
   Boot();
   EXPECT_EQ(Config::Get(Config::GFX_SHADER_COMPILATION_MODE),
             ShaderCompilationMode::AsynchronousUberShaders);
@@ -220,7 +209,6 @@ TEST_F(OrcaGraphicsSettings, OneThreadIsThePlayersChoiceToo)
 
 TEST_F(OrcaGraphicsSettings, ThreadsOutsideTheAppsChoicesAreAuto)
 {
-  // A hand-edited GFX.ini asking for 500 compile threads: Auto instead.
   Ini(Config::GFX_SHADER_COMPILER_THREADS, 500);
   Boot();
   EXPECT_EQ(Config::Get(Config::GFX_SHADER_COMPILER_THREADS), -1);
@@ -232,7 +220,6 @@ TEST_F(OrcaGraphicsSettings, ThreadsOutsideTheAppsChoicesAreAuto)
 
 TEST_F(OrcaGraphicsSettings, TheHighestLayerUnderTheSessionDecides)
 {
-  // A game INI over the app's -C, as Config::Get would read them without the session.
   CommandLine(Config::GFX_SHADER_COMPILATION_MODE, ShaderCompilationMode::AsynchronousUberShaders);
   Config::Set(Config::LayerType::LocalGame, Config::GFX_SHADER_COMPILATION_MODE,
               ShaderCompilationMode::Synchronous);
@@ -243,8 +230,6 @@ TEST_F(OrcaGraphicsSettings, TheHighestLayerUnderTheSessionDecides)
 
 TEST_F(OrcaGraphicsSettings, TheModeIsPinnedForTheRun)
 {
-  // A launcher's disc brings its game INI layers in after the session's: they can't change the
-  // mode the session took at boot.
   CommandLine(Config::GFX_SHADER_COMPILATION_MODE,
               ShaderCompilationMode::AsynchronousSkipRendering);
   Boot();
@@ -259,7 +244,6 @@ TEST_F(OrcaGraphicsSettings, TheModeIsPinnedForTheRun)
 TEST_F(OrcaGraphicsSettings, AnythingAboveTheSessionFailsTheBoot)
 {
   Boot();
-  // Written after the session's layer, on the one layer above it: refused at boot.
   Config::SetCurrent(Config::MAIN_EMULATION_SPEED, 0.5f);
   ASSERT_TRUE(Verify().has_value());
   EXPECT_NE(Verify()->find("EmulationSpeed"), std::string::npos);
@@ -277,11 +261,9 @@ TEST_F(OrcaGraphicsSettings, AnythingAboveTheSessionFailsTheBoot)
 
 TEST_F(OrcaGraphicsSettings, LiveChangesTouchOnlyDrawingSettings)
 {
-  // The `gfx` command writes the layer above the session's, so none of its keys may be forced...
   const std::vector<Config::Location> forced = Orca::UniversalForcedLocations();
   for (const Config::Location& location : Orca::Perf::GfxLocations())
     EXPECT_FALSE(Has(forced, location)) << location.section << "." << location.key;
-  // ...and every change it can make leaves the session's settings standing.
   Boot();
   for (const char* line : {"gfx res 4", "gfx aniso 4", "gfx filter 1", "gfx resample 6",
                            "gfx efb 0", "gfx gpudecode 1", "gfx cpucull 1"})
@@ -303,9 +285,6 @@ TEST_F(OrcaGraphicsSettings, LiveChangesTouchOnlyDrawingSettings)
 
 TEST_F(OrcaGraphicsSettings, ResolutionChangesNeverReloadTheShaders)
 {
-  // VertexRounding is a shader host-config bit only away from native resolution: with it on, the
-  // switch to Performance (res 1) or a live `gfx res` would reload every shader mid-match. Forced
-  // off, no `gfx` change moves the host config.
   Ini(Config::GFX_HACK_VERTEX_ROUNDING, true);
   CommandLine(Config::GFX_EFB_SCALE, 4);
   Boot();
@@ -326,7 +305,6 @@ TEST_F(OrcaGraphicsSettings, ResolutionChangesNeverReloadTheShaders)
     Orca::Perf::ApplyGfx(*change);
     EXPECT_EQ(host_bits(), before) << line;
   }
-  // The switch to Performance is the same changes.
   for (const Orca::Perf::GfxChange& change : Orca::Perf::PerformancePreset())
     Orca::Perf::ApplyGfx(change);
   EXPECT_EQ(host_bits(), before);
@@ -335,12 +313,10 @@ TEST_F(OrcaGraphicsSettings, ResolutionChangesNeverReloadTheShaders)
 TEST_F(OrcaGraphicsSettings, QueuedChangesKeepTheLastValuePerKey)
 {
   Boot();
-  // A burst of lines (a page while the game is paused): one change per key when they apply.
   for (int i = 0; i < 1000; ++i)
     Orca::Perf::QueueGfx({Orca::Perf::GfxKey::Res, i % 2 ? 2 : 3});
   Orca::Perf::QueueGfx({Orca::Perf::GfxKey::Efb, 0});
   Orca::Perf::QueueGfx({Orca::Perf::GfxKey::Res, 4});
-  // The next forward boundary applies them (measuring hasn't started: nothing else happens).
   Orca::Perf::Boundary boundary;
   boundary.first_run = true;
   Orca::Perf::OnBoundary(boundary);
@@ -351,7 +327,6 @@ TEST_F(OrcaGraphicsSettings, QueuedChangesKeepTheLastValuePerKey)
 
 TEST_F(OrcaGraphicsSettings, TheShippedProfilesForceNoLiveKey)
 {
-  // The `gfx` map writes above every forced setting, the profiles' own included.
   const std::string sys =
       (std::filesystem::path(__FILE__).parent_path() / "../../../../Data/Sys/").string();
   for (const auto& [id, revision] : {std::pair<const char*, std::optional<u16>>{"RSBE01", 2},
@@ -380,11 +355,9 @@ TEST_F(OrcaGraphicsSettings, ThePerformancePresetIsRecognized)
   for (const Orca::Perf::GfxChange& change : Orca::Perf::PerformancePreset())
     Orca::Perf::ApplyGfx(change);
   EXPECT_TRUE(Orca::Perf::PerformanceNow());
-  // Anti-aliasing is a next-start setting, but it still isn't Performance: the picture is.
   CommandLine(Config::GFX_MSAA, 4u);
   EXPECT_FALSE(Orca::Perf::PerformanceNow());
   EXPECT_TRUE(Orca::Perf::PerformancePicture());
-  // A player who raised the resolution again is on their own settings.
   Orca::Perf::ApplyGfx({Orca::Perf::GfxKey::Res, 3});
   EXPECT_FALSE(Orca::Perf::PerformancePicture());
 }
@@ -427,8 +400,6 @@ TEST_F(OrcaGraphicsSettings, TheForcedListHoldsTheNewKeys)
       Config::GFX_ENABLE_WIREFRAME.GetLocation(),
       Config::GFX_TEXFMT_OVERLAY_ENABLE.GetLocation(),
       Config::FREE_LOOK_ENABLED.GetLocation(),
-      // From the review: a game-affecting JIT switch, a pacing setting, and the host-config bit
-      // that would make a resolution change reload every shader.
       Config::MAIN_PAUSE_ON_PANIC.GetLocation(),
       Config::MAIN_AUDIO_BUFFER_SIZE.GetLocation(),
       Config::GFX_HACK_VERTEX_ROUNDING.GetLocation(),
@@ -436,7 +407,6 @@ TEST_F(OrcaGraphicsSettings, TheForcedListHoldsTheNewKeys)
   EXPECT_EQ(added.size(), 37u);
   for (const Config::Location& location : added)
     EXPECT_TRUE(Has(forced, location)) << location.section << "." << location.key;
-  // The player's settings are not on the list (WaitForShadersBeforeStarting stays forced).
   for (const Config::Location& location :
        {Config::MAIN_GFX_BACKEND.GetLocation(), Config::GFX_ADAPTER.GetLocation(),
         Config::GFX_EFB_SCALE.GetLocation(), Config::GFX_MAX_EFB_SCALE.GetLocation(),

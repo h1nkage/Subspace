@@ -715,8 +715,6 @@ std::optional<IPCReply> EmulationKernel::OpenDevice(OpenRequest& request)
     device = GetDeviceByName("/dev/fs");
   }
 
-  // Orca: the session device budget, checked after the lookup so an absent device answers exactly
-  // as an unknown one does.
   if (device && Orca::SessionActive() && !SessionAllowsDevice(request.path))
   {
     WARN_LOG_FMT(IOS, "Orca session: {} is not available", request.path);
@@ -841,7 +839,7 @@ void EmulationKernel::EnqueueIPCReply(const Request& request, const s32 return_v
   memory.Write_U32(request.command, request.address + 8);
   // IOS also overwrites the command type with the reply type.
   memory.Write_U32(IPC_REPLY, request.address);
-  if (CoreTiming::g_rollback_event_trace)  // Orca: rollback diagnostics
+  if (CoreTiming::g_rollback_event_trace)
   {
     const auto& device = request.fd < IPC_MAX_FDS ? m_fdmap[request.fd] : nullptr;
     CoreTiming::g_rollback_event_trace->push_back(fmt::format(

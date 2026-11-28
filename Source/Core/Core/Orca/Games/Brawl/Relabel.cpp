@@ -24,19 +24,17 @@ namespace
 {
 constexpr u32 SCENE_MANAGER = 0x805A0060;
 constexpr u32 MANAGER_SCENE = 0x4;
-constexpr u32 CSS_ARCHIVE = 0x410;  // scSelctCharacter's gfArchive* (CssTitle.h)
-// scSelStage's gfArchive offset is unknown, so the scene's first words are scanned for it.
+constexpr u32 CSS_ARCHIVE = 0x410;
 constexpr u32 SSS_SCAN_WORDS = 0x800 / 4;
-// Tried before the scan: +0x450 in both Brawl rev 2 and Project+, as observed by the scan.
 constexpr u32 SSS_ARCHIVE_WORD = 0x450 / 4;
 constexpr u32 ARCHIVE_WORDS = 0x80 / 4;
-constexpr u32 ARC_MAGIC = 0x41524300;  // "ARC\0"
+constexpr u32 ARC_MAGIC = 0x41524300;
 constexpr u32 ARC_NAME = 0x10;
 constexpr u32 ARC_FIRST = 0x40;
-constexpr u32 CSS_FILE = 30;  // character select bres (MiscData 30)
-constexpr u32 SSS_FILE = 20;  // stage select bres (MiscData 20)
+constexpr u32 CSS_FILE = 30;
+constexpr u32 SSS_FILE = 20;
 
-constexpr u32 BRES_MAGIC = 0x62726573;  // "bres"
+constexpr u32 BRES_MAGIC = 0x62726573;
 constexpr u32 BRES_ROOT = 0xC;
 constexpr u32 ROOT_GROUP = 0x8;
 constexpr u32 GROUP_COUNT = 0x4;
@@ -45,12 +43,12 @@ constexpr u32 ENTRY_SIZE = 0x10;
 constexpr u32 ENTRY_NAME = 0x8;
 constexpr u32 ENTRY_DATA = 0xC;
 constexpr u32 MAX_ENTRIES = 1024;
-constexpr u32 TEX0_MAGIC = 0x54455830;  // "TEX0"
+constexpr u32 TEX0_MAGIC = 0x54455830;
 constexpr u32 TEX0_DATA = 0x10;
 constexpr u32 TEX0_WIDTH = 0x1C;
 constexpr u32 TEX0_HEIGHT = 0x1E;
 constexpr u32 TEX0_FORMAT = 0x20;
-constexpr u32 PLT0_MAGIC = 0x504C5430;  // "PLT0"
+constexpr u32 PLT0_MAGIC = 0x504C5430;
 constexpr u32 PLT0_DATA = 0x10;
 constexpr u32 PLT0_FORMAT = 0x18;
 constexpr u32 PLT0_COUNT = 0x1C;
@@ -61,7 +59,7 @@ constexpr u32 PALETTE_RGB5A3 = 2;
 constexpr std::string_view TEXTURES = "Textures(NW4R)";
 constexpr std::string_view PALETTES = "Palettes(NW4R)";
 
-std::atomic<u32> s_shown{0};  // packed Shown for Current(); bit 31 means set
+std::atomic<u32> s_shown{0};
 
 bool Pointer(const GuestMemory& m, u32 p)
 {
@@ -79,7 +77,6 @@ bool StringAt(const GuestMemory& m, u32 at, std::string_view want)
   return true;
 }
 
-// The running scene, if its name is `name`.
 u32 Scene(const GuestMemory& m, std::string_view name)
 {
   if (!Pointer(m, SCENE_MANAGER))
@@ -91,7 +88,6 @@ u32 Scene(const GuestMemory& m, std::string_view name)
   return Pointer(m, scene) && StringAt(m, m.Read32(scene), name) ? scene : 0;
 }
 
-// The archive image named `name` among a gfArchive's first words, or 0.
 u32 ImageIn(const GuestMemory& m, u32 archive, std::string_view name)
 {
   if (!Pointer(m, archive) || !m.Valid(archive + ARCHIVE_WORDS * 4 - 1))
@@ -108,7 +104,6 @@ u32 ImageIn(const GuestMemory& m, u32 archive, std::string_view name)
   return 0;
 }
 
-// The bres in MiscData `file` of the image, or 0.
 u32 Bres(const GuestMemory& m, u32 image, u32 file)
 {
   if (!image)
@@ -125,14 +120,11 @@ u32 CssBres(const GuestMemory& m)
   return Bres(m, ImageIn(m, m.Read32(scene + CSS_ARCHIVE), "sc_selcharacter_en"), CSS_FILE);
 }
 
-// The stage select's bres. `word` gets the scene word that held its archive.
 u32 SssBres(const GuestMemory& m, u32* word = nullptr)
 {
   const u32 scene = Scene(m, "scSelStage");
   if (!scene || !m.Valid(scene + SSS_SCAN_WORDS * 4 - 1))
     return 0;
-  // No cache: the result must depend on emulated memory alone, and a stale archive's bytes can
-  // outlive it in the heap.
   if (const u32 image = ImageIn(m, m.Read32(scene + 4 * SSS_ARCHIVE_WORD), "sc_selmap_en"))
   {
     if (word)
@@ -151,7 +143,6 @@ u32 SssBres(const GuestMemory& m, u32* word = nullptr)
   return 0;
 }
 
-// The data of the entry named `name` in the bres index group at `group`, or 0.
 u32 GroupEntry(const GuestMemory& m, u32 group, std::string_view name)
 {
   if (!Pointer(m, group) || !m.Valid(group + GROUP_ENTRIES - 1))
@@ -163,7 +154,6 @@ u32 GroupEntry(const GuestMemory& m, u32 group, std::string_view name)
   {
     const u32 entry = group + GROUP_ENTRIES + ENTRY_SIZE * i;
     const u32 at = group + m.Read32(entry + ENTRY_NAME);
-    // A name is preceded by its length.
     if (!Pointer(m, at - 4) || m.Read32(at - 4) != name.size() || !StringAt(m, at, name))
       continue;
     return group + m.Read32(entry + ENTRY_DATA);
@@ -171,7 +161,6 @@ u32 GroupEntry(const GuestMemory& m, u32 group, std::string_view name)
   return 0;
 }
 
-// Folder `folder`'s entry `name` in the bres.
 u32 Resource(const GuestMemory& m, u32 bres, std::string_view folder, std::string_view name)
 {
   if (!bres)
@@ -180,7 +169,6 @@ u32 Resource(const GuestMemory& m, u32 bres, std::string_view folder, std::strin
   return GroupEntry(m, GroupEntry(m, root + ROOT_GROUP, folder), name);
 }
 
-// A texture's data, if it is `name` in `bres` at `width` x `height` in `format`.
 u32 TextureData(const GuestMemory& m, u32 bres, std::string_view name, u16 width, u16 height,
                 u32 format)
 {
@@ -195,7 +183,6 @@ u32 TextureData(const GuestMemory& m, u32 bres, std::string_view name, u16 width
   return m.Valid(data) && m.Valid(data + 1) ? data : 0;
 }
 
-// The slot if its current value is the game's or one of its marks, else an empty slot.
 Slot Checked(Slot slot, const GuestMemory& m)
 {
   if (slot.kind == Slot::Kind::None || !slot.address || !slot.LabelOf(slot.Read(m)))
@@ -203,7 +190,7 @@ Slot Checked(Slot slot, const GuestMemory& m)
   return slot;
 }
 
-}  // namespace
+}
 
 u16 Slot::ValueFor(int label, u16 now) const
 {
@@ -246,9 +233,6 @@ void Slot::Write(GuestMemory& m, u16 value) const
 
 Slot FindBand(const GuestMemory& m)
 {
-  // READY TO FIGHT! is C4 352x36 with a 16-entry RGB5A3 palette. The mark is a transparent entry's
-  // blue, one step per label. Brawl uses entry 0 (0x0222), Project+ entry 15 (0x0000); the other
-  // checked entries tell the two apart.
   const u32 bres = CssBres(m);
   const u32 palette = Resource(m, bres, PALETTES, "MenSelchrReady01_2");
   if (!Pointer(m, palette) || !m.Valid(palette + 0x20 - 1) || m.Read32(palette) != PLT0_MAGIC ||
@@ -277,7 +261,6 @@ namespace
 {
 Slot LineIn(const GuestMemory& m, u32 bres)
 {
-  // STAGE SELECT (I4): Brawl's is 128x16 with first texel 1, Project+'s 189x30 with first texel 0.
   if (const u32 data = TextureData(m, bres, "MenSelmapBack07", 128, 16, FORMAT_I4))
     return Checked({Slot::Kind::HighNibble, data, 1, LINE_PICK_A_STAGE}, m);
   if (const u32 data = TextureData(m, bres, "MenSelmapBack07", 189, 30, FORMAT_I4))
@@ -287,15 +270,12 @@ Slot LineIn(const GuestMemory& m, u32 bres)
 
 Slot TitleIn(const GuestMemory& m, u32 bres)
 {
-  // BRAWL / VERSUS (I4 120x24), first texel 0 in both games.
   const u32 data = TextureData(m, bres, "MenSelchrRtitle.30", 120, 24, FORMAT_I4);
   return data ? Checked({Slot::Kind::HighNibble, data, 0, 2}, m) : Slot{};
 }
 
 std::array<Slot, 2> LegendIn(const GuestMemory& m, u32 bres)
 {
-  // Project+'s legend: words (CornerInfo, I4 245x53) and buttons (CornerButtons, IA8 150x50, mark
-  // in the first texel's intensity).
   std::array<Slot, 2> out{};
   if (const u32 data = TextureData(m, bres, "CornerInfo", 245, 53, FORMAT_I4))
     out[0] = Checked({Slot::Kind::HighNibble, data, 0, 1}, m);
@@ -306,7 +286,7 @@ std::array<Slot, 2> LegendIn(const GuestMemory& m, u32 bres)
   }
   return out;
 }
-}  // namespace
+}
 
 Slot FindLine(const GuestMemory& m)
 {
@@ -325,8 +305,6 @@ std::array<Slot, 2> FindLegend(const GuestMemory& m)
 
 Band WantedBand(const GuestMemory& m, const std::vector<Events::PortInfo>& ports)
 {
-  // Ranked games after the first follow the character order. In Free order the loser is asked
-  // first and the winner may lock in any time, so the winner's turn has no label.
   const CharOrder::CssView css = CharOrder::ReadCss(m);
   const CharOrder::State order = CharOrder::ReadState(m);
   if (css.on_css && order.game != 0)
@@ -337,13 +315,11 @@ Band WantedBand(const GuestMemory& m, const std::vector<Events::PortInfo>& ports
     if (order.step == CharOrder::Step::Second)
       return free ? Band::Game : Band::LoserNow;
   }
-  // A queue room's ready step.
   const Queue::View view = Queue::ReadView(m, ports);
   if (view.queue2 && view.css && !view.solo && (view.plugged & 3) == 3 &&
       Queue::ReadyPhase(view) && !Queue::OrderLockedIn(view))
   {
     const Queue::State state = Queue::ReadState(m);
-    // Not once both are locked in, the match is starting, or time ran out.
     if ((state.ready & 3) != 3 && !(state.flags & (Queue::FLAG_GO | Queue::FLAG_TIMED_OUT)))
       return Band::LockIn;
   }
@@ -389,7 +365,6 @@ Title WantedTitle(const GuestMemory& m)
 
 bool WantedLegend(const GuestMemory& m)
 {
-  // Only in a ranked stage select with Orca's two cursors (StageCursors.h). Casual has no strikes.
   const Rules::Header header = Rules::ReadHeader(m);
   return header.present && header.mode == Rules::Mode::Ranked && StageCursors::Read(m).has_value();
 }
@@ -429,7 +404,6 @@ int Apply(GuestMemory& m, const std::vector<Events::PortInfo>& ports, Shown* sho
     now.band_up = BandUp(m, ports);
     put(band, static_cast<int>(now.band));
   }
-  // Found once for the stage select's three textures.
   const u32 sss = SssBres(m);
   if (const Slot line = LineIn(m, sss); line.kind != Slot::Kind::None)
   {
@@ -463,7 +437,6 @@ Shown Frame(const Core::CPUThreadGuard& guard, bool resimulating,
   const int written = Apply(memory, ports, &shown);
   if (resimulating)
     return shown;
-  // Logs which scene word held the stage select archive (source of SSS_ARCHIVE_WORD).
   static u32 s_logged_word = 0;
   if (u32 word = 0; written && SssBres(memory, &word) && word != s_logged_word)
   {
@@ -474,7 +447,6 @@ Shown Frame(const Core::CPUThreadGuard& guard, bool resimulating,
   s_shown.store(0x80000000u | (shown.band_up ? 1u << 14 : 0u) | (u32(shown.band) << 12) |
                     (u32(shown.line) << 4) | (u32(shown.title) << 1) | (shown.legend ? 1u : 0u),
                 std::memory_order_relaxed);
-  // Only logged outside re-simulation; a rollback re-run writes the same values again.
   if (written)
   {
     NOTICE_LOG_FMT(ROLLBACK, "Orca: relabels band {} line {} title {} legend {}",
@@ -497,4 +469,4 @@ Shown Current()
   s.band_up = (v >> 14) & 1;
   return s;
 }
-}  // namespace Orca::UX::Relabel
+}

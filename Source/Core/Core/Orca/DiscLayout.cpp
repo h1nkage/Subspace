@@ -134,7 +134,7 @@ std::map<std::pair<u64, u64>, Common::SHA1::Digest> ErasedHashSlots(const Layout
   }
   return slots;
 }
-}  // namespace
+}
 
 /*
  * Seed formula ported from NKit 2: NKit/Formats/Nintendo/WiiGc/NJunk.cs via gc-junk.ts.
@@ -377,7 +377,6 @@ bool Validate(const Layout& layout, std::string* error)
 
 std::string Serialize(const Layout& layout)
 {
-  // Older readers must reject layouts whose zero gaps require ciphertext semantics.
   const bool physical_zero = std::any_of(layout.gaps.begin(), layout.gaps.end(),
                                          [](const auto& gap) { return gap.physical_zero; });
   const u64 version = !layout.erased_hashes.empty() ? FORMAT_VERSION : physical_zero ? 2 : 1;
@@ -681,7 +680,6 @@ bool ValidateSource(const DiscIO::Volume& volume, std::string* error)
   const auto cert = field(0x2b0);
   const auto cert_size = volume.ReadSwapped<u32>(partition.offset + 0x2ac, DiscIO::PARTITION_NONE);
   const auto h3 = field(0x2b4);
-  // All sums below are bounded by this subtraction check; shifted words are widened u32s.
   if (!data_offset || !data_size || *data_offset < 0x2c0 || *data_offset > 16 * 1024 * 1024 ||
       *data_size == 0 || *data_size % Wii::BLOCK_TOTAL_SIZE != 0 ||
       !Fits({*data_offset, *data_size}, size - partition.offset) || !tmd || !tmd_size ||
@@ -703,7 +701,6 @@ bool ValidateSource(const DiscIO::Volume& volume, std::string* error)
       Common::swap32(bytes.data() + 4) != 0)
     return fail("invalid source FST root");
   const u64 strings = count * 12;
-  // Validate iteratively before the existing recursive filesystem reader sees the tree.
   std::vector<std::pair<u64, u64>> parents{{0, count}};
   for (u64 i = 1; i < count; ++i)
   {
@@ -752,7 +749,6 @@ std::optional<Layout> Generate(const DiscIO::Volume& volume, std::string* error)
     return fail("cannot read disc number");
   layout.disc_number = *disc_number;
   layout.partition_offset = partition.offset;
-  // Read each table directly so its original entry order is retained.
   for (u64 group = 0; group < 4; ++group)
   {
     const auto count = volume.ReadSwapped<u32>(0x40000 + group * 8, DiscIO::PARTITION_NONE);
@@ -920,12 +916,8 @@ std::optional<Layout> Generate(const DiscIO::Volume& volume, std::string* error)
         lfg.SetSeed(seed.data());
         lfg.GetBytes(formula.size(), formula.data());
         candidates.clear();
-        // Recover from any sufficiently long gap in this unit, also covering tiny fragments
-        // separated by files. Like RVZPack, skip the zero padding that can follow a file.
         for (auto it = gap_it; it != layout.gaps.end() && it->offset < unit_end; ++it)
         {
-          // A physical-zero payload can interrupt a junk unit. Recover independently
-          // on either side without rebasing the partition-relative 0x8000 LFG origin.
           const u64 limit = std::min(it->offset + it->size, unit_end);
           for (u64 candidate = std::max(it->offset, unit); candidate < limit;)
           {
@@ -950,8 +942,6 @@ std::optional<Layout> Generate(const DiscIO::Volume& volume, std::string* error)
       const u64 block = position / Wii::BLOCK_DATA_SIZE;
       if (cached_block != block)
       {
-        // RVZ's encrypted AllSame reuse handles these before RVZPack's LFG detection.
-        // Do not confuse zero ciphertext (including its zero IV/hash header) with zero data.
         if (!volume.Read(layout.partition_offset + layout.data.offset +
                              block * Wii::BLOCK_TOTAL_SIZE,
                          raw_block.size(), raw_block.data(), DiscIO::PARTITION_NONE))
@@ -1049,4 +1039,4 @@ int Run(const std::string& image, const std::string& output, std::FILE* out)
   fmt::print(out, "PASS: wrote {} layout\n", layout->id);
   return 0;
 }
-}  // namespace Orca::DiscLayout
+}

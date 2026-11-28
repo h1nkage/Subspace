@@ -10,6 +10,7 @@
 #include <QDir>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QFile>
 #include <QFileInfo>
 #include <QIcon>
 #include <QMimeData>
@@ -20,6 +21,8 @@
 
 #include <fmt/format.h>
 
+#include <algorithm>
+#include <filesystem>
 #include <future>
 #include <optional>
 #include <utility>
@@ -217,11 +220,20 @@ MainWindow::MainWindow(Core::System& system, std::unique_ptr<BootParameters> boo
                        const std::string& movie_path)
     : QMainWindow(nullptr), m_system(system)
 {
-  setWindowTitle(QString::fromStdString(Common::GetScmRevStr()));
+  setWindowTitle(QString::fromStdString(Common::GetScmDescStr()));
   setWindowIcon(Resources::GetAppIcon());
   setUnifiedTitleAndToolBarOnMac(true);
   setAcceptDrops(true);
   setAttribute(Qt::WA_NativeWindow);
+
+  if (Config::GetIsoPaths().empty())
+  {
+    const QString games =
+        QDir::fromNativeSeparators(QString::fromStdString(File::GetExeDirectory())) +
+        QStringLiteral("/Games");
+    if (QDir(games).exists())
+      Settings::Instance().AddPath(games);
+  }
 
   CreateComponents();
 
@@ -548,10 +560,11 @@ void MainWindow::ConnectMenuBar()
   connect(m_menu_bar, &MenuBar::SetStateSlot, this, &MainWindow::SetStateSlot);
 
   // Options
-  connect(m_menu_bar, &MenuBar::Configure, this, &MainWindow::ShowSettingsWindow);
+  connect(m_menu_bar, &MenuBar::Configure, this, &MainWindow::ShowGeneralWindow);
   connect(m_menu_bar, &MenuBar::ConfigureGraphics, this, &MainWindow::ShowGraphicsWindow);
   connect(m_menu_bar, &MenuBar::ConfigureAudio, this, &MainWindow::ShowAudioWindow);
   connect(m_menu_bar, &MenuBar::ConfigureControllers, this, &MainWindow::ShowControllersWindow);
+  connect(m_menu_bar, &MenuBar::ConfigureNetPlay, this, &MainWindow::ShowNetPlaySettingsWindow);
   connect(m_menu_bar, &MenuBar::ConfigureHotkeys, this, &MainWindow::ShowHotkeyDialog);
   connect(m_menu_bar, &MenuBar::ConfigureFreelook, this, &MainWindow::ShowFreeLookWindow);
 
@@ -688,6 +701,7 @@ void MainWindow::ConnectToolBar()
 
   connect(m_tool_bar, &ToolBar::OpenPressed, this, &MainWindow::Open);
   connect(m_tool_bar, &ToolBar::RefreshPressed, this, &MainWindow::RefreshGameList);
+  connect(m_tool_bar, &ToolBar::NetPlayPressed, this, &MainWindow::ShowNetPlaySetupDialog);
 
   connect(m_tool_bar, &ToolBar::PlayPressed, this, [this] { Play(); });
   connect(m_tool_bar, &ToolBar::PausePressed, this, &MainWindow::Pause);
@@ -1301,7 +1315,7 @@ void MainWindow::HideRenderWidget(bool reinit, bool is_exit)
     m_rendering_to_main = false;
     m_stack->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
     disconnect(Host::GetInstance(), &Host::RequestTitle, this, &MainWindow::setWindowTitle);
-    setWindowTitle(QString::fromStdString(Common::GetScmRevStr()));
+    setWindowTitle(QString::fromStdString(Common::GetScmDescStr()));
   }
 
   // The following code works around a driver bug that would lead to Dolphin crashing when changing
@@ -1337,6 +1351,12 @@ void MainWindow::ShowControllersWindow()
 {
   ShowSettingsWindow();
   m_settings_window->SelectPane(SettingsWindowPaneIndex::Controllers);
+}
+
+void MainWindow::ShowNetPlaySettingsWindow()
+{
+  ShowSettingsWindow();
+  m_settings_window->SelectPane(SettingsWindowPaneIndex::NetPlay);
 }
 
 void MainWindow::ShowTriforceWindow()
@@ -1827,6 +1847,9 @@ void MainWindow::dropEvent(QDropEvent* event)
     (file_info.isFile() ? files : folders).append(path);
   }
 
+  if (files.size() == 1 && folders.isEmpty() && MoveIntoGamesFolder(files.front()))
+    return;
+
   if (!files.isEmpty())
   {
     StartGame(StringListToStdVector(files));
@@ -1849,6 +1872,95 @@ void MainWindow::dropEvent(QDropEvent* event)
       settings.AddPath(folder);
     }
   }
+}
+
+bool MainWindow::MoveIntoGamesFolder(const QString& path)
+{
+  static const QStringList disc_extensions{
+      QStringLiteral("iso"),  QStringLiteral("gcm"), QStringLiteral("ciso"),
+      QStringLiteral("gcz"),  QStringLiteral("wbfs"), QStringLiteral("wia"),
+      QStringLiteral("rvz"),  QStringLiteral("tgc"), QStringLiteral("nfs")};
+  const QFileInfo source(path);
+  if (!disc_extensions.contains(source.suffix().toLower()))
+    return false;
+  const QString games =
+      QDir::fromNativeSeparators(QString::fromStdString(File::GetExeDirectory())) +
+      QStringLiteral("/Games");
+  if (!QDir(games).exists())
+    return false;
+  if (QDir(source.absolutePath()) == QDir(games))
+    return true;
+
+  const QString target = games + QLatin1Char('/') + source.fileName();
+  if (QFileInfo::exists(target))
+  {
+    ModalMessageBox::information(
+        this, tr("Games Folder"),
+        tr("\"%1\" is already in the Games folder.").arg(source.fileName()));
+    return true;
+  }
+
+  std::error_code error;
+  std::filesystem::rename(std::filesystem::path(path.toStdWString()),
+                          std::filesystem::path(target.toStdWString()), error);
+  if (error)
+  {
+    if (!CopyIntoGamesFolder(path, target))
+    {
+      QFile::remove(target);
+      ModalMessageBox::critical(
+          this, tr("Error"),
+          tr("Failed to move \"%1\" to the Games folder.").arg(source.fileName()));
+      return true;
+    }
+    if (!QFile::remove(path))
+    {
+      ModalMessageBox::warning(this, tr("Warning"),
+                               tr("\"%1\" was copied to the Games folder, but the original "
+                                  "could not be removed.")
+                                   .arg(source.fileName()));
+    }
+  }
+  Settings::Instance().RefreshGameList();
+  return true;
+}
+
+bool MainWindow::CopyIntoGamesFolder(const QString& from, const QString& to)
+{
+  ParallelProgressDialog progress(tr("Moving to the Games folder..."), tr("Cancel"), 0, 100,
+                                  this);
+  progress.GetRaw()->setWindowModality(Qt::WindowModal);
+  progress.GetRaw()->setWindowTitle(tr("Progress"));
+  auto copied = std::async(std::launch::async, [&] {
+    bool good = false;
+    {
+      QFile in(from);
+      QFile out(to);
+      if (in.open(QIODevice::ReadOnly) && out.open(QIODevice::WriteOnly))
+      {
+        const qint64 total = std::max<qint64>(in.size(), 1);
+        qint64 done = 0;
+        good = true;
+        while (good && !in.atEnd())
+        {
+          if (progress.WasCanceled())
+          {
+            good = false;
+            break;
+          }
+          const QByteArray chunk = in.read(qint64{4} << 20);
+          good = !chunk.isEmpty() && out.write(chunk) == chunk.size();
+          done += chunk.size();
+          progress.SetValue(static_cast<int>(done * 100 / total));
+        }
+        good = good && out.flush();
+      }
+    }
+    progress.Reset();
+    return good;
+  });
+  progress.GetRaw()->exec();
+  return copied.get();
 }
 
 QSize MainWindow::sizeHint() const

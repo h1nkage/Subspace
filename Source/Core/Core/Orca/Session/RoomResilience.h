@@ -12,7 +12,6 @@
 namespace Orca::Net
 {
 using RoomClock = std::chrono::steady_clock;
-// Transport policy only: neither timer participates in the simulated game.
 inline constexpr auto ROOM_HOLD = std::chrono::seconds(90);
 inline constexpr auto ROOM_VERDICT_GRACE = std::chrono::seconds(10);
 inline constexpr auto PEER_SILENCE_LIMIT = std::chrono::seconds(10);
@@ -30,8 +29,6 @@ enum class RoomLoss
   HoldExpired,
 };
 
-// A held room seat is still the same player. Once its session is suspended, the next attach
-// needs a fresh hello/keyframe, but its hold deadline remains available to the waiting joiner.
 struct PeerRoomPresence
 {
   std::optional<RoomClock::time_point> away_since;
@@ -55,13 +52,10 @@ struct PeerRoomPresence
       return RoomLoss::None;
     if (now >= *Deadline())
       return RoomLoss::HoldExpired;
-    // Input silence freezes the existing session until the room hold expires.
-    // It is not a room verdict; the server may not have detected the dead socket yet.
     (void)last_direct_input;
     return RoomLoss::None;
   }
 
-  // Also handles a same-id join when the server missed the old socket's close.
   bool Back(RoomClock::time_point now, bool direct_live)
   {
     const bool keep = !suspended && (away_since ? now < *Deadline() : direct_live);
@@ -89,7 +83,6 @@ inline const char* FinalRoomClose(unsigned code)
   }
 }
 
-// Lifetime budget: welcome clears an outage, never this rolling history.
 struct RoomReconnectBudget
 {
   std::deque<RoomClock::time_point> connections;
@@ -108,8 +101,6 @@ struct RoomReconnectBudget
   }
 };
 
-// Only a recovered socket that dies before a minute counts. A healthy rejoin leaves the
-// rolling history intact; initial connections and failed upgrades never enter it.
 struct RoomRejoinFlaps
 {
   static constexpr auto SHORT_LIFE = std::chrono::seconds(60);
@@ -145,7 +136,6 @@ struct RoomReconnect
   unsigned attempts = 0;
   std::chrono::milliseconds backoff{500};
 
-  // Transport-only jitter, supplied by the room's per-process seed. Tests use the midpoint.
   static std::chrono::milliseconds Jitter(std::chrono::milliseconds delay, unsigned sample)
   {
     return delay * (70 + sample % 61) / 100;
@@ -203,8 +193,6 @@ struct RoomReconnect
   }
 };
 
-// After the host's session goes away, the joiner stays in the room while its seat is held. Back
-// starts the ordinary drop-in path; a real leave or an expired hold abandons the wait.
 struct HostRoomWait
 {
   std::optional<RoomClock::time_point> until;
@@ -220,4 +208,4 @@ struct HostRoomWait
   bool Expired(RoomClock::time_point now) const { return until && now >= *until; }
   void Back() { until.reset(); }
 };
-}  // namespace Orca::Net
+}

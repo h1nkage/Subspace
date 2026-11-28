@@ -18,7 +18,6 @@ static constexpr auto SD_UNPACK_TEXT = _trans("Unpack SD Card Now");
 bool SyncSDFolderToSDImage(const std::function<bool()>& cancelled, bool deterministic);
 bool SyncSDImageToSDFolder(const std::function<bool()>& cancelled);
 
-// Orca mods (Core/Orca/Mod.h): an SD image built from exactly these files, never a directory scan.
 struct SDImageFile
 {
   std::string image_path;   // in the image, '/'-separated, no leading '/'

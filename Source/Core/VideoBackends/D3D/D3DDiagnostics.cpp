@@ -61,7 +61,7 @@ void Budget()
                         query(DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL));
   Diag::Log(text);
 }
-}  // namespace
+}
 
 void Initialize(IDXGIAdapter* adapter)
 {
@@ -73,7 +73,6 @@ void Initialize(IDXGIAdapter* adapter)
   s_render.backend = "D3D11";
   s_render.mode = Mode(g_ActiveConfig.iShaderCompilationMode);
   s_render.feature_level = static_cast<u32>(D3D::feature_level);
-  // The actual scale is refreshed once the framebuffer manager exists.
   s_render.scale = static_cast<u32>(g_ActiveConfig.iEFBScale);
   if (!adapter)
   {
@@ -148,5 +147,5 @@ void Lost(u32 removed_reason)
   render.removed_reason = removed_reason;
   Diag::LogRender(render);
 }
-}  // namespace DX11::Diagnostics
+}
 #endif

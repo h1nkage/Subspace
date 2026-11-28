@@ -24,9 +24,8 @@ constexpr std::array<std::string_view, 24> KEYWORDS{
     "maxItems",     "minimum",       "maximum",         "minLength",      "maxLength",
     "pattern",      "enum",          "x-orca-charset",  "x-orca-indexOf",
 };
-// x-orca-charset "id", as a pattern for other JSON Schema tools.
 constexpr std::string_view ID_PATTERN = "^[a-z0-9][a-z0-9-]*$";
-constexpr double MAX_SAFE_INTEGER = 9007199254740991.0;  // 2^53 - 1, as JavaScript's
+constexpr double MAX_SAFE_INTEGER = 9007199254740991.0;
 constexpr double MAX_LENGTH = 65536;
 constexpr std::string_view DEFS_PREFIX = "#/$defs/";
 
@@ -35,7 +34,6 @@ std::string Where(const std::string& path)
   return path.empty() ? std::string("(root)") : path;
 }
 
-// A JSON integer a JavaScript number holds exactly.
 bool Integer(const picojson::value& v, double* out)
 {
   if (!v.is<double>())
@@ -53,7 +51,6 @@ const picojson::value* Member(const Object& o, std::string_view key)
   return it == o.end() ? nullptr : &it->second;
 }
 
-// Code points of well-formed UTF-8, or false.
 template <typename F>
 bool EachCodePoint(std::string_view s, F&& f)
 {
@@ -121,7 +118,6 @@ bool TextCharset(std::string_view s)
   return EachCodePoint(s, [](u32 cp) { return cp >= 0x20 && cp != 0x7F && !(cp >= 0x80 && cp <= 0x9F); });
 }
 
-// "/a/b": segments of [A-Za-z0-9_], at least one.
 bool SimplePointer(std::string_view p)
 {
   if (p.size() < 2 || p[0] != '/')
@@ -161,8 +157,6 @@ const picojson::value* Resolve(const picojson::value& root, std::string_view poi
   }
   return at;
 }
-
-// ---- The schema itself ----
 
 class Lint
 {
@@ -331,8 +325,6 @@ private:
   const Object* m_defs;
 };
 
-// ---- A document ----
-
 class Check
 {
 public:
@@ -432,7 +424,6 @@ public:
     }
     if (t == "boolean")
       return v.is<bool>() ? std::nullopt : std::optional(Where(path) + ": must be true or false");
-    // string
     if (!v.is<std::string>())
       return Where(path) + ": must be a string";
     const std::string& s = v.get<std::string>();
@@ -455,7 +446,7 @@ private:
   const Object* m_defs;
   const picojson::value& m_document;
 };
-}  // namespace
+}
 
 std::span<const std::string_view> SchemaKeywords()
 {
@@ -532,4 +523,4 @@ std::optional<std::string> SchemaMismatch(const picojson::value& schema,
   const Check check(defs ? &defs->get<Object>() : nullptr, document);
   return check.Node(schema, document, "");
 }
-}  // namespace Orca::Engine
+}

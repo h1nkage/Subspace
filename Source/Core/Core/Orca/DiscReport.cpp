@@ -87,7 +87,7 @@ bool CollectFiles(const DiscIO::FileInfo& directory, const std::string& parent,
   }
   return true;
 }
-}  // namespace
+}
 
 std::optional<std::string> Detail::HashRange(const DiscIO::Volume& volume,
                                           const DiscIO::Partition& partition, std::string_view path,
@@ -105,7 +105,6 @@ std::optional<std::string> Detail::HashRange(const DiscIO::Volume& volume,
     const size_t length = static_cast<size_t>(std::min<u64>(buffer.size(), size - position));
     if (!volume.Read(offset + position, length, buffer.data(), partition))
       return std::nullopt;
-    // Disc tools can rename a title without changing the game. Mask only that field.
     if (path == "sys/boot.bin" && position == 0)
       std::fill(buffer.begin() + std::min<size_t>(0x20, length),
                 buffer.begin() + std::min<size_t>(0x60, length), 0);
@@ -120,7 +119,6 @@ namespace
 std::optional<u64> DolSize(const DiscIO::Volume& volume, const DiscIO::Partition& partition,
                            u64 offset)
 {
-  // Include the header, and add section sizes as u64 to avoid wrapping malformed DOLs.
   u64 end = 0x100;
   for (u64 i = 0; i < 18; ++i)
   {
@@ -161,7 +159,7 @@ std::string LowerSha1(std::string sha1)
   }
   return sha1;
 }
-}  // namespace
+}
 
 std::optional<Report> Generate(const std::string& image, std::string* error)
 {
@@ -250,7 +248,6 @@ std::optional<Report> Generate(const DiscIO::Volume& source, std::string* error,
     if (!paths.insert(file.path).second)
       return fail("duplicate file path: " + file.path);
   }
-  // Physical order keeps the full-disc read sequential even when FST order is different.
   std::sort(files.begin(), files.end(),
             [](const FileRange& a, const FileRange& b) { return a.offset < b.offset; });
   for (const auto& file : files)
@@ -404,4 +401,4 @@ int Run(const std::string& image, const std::optional<std::string>& reference_pa
   fmt::print(out, "{}\n", VerdictLine(*reference, differences));
   return differences.empty() ? 0 : 2;
 }
-}  // namespace Orca::DiscReport
+}

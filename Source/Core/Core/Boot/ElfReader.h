@@ -73,17 +73,12 @@ public:
 
   bool DidRelocate() const { return bRelocate; }
 
-  // Orca, tests: sees the file's bytes (GetBytes()) and the copy this reader parses as the copy is
-  // made, before Initialize() byte-swaps it. Unset in a boot.
   using CopyObserver = std::function<void(std::span<const u8> file, std::span<const u8> copy)>;
   static void SetCopyObserverForTests(CopyObserver observer);
 
 private:
   bool Initialize();
 
-  // Orca: what this reader parses, a copy of the file's bytes made before Initialize() runs.
-  // Initialize() byte-swaps its header, segment and section tables in place, so m_bytes stays the
-  // file as read (a flat bundle's signature is checked on it, Core/Orca/Bundle.h).
   std::vector<u8> m_image;
 
   char* base = nullptr;

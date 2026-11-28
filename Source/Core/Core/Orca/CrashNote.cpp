@@ -27,7 +27,6 @@ bool WriteLine(std::FILE* out, std::string_view text) noexcept
 {
   if (!out)
     return false;
-  // One call (one lock), so another thread's line can't land between the text and its newline.
   const bool wrote =
       std::fprintf(out, "%.*s\n", static_cast<int>(text.size()), text.data()) >= 0;
   return std::fflush(out) == 0 && wrote;
@@ -75,7 +74,6 @@ FixedLine& FixedLine::Dec(u64 value)
 
 const char* FaultName(u32 code)
 {
-  // winnt.h's STATUS_* for the exceptions that end a process nobody catches them in.
   switch (code)
   {
   case 0xC0000005:
@@ -159,8 +157,6 @@ size_t FormatFaultStack(char* out, size_t size, std::span<const StackFrame> fram
       module.remove_prefix(slash + 1);
     if (module.empty())
       module = "?";
-    // Reserve enough space for the entire token and a possible omission marker. Never leave an
-    // offset cut in half: it would look valid but resolve to the wrong address in the PDB.
     if (module.size() >= MAX_FAULT_STACK_LINE)
       break;
     char token[MAX_FAULT_STACK_LINE];
@@ -188,7 +184,6 @@ size_t FormatFaultStack(char* out, size_t size, std::span<const StackFrame> fram
 std::string TypeName(std::string_view decorated)
 {
   std::string_view s = decorated;
-  // Class (V) or struct (U), then "name@scope@...@@"; anything else is left as it is.
   if (!s.starts_with(".?AV") && !s.starts_with(".?AU"))
     return std::string(decorated);
   s.remove_prefix(4);
@@ -212,11 +207,6 @@ std::string TypeName(std::string_view decorated)
 
 namespace
 {
-// MSVC's throw info, x64 and ARM64 (ehdata.h): every pointer is an offset from the image base.
-//   _ThrowInfo         { u32 attributes; s32 unwind, forward_compat, catchable_type_array; }
-//   _CatchableTypeArray { s32 count; s32 types[count]; }
-//   _CatchableType     { u32 properties; s32 type; s32 mdisp, pdisp, vdisp; s32 size; s32 copy; }
-//   TypeDescriptor     { void* vftable; void* spare; char name[]; }
 constexpr size_t THROW_INFO_TYPES = 12;
 constexpr size_t CATCHABLE_TYPE_TYPE = 4;
 constexpr size_t CATCHABLE_TYPE_MDISP = 8;
@@ -231,7 +221,7 @@ s32 ReadS32(const u8* at)
   std::memcpy(&value, at, sizeof(value));
   return value;
 }
-}  // namespace
+}
 
 ThrownTypes ReadThrowInfo(const u8* image_base, const u8* throw_info)
 {
@@ -255,7 +245,6 @@ ThrownTypes ReadThrowInfo(const u8* image_base, const u8* throw_info)
     const char* name =
         reinterpret_cast<const char*>(image_base + descriptor_offset + TYPE_DESCRIPTOR_NAME);
     std::string decorated(name, strnlen(name, MAX_NAME));
-    // A non-virtual base (pdisp -1) sits at mdisp; std::exception is never a virtual base.
     if (decorated == ".?AVexception@std@@" && ReadS32(catchable + CATCHABLE_TYPE_PDISP) == -1)
       out.std_exception_offset = ReadS32(catchable + CATCHABLE_TYPE_MDISP);
     out.decorated.push_back(std::move(decorated));
@@ -267,7 +256,6 @@ ThrownTypes ReadThrowInfo(const u8* image_base, const u8* throw_info)
 namespace
 {
 constexpr DWORD MSVC_CXX_EXCEPTION = 0xE06D7363;
-// The record's first parameter for a C++ throw (ehdata.h EH_MAGIC_NUMBER1 and its later forms).
 constexpr ULONG_PTR EH_MAGIC_NUMBERS[] = {0x19930520, 0x19930521, 0x19930522};
 constexpr int MAX_REPORTS = 16;
 constexpr size_t MAX_WHAT = 300;
@@ -278,7 +266,6 @@ std::array<size_t, MAX_REPORTS> s_reported{};
 int s_reports = 0;
 thread_local bool t_reporting = false;
 
-// [base, base + size) of a loaded module, from its PE header; size 0 if it can't be read.
 std::pair<uintptr_t, size_t> ModuleRange(HMODULE module)
 {
   if (!module)
@@ -293,8 +280,6 @@ std::pair<uintptr_t, size_t> ModuleRange(HMODULE module)
   return {base, nt->OptionalHeader.SizeOfImage};
 }
 
-// Orca's own code: Orca.exe, and the C++ library DLL whose helpers throw for it (std::vector::at,
-// std::stoi). Drivers and system DLLs throw and catch their own; those are left out.
 bool OwnThrow(ULONG_PTR image_base)
 {
   if (image_base == reinterpret_cast<ULONG_PTR>(GetModuleHandleW(nullptr)))
@@ -337,8 +322,6 @@ std::string Report(const EXCEPTION_RECORD& record)
       line += ": " + text;
     }
   }
-  // Where it was thrown: Orca.exe's frames on this stack past the exception dispatch (this
-  // handler's own frames come first, then ntdll's and the throw's; JIT frames end the walk).
   void* frames[48];
   const USHORT count = RtlCaptureStackBackTrace(0, 48, frames, nullptr);
   const auto [base, size] = ModuleRange(GetModuleHandleW(nullptr));
@@ -381,7 +364,6 @@ LONG CALLBACK OnException(EXCEPTION_POINTERS* pointers)
     if (s_reports < MAX_REPORTS)
     {
       std::string line = Report(*record);
-      // Once per type, message and place, whichever thread threw it.
       std::string key = line;
       if (const size_t thread = key.find(" on thread "); thread != std::string::npos)
         key.erase(thread, key.find_first_of(":(", thread) - thread);
@@ -391,7 +373,6 @@ LONG CALLBACK OnException(EXCEPTION_POINTERS* pointers)
       {
         s_reported[s_reports++] = hash;
         line += '\n';
-        // Straight to the handle: the C runtime's stderr may be the stream that failed.
         DWORD written;
         WriteFile(GetStdHandle(STD_ERROR_HANDLE), line.data(), static_cast<DWORD>(line.size()),
                   &written, nullptr);
@@ -404,14 +385,13 @@ LONG CALLBACK OnException(EXCEPTION_POINTERS* pointers)
   t_reporting = false;
   return EXCEPTION_CONTINUE_SEARCH;
 }
-}  // namespace
+}
 
 void InstallThrowReporter()
 {
   static std::atomic<bool> s_installed{false};
   if (s_installed.exchange(true))
     return;
-  // Called last, after the fastmem handler (MemTools.cpp), which never takes a C++ exception.
   AddVectoredExceptionHandler(FALSE, OnException);
 }
 
@@ -419,16 +399,12 @@ namespace
 {
 constexpr int MAX_FAULTS = 8;
 
-// The handler's state is static: a fault may come with the stack nearly gone or the heap broken.
-// One fault at a time; another thread's meanwhile goes unrecorded rather than wait in a handler.
 std::atomic_flag s_fault_busy = ATOMIC_FLAG_INIT;
 std::array<u64, MAX_FAULTS> s_faults{};
 int s_fault_count = 0;
 char s_fault_line[768];
 char s_fault_graphics[256];
 char s_fault_module[MAX_PATH];
-// Resolve the native query before installing handlers. Higher-level filename APIs may allocate
-// temporary buffers; MemoryMappedFilenameInformation writes into this caller-owned buffer.
 using QueryVirtualMemory = LONG(NTAPI*)(HANDLE, const void*, int, void*, SIZE_T, SIZE_T*);
 QueryVirtualMemory s_query_virtual_memory = nullptr;
 struct MappedName
@@ -439,8 +415,6 @@ struct MappedName
   wchar_t buffer[MAX_PATH];
 };
 MappedName s_fault_mapping{};
-// Protected by the same non-waiting flag as the fault line. Keep the module-name storage off an
-// already exhausted stack; the capture context, addresses and output line have fixed stack space.
 char s_stack_modules[MAX_FAULT_STACK_FRAMES][MAX_PATH];
 
 u64 FaultImage(const void* address)
@@ -451,14 +425,11 @@ u64 FaultImage(const void* address)
   return reinterpret_cast<u64>(memory.AllocationBase);
 }
 
-// The file name of the module `address` is in (a path would name the player's folders), as ASCII,
-// and its base; empty when it is in none (JIT code).
 std::string_view FaultModule(const void* address, u64* base)
 {
   *base = FaultImage(address);
   if (!*base)
     return {};
-  // Query the mapping, not the loader's module list: no loader lock in the exception path.
   constexpr int MEMORY_MAPPED_FILENAME_INFORMATION = 2;
   if (!s_query_virtual_memory ||
       s_query_virtual_memory(GetCurrentProcess(), address, MEMORY_MAPPED_FILENAME_INFORMATION,
@@ -485,8 +456,6 @@ std::string_view FaultModule(const void* address, u64* base)
   return {s_fault_module, n};
 }
 
-// Only native image unwind tables. Avoid DbgHelp's symbol state/locks and dynamic function-table
-// callbacks (including JIT code). The containing CaptureFaultStack SEH guard bounds bad reads.
 PRUNTIME_FUNCTION FaultFunction(u64 pc, u64 base)
 {
   const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
@@ -502,7 +471,6 @@ PRUNTIME_FUNCTION FaultFunction(u64 pc, u64 base)
     return nullptr;
   auto* table = reinterpret_cast<PRUNTIME_FUNCTION>(base + directory.VirtualAddress);
   const size_t count = directory.Size / sizeof(*table);
-  // PE runtime function entries are sorted by BeginAddress. Find the last start <= pc.
   size_t low = 0;
   size_t high = count;
   const u64 rva = pc - base;
@@ -520,8 +488,6 @@ PRUNTIME_FUNCTION FaultFunction(u64 pc, u64 base)
 #if defined(_M_X64)
   return rva < entry->EndAddress ? entry : nullptr;
 #elif defined(_M_ARM64)
-  // ARM64 packed entries carry FunctionLength (11 bits, in instructions); unpacked .xdata
-  // headers carry FunctionLength in their low 18 bits. Flag 3 is reserved.
   const u32 flag = entry->UnwindData & 3;
   if (flag == 3)
     return nullptr;
@@ -536,8 +502,6 @@ size_t CaptureFaultStack(const CONTEXT* original, u64* addresses) noexcept
   size_t count = 0;
   if (!original)
     return count;
-  // RtlCaptureStackBackTrace would start in this handler. Unwind a COPY of the fault context so
-  // frame zero is the fault, and Windows can still dispatch the untouched original afterwards.
   __try
   {
     CONTEXT context = *original;
@@ -560,7 +524,7 @@ size_t CaptureFaultStack(const CONTEXT* original, u64* addresses) noexcept
         break;
       const u64 base = FaultImage(reinterpret_cast<const void*>(pc));
       if (!base)
-        break;  // JIT/unknown code has no native image table. Do not guess return addresses.
+        break;
       if (PRUNTIME_FUNCTION entry = FaultFunction(pc, base))
       {
         void* handler_data = nullptr;
@@ -570,8 +534,6 @@ size_t CaptureFaultStack(const CONTEXT* original, u64* addresses) noexcept
       }
       else
       {
-        // Native leaf functions have no table entry. Their return address is on the stack (x64)
-        // or in the link register (ARM64).
 #if defined(_M_X64)
         if (stack_high - sp < sizeof(u64))
           break;
@@ -593,7 +555,6 @@ size_t CaptureFaultStack(const CONTEXT* original, u64* addresses) noexcept
   }
   __except (EXCEPTION_EXECUTE_HANDLER)
   {
-    // Damaged stack/unwind data: retain every frame already captured; never fault recursively.
   }
   return count;
 }
@@ -617,9 +578,6 @@ void WriteFaultStack(const CONTEXT* context)
   WriteFile(GetStdHandle(STD_ERROR_HANDLE), line, static_cast<DWORD>(length), &written, nullptr);
 }
 
-// Prints `record`'s line once (at most MAX_FAULTS different ones). A first-chance line and the
-// unhandled filter's line for the same fault are different lines, so a fault the CPU thread's
-// handler saw first and that then ended Orca is said both ways.
 void RecordFault(const EXCEPTION_RECORD& record, const CONTEXT* context, bool first_chance)
 {
   if (s_fault_busy.test_and_set(std::memory_order_acquire))
@@ -651,7 +609,6 @@ void RecordFault(const EXCEPTION_RECORD& record, const CONTEXT* context, bool fi
         s_fault_graphics, GpuLost::DeviceState(s_fault_graphics, sizeof(s_fault_graphics)));
     size_t length = FormatFault(s_fault_line, sizeof(s_fault_line) - 1, fault);
     s_fault_line[length++] = '\n';
-    // Straight to the handle, like the throw reporter: no C runtime lock in a fault.
     DWORD written;
     WriteFile(GetStdHandle(STD_ERROR_HANDLE), s_fault_line, static_cast<DWORD>(length), &written,
               nullptr);
@@ -666,10 +623,6 @@ const EXCEPTION_RECORD* ReportedFault(const EXCEPTION_POINTERS* pointers)
   return record && FaultName(record->ExceptionCode) ? record : nullptr;
 }
 
-// The CPU thread's faults, as they are raised: its JIT frames have no unwind tables, so a fault
-// under them never reaches the unhandled-exception filter (the way a C++ throw from there can't be
-// dispatched). Other threads' faults may still be caught (a driver catches its own), so only the
-// filter says them.
 LONG CALLBACK OnCpuThreadFault(EXCEPTION_POINTERS* pointers)
 {
   if (const EXCEPTION_RECORD* record = ReportedFault(pointers); record && Core::IsCPUThread())
@@ -679,15 +632,13 @@ LONG CALLBACK OnCpuThreadFault(EXCEPTION_POINTERS* pointers)
 
 LPTOP_LEVEL_EXCEPTION_FILTER s_previous_filter = nullptr;
 
-// Nothing caught it: say it, then on to what Windows did before (the C runtime's filter, then
-// Windows Error Reporting, which ends Orca with the exception's code).
 LONG WINAPI OnUnhandledFault(EXCEPTION_POINTERS* pointers)
 {
   if (const EXCEPTION_RECORD* record = ReportedFault(pointers))
     RecordFault(*record, pointers->ContextRecord, false);
   return s_previous_filter ? s_previous_filter(pointers) : EXCEPTION_CONTINUE_SEARCH;
 }
-}  // namespace
+}
 
 void InstallFaultReporter()
 {
@@ -696,8 +647,6 @@ void InstallFaultReporter()
     return;
   s_query_virtual_memory = reinterpret_cast<QueryVirtualMemory>(
       GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "NtQueryVirtualMemory"));
-  // Last, after the fastmem and rollback-snapshot handler (MemTools.cpp, installed first), which
-  // takes the access violations that are Orca's own business and resumes them.
   AddVectoredExceptionHandler(FALSE, OnCpuThreadFault);
   s_previous_filter = SetUnhandledExceptionFilter(OnUnhandledFault);
 }
@@ -710,4 +659,4 @@ void InstallFaultReporter()
 {
 }
 #endif
-}  // namespace Orca::CrashNote
+}

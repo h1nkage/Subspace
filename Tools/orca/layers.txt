@@ -47,7 +47,7 @@
 %orca-root Source/Core/Core/Orca/
 %orca-root Source/Core/Core/Rollback/
 %orca-root Source/UnitTests/Core/Orca/
-%orca-root Data/Sys/Orca/
+%orca-root Data/Sys/Subspace/
 %orca-root Tools/orca/
 %upstream-ref upstream/master
 %upstream-base f84df02055ab9610feec48e65648cac5a3c098fa
@@ -57,18 +57,18 @@
 engine            **
 
 # ---------------------------------------------------------------------------------------------
-# Game data (Data/Sys/Orca: patches, JIT seeds, label textures), by kind: anything else there (a
+# Game data (Data/Sys/Subspace: patches, JIT seeds, label textures), by kind: anything else there (a
 # new kind of file, code) is engine until it is named here.
-engine            Data/Sys/Orca/**
-game-data         Data/Sys/Orca/*.patches                 # game code patches (a validator in S5)
-game-data         Data/Sys/Orca/*.jitwarm                 # JIT warm-up seeds
-game-data         Data/Sys/Orca/Textures/**/*.png         # label textures
-engine            Data/Sys/Orca/Fonts/**                  # The service card font: an engine asset
-engine            Data/Sys/Orca/Input/**                  # default pad mapping: an engine asset
+engine            Data/Sys/Subspace/**
+game-data         Data/Sys/Subspace/*.patches                 # game code patches (a validator in S5)
+game-data         Data/Sys/Subspace/*.jitwarm                 # JIT warm-up seeds
+game-data         Data/Sys/Subspace/Textures/**/*.png         # label textures
+engine            Data/Sys/Subspace/Fonts/**                  # The service card font: an engine asset
+engine            Data/Sys/Subspace/Input/**                  # default pad mapping: an engine asset
 # Profiles: [Forced] can set any Dolphin setting on the session's layer (after the universal list,
 # so it can undo it), and [Profile] holds owner-only fields (FrameHook, KeepGameCode, Launcher,
 # SDImageHash...). Engine-sensitive until S4's mod.json is checked field by field.
-engine-sensitive  Data/Sys/Orca/*.ini
+engine-sensitive  Data/Sys/Subspace/*.ini
 # Dolphin's own game settings for Brawl ([Core], [Video_*]: Dolphin settings), in the key.
 engine-sensitive  Data/Sys/GameSettings/RSB*.ini
 # Branding.

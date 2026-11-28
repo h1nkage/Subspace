@@ -318,8 +318,6 @@ bool VideoBackendBase::InitializeShared(std::unique_ptr<AbstractGfx> gfx,
 
   // do not initialize again for the config window
   m_initialized = true;
-  // Orca: render skipping stays off until rollback asks for it. ORCA_TEST_SKIP_RENDER=1 (tests
-  // only) skips rendering for the whole run.
   VideoCommon_SetSkipRender(Orca::TestSkipRender());
 
   g_gfx = std::move(gfx);
@@ -386,9 +384,6 @@ void VideoBackendBase::ShutdownShared()
 {
   // Wait out host screenshot requests before destroying any renderer components.
   ScreenshotRequests().SetRenderer(nullptr);
-  // Orca: the overlay's own textures go first, while their device is alive. A texture kept past
-  // the backend keeps its device, and the driver's threads, alive after the backend has unloaded
-  // the graphics library they call back into.
   OSD::ReleaseHostOverlay();
 
   auto& system = Core::System::GetInstance();

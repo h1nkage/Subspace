@@ -7,6 +7,8 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
+#include <sstream>
+#include <string>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -38,6 +40,12 @@
 #include "Core/HW/SI/SI_Device.h"
 #include "Core/Orca/Session/Events.h"
 #include "Core/Orca/Session/RelayRoom.h"
+
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 #include "Core/Orca/UX/ControllerSource.h"
 #include "Core/Orca/UX/Probe.h"
 #include "Core/Rollback/ReplayStream.h"
@@ -46,12 +54,8 @@ namespace Orca::Online
 {
 namespace
 {
-// How long Shutdown waits for rooms still being left in the background (goodbye, close handshake
-// and emptying the page's room take about a second).
 constexpr auto TEARDOWN_WAIT = std::chrono::seconds(2);
 std::mutex s_mutex;
-// Shared so a caller still holding the room (WaitForMatch, a status poll) keeps it alive while
-// Shutdown runs on another thread.
 std::shared_ptr<Net::RelayRoom> s_room;
 
 std::string Env(const char* name)
@@ -64,7 +68,7 @@ std::shared_ptr<Net::RelayRoom> Room()
   std::lock_guard lock(s_mutex);
   return s_room;
 }
-}  // namespace
+}
 
 bool LocalRoom()
 {
@@ -77,8 +81,6 @@ bool Enabled()
     return false;
   if (!SessionActive())
     return false;
-  // Replay boots use the same four-port profile and boundary dispatcher as online matches,
-  // while StartLocked refuses to create a room for them.
   if (Rollback::ReplayStream::ProductMode())
     return true;
   return Bridge::Ready() || (!Env("SUBSPACE_BRIDGE").empty() && !Env("SUBSPACE_TOKEN").empty()) ||
@@ -87,15 +89,12 @@ bool Enabled()
 
 namespace
 {
-// The UX version for the running game: the engine's, and the game module's own revision.
 std::string RunningUxKeyPart()
 {
   Engine::Module* module = Engine::ActiveModule();
   return UxKeyPart(Events::UXCompatVersion(), module ? module->Describe().compat : 0);
 }
 
-// The universal forced settings that change what the game computes, the seeded save and whether test
-// overrides are on: the tail of both key versions.
 std::string UniversalKeyParts()
 {
   return fmt::format(
@@ -114,13 +113,6 @@ std::string UniversalKeyParts()
       Config::Get(Config::MAIN_ALLOW_SD_WRITES));
 }
 
-// Mod mode (Core/Orca/Mod.h, service docs/ORCA_MODS.md "The key in mod mode"): the engine's commit
-// and API version, the bundle's tree hash (mod.json, the patches, textures, launcher and SD files:
-// everything but orca/jitwarm and orca/test/), the SD image's hash, the disc, the Sys/GameSettings
-// INIs Dolphin loads for the game (as the legacy key hashes them: an install whose copy was edited
-// meets nobody rather than desyncing), then the forced settings as the legacy key adds them. The
-// player's own User/GameSettings INIs are ignored in a mod session
-// (ConfigLoaders/GameConfigLoader.cpp), so they are not in it.
 std::string ModKeyParts(const Profile& profile)
 {
   const Mod::ModInfo& mod = *profile.mod;
@@ -129,7 +121,6 @@ std::string ModKeyParts(const Profile& profile)
                                   Common::GetScmRevGitStr(), Mod::ENGINE_API, mod.tree.hash,
                                   mod.sd_image_hash.empty() ? "-" : mod.sd_image_hash,
                                   disc.empty() ? "-" : disc);
-  // A launcher profile runs under two game IDs, its loader's and the disc's (as below).
   std::vector<std::pair<std::string, u16>> ini_games{{profile.game_id, profile.revision}};
   if (profile.IsLauncher())
   {
@@ -163,7 +154,7 @@ std::string ModKeyParts(const Profile& profile)
   parts += fmt::format("|hostport={}", HostPort());
   return parts;
 }
-}  // namespace
+}
 
 std::string UxKeyPart(int engine, int game)
 {
@@ -178,18 +169,12 @@ std::string CompatibilityKeyParts()
   if (const Profile* profile = ActiveProfile())
   {
     parts += fmt::format("{}|{}|", profile->game_id, profile->revision);
-    // Data files that affect emulation besides code: the profile and every game settings INI
-    // Dolphin loads for this disc, shipped or the player's own (a local edit changes what the game
-    // runs with).
-    std::vector<std::string> files{File::GetSysDirectory() + "Orca/" + profile->game_id + ".ini",
-                                   // Orca's forced game patches (UX/GamePatches.h)
-                                   File::GetSysDirectory() + "Orca/" + profile->game_id + ".patches"};
-    // A launcher profile runs under two game IDs: its loader's, then the disc's.
+    const std::string sys = File::GetSysDirectory() + "Subspace/";
+    std::vector<std::string> files{sys + profile->game_id + ".ini",
+                                   sys + profile->game_id + ".patches"};
     std::vector<std::pair<std::string, u16>> ini_games{{profile->game_id, profile->revision}};
     if (profile->IsLauncher())
     {
-      // The running metadata comes from the disc's TMD, whose version can differ from the header's
-      // revision: hash the INIs for both.
       const SConfig& running = SConfig::GetInstance();
       ini_games = {{profile->boot_game_id, 0},
                    {profile->disc, profile->revision},
@@ -203,8 +188,6 @@ std::string CompatibilityKeyParts()
         files.push_back(File::GetUserPath(D_GAMESETTINGS_IDX) + name);
       }
     }
-    // The loader and SD card the boot verified. Their hashes are in the profile too, but stating
-    // them here keeps the key independent of the profile file.
     if (profile->IsLauncher())
     {
       parts += fmt::format("launcher={}|disc={}|sd={}|", profile->launcher_hash, profile->disc,
@@ -222,24 +205,9 @@ std::string CompatibilityKeyParts()
       parts += fmt::format("{}.{}.{}={}|", static_cast<int>(location.system), location.section,
                            location.key, value);
   }
-  // The host CPU is not in the key: JitArm64 and Jit64 produce identical results, so Mac and PC
-  // players meet. FMA is in the key (below).
-  //
-  // Nor is whether an ARM CPU has FEAT_AFP: sessions force accurate NaNs and keep denormal single
-  // inputs exact on CPUs that flush them (Profile.cpp MAIN_ACCURATE_NANS,
-  // JitArm64::DenormalInputsFlushed), so every Mac and PC computes the same. ORCA_TEST_NO_AFP
-  // simulates an M1 to M3 on a newer Mac.
-  //
-  // The universal forced settings that change what the game computes.
   parts += UniversalKeyParts();
-  // The disc image's hash, when the app computed it: a modified disc with the right ID and revision
-  // would otherwise desync instead of being refused. For a dump AliasRevision plays as another
-  // (Brawl Rev 1), the app passes the hash of the dump it plays as, or its players meet no one.
   parts += "|disc=" + Env("ORCA_DISC_SHA1");
-  // Version of what the in-game UX writes to emulated memory (name tags, mode locks).
   parts += RunningUxKeyPart();
-  // Subspace: the seat-to-port table (HostPort). Games that put seats on different ports would run
-  // different games, so they never meet.
   parts += fmt::format("|hostport={}", HostPort());
   return parts;
 }
@@ -247,11 +215,7 @@ std::string CompatibilityKeyParts()
 std::string CompatibilityKey()
 {
   const std::string parts = CompatibilityKeyParts();
-  // "orca2:" is the room protocol's prefix, in legacy and mod mode alike; the two modes never share
-  // a hash: legacy parts start "orca|", mod parts "orca2|" (ModKeyParts). The room allows 1-64
-  // characters of [a-zA-Z0-9._:-].
   const std::string key = fmt::format("orca2:{:016x}", XXH3_64bits(parts.data(), parts.size()));
-  // What went into it, when that changes: a player alone in a queue shows which input split them.
   {
     static std::mutex logged_mutex;
     static std::string logged;
@@ -286,8 +250,6 @@ void StartLocked(Net::RoomOptions options)
   }
   if (!Env("ORCA_NAME").empty())
     options.player_name = Env("ORCA_NAME").substr(0, 32);
-  // A joiner's own controls, for its port in the host's game (none for a launch join, whose game
-  // hasn't run yet).
   if (options.joining || options.join_if_taken)
   {
     options.controls = Events::OwnControls();
@@ -298,11 +260,10 @@ void StartLocked(Net::RoomOptions options)
                  options.compatibility);
   s_room = std::make_shared<Net::RelayRoom>(std::move(options));
 }
-}  // namespace
+}
 
 void Start()
 {
-  // Accessors keep running while the audit hashes. No room constructor until it passes.
   if (!BootAudit::WaitForOnline(BootAudit::SessionAudit()))
     return;
   std::lock_guard lock(s_mutex);
@@ -363,7 +324,7 @@ bool s_leave_request = false;
 std::optional<int> s_chosen_delay;
 std::atomic<bool> s_direct_wanted{true};
 std::atomic<RecordChoice> s_record_choice{RecordChoice::Auto};
-}  // namespace
+}
 
 void RequestJoin(const std::string& code)
 {
@@ -535,6 +496,162 @@ std::optional<int> ChosenDelay()
   return s_chosen_delay;
 }
 
+namespace
+{
+std::mutex s_delay_request_mutex;
+std::optional<DelayRequest> s_delay_request;
+std::optional<int> s_volume_request;
+std::atomic<bool> s_show_ping{false};
+std::atomic<int> s_hud_names{-1};
+std::atomic<bool> s_corner_sprite{true};
+std::atomic<bool> s_corner_fps{true};
+std::atomic<bool> s_corner_ping{true};
+std::atomic<bool> s_frame_ms{false};
+
+void TakeLobbyLine(const std::string& line)
+{
+  std::istringstream in(line);
+  std::string cmd;
+  if (in >> cmd && cmd == "ping")
+  {
+    int on = -1;
+    if (in >> on && (on == 0 || on == 1))
+      s_show_ping.store(on == 1, std::memory_order_relaxed);
+    return;
+  }
+  if (cmd == "cornersprite" || cmd == "cornerfps" || cmd == "framems" || cmd == "cornerping")
+  {
+    std::atomic<bool>& flag = cmd == "cornersprite" ? s_corner_sprite :
+                              cmd == "cornerfps"    ? s_corner_fps :
+                              cmd == "framems"      ? s_frame_ms :
+                                                      s_corner_ping;
+    int on = -1;
+    if (in >> on && (on == 0 || on == 1))
+      flag.store(on == 1, std::memory_order_relaxed);
+    return;
+  }
+  if (cmd == "names")
+  {
+    int mode = -1;
+    if (in >> mode && mode >= 0 && mode <= 4)
+      s_hud_names.store(mode, std::memory_order_relaxed);
+    return;
+  }
+  if (cmd == "volume")
+  {
+    int volume = -1;
+    if (in >> volume && volume >= 0 && volume <= 100)
+    {
+      std::lock_guard lock(s_delay_request_mutex);
+      s_volume_request = volume;
+    }
+    return;
+  }
+  DelayRequest request;
+  if (cmd != "delay" || !(in >> request.frames) || request.frames < 1 ||
+      request.frames > Net::Config{}.max_delay)
+  {
+    return;
+  }
+  int at = -1;
+  if (in >> at && at >= 0)
+    request.at = at;
+  std::lock_guard lock(s_delay_request_mutex);
+  s_delay_request = request;
+}
+
+void StartLobbyReader()
+{
+  if (Orca::GetEnv("ORCA_SUBSPACE_COMMANDS") != "1")
+    return;
+  std::thread([] {
+    std::string pending;
+    char buffer[4096];
+    while (true)
+    {
+#ifdef _WIN32
+      const int got = _read(0, buffer, sizeof(buffer));
+#else
+      const ssize_t got = read(STDIN_FILENO, buffer, sizeof(buffer));
+#endif
+      if (got <= 0)
+        return;
+      pending.append(buffer, static_cast<size_t>(got));
+      size_t end;
+      while ((end = pending.find('\n')) != std::string::npos)
+      {
+        std::string line = pending.substr(0, end);
+        pending.erase(0, end + 1);
+        if (!line.empty() && line.back() == '\r')
+          line.pop_back();
+        TakeLobbyLine(line);
+      }
+      if (pending.size() > 4096)
+        pending.clear();
+    }
+  }).detach();
+}
+
+void EnsureLobbyReader()
+{
+  static std::once_flag started;
+  std::call_once(started, StartLobbyReader);
+}
+}
+
+std::optional<DelayRequest> TakeDelayRequest()
+{
+  EnsureLobbyReader();
+  std::lock_guard lock(s_delay_request_mutex);
+  return std::exchange(s_delay_request, std::nullopt);
+}
+
+std::optional<int> TakeVolumeRequest()
+{
+  EnsureLobbyReader();
+  std::lock_guard lock(s_delay_request_mutex);
+  return std::exchange(s_volume_request, std::nullopt);
+}
+
+bool ShowPing()
+{
+  EnsureLobbyReader();
+  return s_show_ping.load(std::memory_order_relaxed);
+}
+
+bool ShowCornerSprite()
+{
+  EnsureLobbyReader();
+  return s_corner_sprite.load(std::memory_order_relaxed);
+}
+
+bool ShowCornerFps()
+{
+  EnsureLobbyReader();
+  return s_corner_fps.load(std::memory_order_relaxed);
+}
+
+bool ShowCornerPing()
+{
+  EnsureLobbyReader();
+  return s_corner_ping.load(std::memory_order_relaxed);
+}
+
+bool ShowFrameMs()
+{
+  EnsureLobbyReader();
+  return s_frame_ms.load(std::memory_order_relaxed);
+}
+
+int HudNames()
+{
+  EnsureLobbyReader();
+  if (const int mode = s_hud_names.load(std::memory_order_relaxed); mode >= 0)
+    return mode;
+  const std::string launch = Orca::GetEnv("ORCA_SUBSPACE_HUD_NAMES");
+  return launch == "0" ? 0 : launch == "1" ? 1 : launch == "2" ? 2 : launch == "4" ? 4 : 3;
+}
+
 std::optional<bool> Joining()
 {
   const auto room = Room();
@@ -574,7 +691,6 @@ int SeatPort(int seat)
 
 int PortSeat(int port)
 {
-  // A swap is its own inverse.
   return SeatPort(port);
 }
 
@@ -728,8 +844,6 @@ void BroadcastNames(const std::vector<Net::KeyframeInfo::Name>& names, int versi
 
 namespace
 {
-// Rooms being left in the background, until their goodbyes are sent. Never destroyed, so a teardown
-// still running at process exit can't find them gone.
 struct Teardowns
 {
   std::mutex mutex;
@@ -741,7 +855,7 @@ Teardowns& TheTeardowns()
   static Teardowns* const teardowns = new Teardowns;
   return *teardowns;
 }
-}  // namespace
+}
 
 bool RoomsLeaving()
 {
@@ -807,8 +921,6 @@ bool TakeLetIn()
 
 bool DropInPending()
 {
-  // Mirrors what the boundary will take: join or leave once the app's caps allow them (OnlineMatch
-  // TakeCommands), an invite or arrival only while the room is up (HostEvents).
   {
     std::lock_guard lock(s_request_mutex);
     if ((s_join_request && Status::Cap("join")) || (s_leave_request && Status::Cap("leave")) ||
@@ -850,12 +962,11 @@ std::vector<int> RecentRoundTrips(u32* sequence)
 
 namespace
 {
-// The room's code as the app knows it: "taken" is the game's (it opens another room).
 std::string AppCode(std::string code)
 {
   return code == "taken" ? "network" : code;
 }
-}  // namespace
+}
 
 std::string RoomErrorCode()
 {
@@ -878,8 +989,6 @@ std::string StatusLine()
 bool ReportSessionEnd(const std::string& session_error, bool from_peer)
 {
   const auto room = Room();
-  // Disagreeing inputs or checksums: the games desynced. Tell the friend before leaving, so both
-  // report the same thing.
   if (IsDesync(session_error))
   {
     if (room)
@@ -890,8 +999,6 @@ bool ReportSessionEnd(const std::string& session_error, bool from_peer)
     Status::Report("desync", "Your games went out of sync, so the match ended");
     return true;
   }
-  // A rollback this machine couldn't make (an engine fault, not a desync): leave the match and play
-  // on from here. Worded distinctly so logs tell it from a desync.
   if (IsRollbackFailure(session_error))
   {
     Status::Report(
@@ -899,31 +1006,22 @@ bool ReportSessionEnd(const std::string& session_error, bool from_peer)
         fmt::format("Your game couldn't roll back ({}), so you left the match", session_error));
     return true;
   }
-  // The session ends when the room does, and the room says why unless this player left. Check state
-  // first: once Ended, the code is final.
   if (room && room->GetState() == Net::RoomState::Ended)
   {
-    // KeepRoomOpen reports the host's replacement once. A joiner uses the app's existing
-    // network sentence; the internal end reason is only for the engine's reopen policy.
     if (room->ErrorCode() == "room-unstable")
     {
       if (room->Joining().value_or(false))
         Status::Report("network", room->Status());
       return true;
     }
-    // A matchmade room closed after its result: a clean end, reported by the caller.
     if (const std::string code = AppCode(room->ErrorCode()); !code.empty() && code != "match-over")
       Status::Report(code, room->Status());
     return true;
   }
   if (session_error.empty())
     return true;
-  // The emulator side failed (a snapshot that wouldn't save or load, lost frame alignment), or the
-  // friend sent something an honest Orca never sends (a bad packet, or a host's roster or history
-  // that takes back this player's seat): that one is the friend's doing, and this game goes on.
   if (from_peer || session_error.find("sent an invalid packet") != std::string::npos)
   {
-    // The room's match hears it void first, so this player's going can't hand it to the friend.
     if (room)
       room->ReportFault();
     Status::Report("network", session_error);
@@ -950,7 +1048,6 @@ void TestDropRoom()
 {
   if (const auto room = Room())
   {
-    // All recovery rooms retain the same room object; legacy silent drops keep the socket.
     if (!room->RoomRecovery() && Env("ORCA_TEST_DROP_SILENT") == "1")
     {
       static std::vector<std::shared_ptr<Net::RelayRoom>> s_kept;
@@ -975,12 +1072,9 @@ void Shutdown()
   }
   if (room)
     room->Leave();
-  // Rooms just left in the background (a leave, then an immediate quit) still send their goodbyes,
-  // so friends learn right away rather than after a timeout. Bounded, so a hung teardown can't hold
-  // the exit.
   Teardowns& teardowns = TheTeardowns();
   std::unique_lock lock(teardowns.mutex);
   if (!teardowns.done.wait_for(lock, TEARDOWN_WAIT, [&] { return teardowns.running == 0; }))
     WARN_LOG_FMT(NETPLAY, "Orca: {} room(s) still leaving at shutdown", teardowns.running);
 }
-}  // namespace Orca::Online
+}

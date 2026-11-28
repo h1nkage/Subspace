@@ -29,15 +29,9 @@ pD3DCompile d3d_compile;
 
 static Common::DynamicLibrary s_dxgi_library;
 static Common::DynamicLibrary s_d3dcompiler_library;
-// Orca: the compiler beside the exe, loaded by its full path (LoadCompilerBesideExe).
 static HMODULE s_d3dcompiler_beside = nullptr;
 static bool s_libraries_loaded = false;
 
-// Orca: the d3dcompiler_47.dll that ships beside Orca.exe, by its full path. Loaded by name, the
-// sandbox's prefer-System32 rule (or a DLL planted elsewhere on the search path) would swap in
-// another build of the compiler, and every shader in the cache keyed to the shipped one would be
-// compiled again (FxcCache.cpp). Null when there is none there (a dev build): the name is the
-// fallback.
 static HMODULE LoadCompilerBesideExe()
 {
   const std::string path = File::GetExeDirectory() + "/" + D3DCOMPILER_DLL_A;
@@ -101,7 +95,6 @@ bool LoadLibraries()
 
 void UnloadLibraries()
 {
-  // Orca: close the FXC cache along with the compiler it caches.
   FxcCache::Close();
   create_dxgi_factory = nullptr;
   create_dxgi_factory2 = nullptr;
@@ -144,9 +137,6 @@ std::vector<std::string> GetAdapterNames()
     return {};
 
   std::vector<std::string> adapters;
-  // Orca: which ones are software renderers (Windows 8+ lists the Microsoft Basic Render Driver,
-  // WARP, after the real cards). Trailing ones are left off the list, so a machine with one card
-  // shows one, and every index left still picks the adapter EnumAdapters gives it.
   std::vector<bool> software;
   Microsoft::WRL::ComPtr<IDXGIAdapter> adapter;
   while (factory->EnumAdapters(static_cast<UINT>(adapters.size()), &adapter) !=

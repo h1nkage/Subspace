@@ -17,7 +17,6 @@ std::string EndAtFirstFrame()
   std::string ended;
   for (const auto type : TYPES)
   {
-    // Logger.ini keys are the categories' short names (MEMMAP is "MI").
     const char* const name = logs->GetShortName(type);
     const Config::Info<bool> info{{Config::System::Logger, "Logs", name}, false};
     if (!logs->IsEnabled(type) || (base && base->Get(info)))
@@ -29,4 +28,4 @@ std::string EndAtFirstFrame()
   }
   return ended;
 }
-}  // namespace Orca::BootLogs
+}

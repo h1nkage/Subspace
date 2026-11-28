@@ -15,7 +15,6 @@
 #include <CommonCrypto/CommonDigest.h>
 #elif defined(_WIN32)
 #include <windows.h>
-// (after windows.h)
 #include <bcrypt.h>
 #else
 #include <mbedtls/sha256.h>
@@ -40,9 +39,6 @@ namespace Orca::Mod
 namespace
 {
 #ifdef ORCA_BUNDLE_TRUST_TEST_KEY
-// TEST KEY (bundle-flat branch): compiled in only with CMake -DORCA_BUNDLE_TRUST_TEST_KEY=ON, for
-// tests and gates. Its private half was made for them and never committed; release scripts refuse a
-// build that has it.
 constexpr std::string_view TEST_PUBLIC_KEY =
     "afb9463d5c16f0f617432d76f75f37a8c649e36d7c626088ba00b19dea115a43";
 #endif
@@ -56,7 +52,6 @@ std::optional<u8> Nibble(char c)
   return std::nullopt;
 }
 
-// Lowercase hex of exactly N bytes.
 template <size_t N>
 std::optional<std::array<u8, N>> FromHex(std::string_view hex)
 {
@@ -73,7 +68,6 @@ std::optional<std::array<u8, N>> FromHex(std::string_view hex)
   return out;
 }
 
-// A file of the bundle read whole, refused over max_bytes before anything is read.
 bool ReadBounded(const std::string& path, u64 max_bytes, std::string* out, std::string* why)
 {
   File::IOFile f(path, "rb");
@@ -97,8 +91,6 @@ bool ReadBounded(const std::string& path, u64 max_bytes, std::string* out, std::
   return true;
 }
 
-// SHA-256 with the platform's own code where it has one (Apple and Windows use the CPU's SHA
-// instructions when there are any), else mbedtls.
 class Sha256
 {
 public:
@@ -129,7 +121,6 @@ public:
   Sha256(const Sha256&) = delete;
   Sha256& operator=(const Sha256&) = delete;
 
-  // `size` at most 4 GiB - 1 (the platform calls take 32 bits).
   void Update(const u8* data, size_t size)
   {
 #if defined(__APPLE__)
@@ -171,12 +162,12 @@ struct Resolution
   std::string looked_in;
   BundleKind kind = BundleKind::None;
   std::optional<FlatBundle> flat;
-  std::string error;  // Refused: why
+  std::string error;
 };
 std::optional<Resolution> s_resolved;
 std::optional<std::vector<PublicKey>> s_test_keys;
 std::string s_local_pack;
-}  // namespace
+}
 
 std::string FlatSignedMessage(std::span<const TreeFile> files)
 {
@@ -300,7 +291,6 @@ std::span<const PublicKey> TrustedKeys()
   static const std::vector<PublicKey> keys = [] {
     std::vector<PublicKey> out;
 #ifdef ORCA_BUNDLE_PUBLIC_KEY
-    // (Logged by text: the release script finds the key in the executable.)
     if (const auto key = FromHex<32>(ORCA_BUNDLE_PUBLIC_KEY))
       out.push_back(*key);
     NOTICE_LOG_FMT(BOOT, "Orca bundle: this build trusts key {}{}", ORCA_BUNDLE_PUBLIC_KEY,
@@ -351,12 +341,9 @@ static std::optional<FlatBundle> LoadFlatBundleImpl(const std::string& dir_in,
     return fail("no folder");
   if (dir.back() != '/' && dir.back() != '\\')
     dir += '/';
-  // The app's own bundle (a listing) may come without mod.sig; anything else checks its key early.
   if (!local && listing.empty() && keys.empty())
     return fail("this build trusts no bundle key");
 
-  // The folder: regular files only (hidden ones aside: the app's .copies.json, a .DS_Store), no
-  // more than a flat bundle holds. Nothing is read yet.
   std::set<std::string> present;
   {
     std::error_code ec;
@@ -389,9 +376,6 @@ static std::optional<FlatBundle> LoadFlatBundleImpl(const std::string& dir_in,
   if (!present.contains(std::string(FLAT_MANIFEST)))
     return fail("no mod.json");
 
-  // mod.sig, when there is one, is checked first, by a key this Orca trusts, before parsing
-  // mod.json. The app's bundles (a listing) may come without one: The service's download checked their
-  // files. Without a listing it is required. Local packs read unsigned mod.json by design.
   std::string why;
   std::optional<std::pair<PublicKey, Signature>> signature;
   if (local)
@@ -421,7 +405,6 @@ static std::optional<FlatBundle> LoadFlatBundleImpl(const std::string& dir_in,
     }
   }
 
-  // mod.json, format 2, for this listing and not retired.
   std::string json;
   if (!ReadBounded(dir + std::string(FLAT_MANIFEST), MAX_MOD_JSON_BYTES, &json, &why))
     return fail("mod.json " + why);
@@ -447,7 +430,6 @@ static std::optional<FlatBundle> LoadFlatBundleImpl(const std::string& dir_in,
                             manifest->launcher.empty() ? "none" : manifest->launcher));
   }
 
-  // Exactly the files mod.json names, mod.json and mod.sig when the bundle is signed.
   const std::vector<std::string> named = manifest->FlatFiles();
   std::set<std::string> expected(named.begin(), named.end());
   expected.emplace(FLAT_MANIFEST);
@@ -464,8 +446,6 @@ static std::optional<FlatBundle> LoadFlatBundleImpl(const std::string& dir_in,
       return fail(fmt::format("{} is missing", name));
   }
 
-  // Every file but the SD image, read (bounded) and hashed; the patches and JIT seed are kept as
-  // read, and the launcher is the boot's own bytes when there are any.
   FlatBundle bundle;
   bundle.dir = dir;
   std::vector<TreeFile> files;
@@ -503,7 +483,6 @@ static std::optional<FlatBundle> LoadFlatBundleImpl(const std::string& dir_in,
                 "signature is damaged)");
   }
 
-  // Signed or not, the patches must parse: checked rather than run half of them.
   for (const auto& [name, text] : bundle.patches)
   {
     std::string patch_error;
@@ -511,7 +490,6 @@ static std::optional<FlatBundle> LoadFlatBundleImpl(const std::string& dir_in,
       return fail(fmt::format("{}: {}", name, patch_error));
   }
 
-  // The SD image last (up to 2 GiB): its size, then its chunked SHA-256, as mod.json pins them.
   if (manifest->sd_image)
   {
     const SdImageFile& image = *manifest->sd_image;
@@ -570,7 +548,6 @@ std::string FlatBundleDir(const std::string* executable_path)
     }
     else
     {
-      // A service listing's slug (desktop orca-policy.ts SLUG_RE).
       const std::string slug = GetEnv("SUBSPACE_GAME");
       if (slug.empty() || slug.size() > 80 || !std::ranges::all_of(slug, [](char c) {
             return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-';
@@ -595,8 +572,6 @@ static void ResolveBundleWithJail(const std::string* executable_path,
                                  std::span<const u8> launcher_bytes, bool jailed)
 {
   const std::string dir = FlatBundleDir(executable_path);
-  // Once per process (DolphinNoGUI boots once): a second boot from the same folder keeps the first
-  // check. A frontend that boots again in one process must reset it (ResetResolvedBundle) first.
   if (s_resolved && s_resolved->looked_in == dir)
     return;
   Resolution resolution;
@@ -607,13 +582,8 @@ static void ResolveBundleWithJail(const std::string* executable_path,
     resolution.kind = kind;
     s_resolved = std::move(resolution);
   };
-  // A refused bundle refuses the session (as a broken tree bundle does), whether ORCA_MOD_DIR named
-  // the folder or Orca found its mod.json by itself: never the built-in game in a pack's place, which
-  // would split the player from the pack's room unseen.
   const auto refuse = [&](const std::string& why) {
     ERROR_LOG_FMT(BOOT, "Orca bundle: {} refused: {}. The session is refused.", dir, why);
-    // What the player reads (orca error): no folder path, which names their home folder; the log
-    // line above keeps it.
     resolution.error = fmt::format("Subspace refused this game's pack: {}", why);
     decide(BundleKind::Refused);
   };
@@ -632,7 +602,6 @@ static void ResolveBundleWithJail(const std::string* executable_path,
   };
   if (local && File::Exists(dir + std::string(FLAT_SIGNATURE)))
     return refuse("--pack takes unsigned local packs; open signed community packs through the desktop app");
-  // Mods phase 1: a run folder the app wrote with tree.json (checked by LoadModProfile at boot).
   if (explicit_dir && File::Exists(dir + "tree.json"))
   {
     if (local)
@@ -654,7 +623,6 @@ static void ResolveBundleWithJail(const std::string* executable_path,
     return refuse("this pack requires the desktop app's sandbox; open it through the desktop app");
   if (!SessionActive())
     return decide(BundleKind::None);
-  // The app's bundle (SUBSPACE_GAME set) may come without mod.sig, and needs no key then.
   const std::string listing = GetEnv("SUBSPACE_GAME");
   if (!local && TrustedKeys().empty() &&
       (listing.empty() || File::Exists(dir + std::string(FLAT_SIGNATURE))))
@@ -664,9 +632,6 @@ static void ResolveBundleWithJail(const std::string* executable_path,
 
   const auto start = std::chrono::steady_clock::now();
   std::string why;
-  // (Every filesystem call there takes an error code: nothing in it throws.) A launcher boot runs
-  // the bundle's launcher, checked as the bytes the boot read; a disc boot needs a bundle without
-  // one (BootManager's PrepareModBoot would refuse the session instead).
   std::optional<BootLauncher> boot;
   if (executable_path)
     boot = BootLauncher{PathToFileName(*executable_path), launcher_bytes};
@@ -743,4 +708,4 @@ void ResetResolvedBundle()
 {
   s_resolved.reset();
 }
-}  // namespace Orca::Mod
+}

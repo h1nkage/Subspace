@@ -18,11 +18,7 @@ namespace Orca::Bridge
 {
 namespace
 {
-// How a controller snapshot push starts as the app writes it (JSON.stringify keeps key order), so
-// the older ones of one read can be skipped unparsed. Only a shortcut: a line that doesn't match is
-// parsed like any other.
 constexpr std::string_view CONTROLLERS_PREFIX = R"(br {"push":{"type":"controllers")";
-// JSON numbers are doubles: ids stay exact up to 2^53.
 constexpr double MAX_ID = 9007199254740991.0;
 
 struct Counters
@@ -36,7 +32,6 @@ Counters& Count()
   return *counters;
 }
 
-// Requests waiting for their reply. Never destroyed: the stdin thread may outlive main.
 struct Waiting
 {
   std::mutex mutex;
@@ -55,7 +50,7 @@ Waiting& Wait()
 template <typename T>
 struct Handler
 {
-  std::mutex mutex;  // held through a call, so clearing waits it out
+  std::mutex mutex;
   std::function<void(const T&)> fn;
   u64 token = 0;
 };
@@ -138,7 +133,7 @@ void Deliver(Inbound in)
   }
   ++c.ignored;
 }
-}  // namespace
+}
 
 bool Enabled()
 {
@@ -168,7 +163,6 @@ std::vector<std::string> LineSplitter::Feed(std::string_view bytes)
     const std::string_view piece = bytes.substr(0, newline);
     if (m_skipping)
     {
-      // The rest of a line already dropped.
     }
     else if (m_pending.size() + piece.size() > m_max)
     {
@@ -227,7 +221,6 @@ Inbound Parse(std::string_view line)
       return in;
     const picojson::object& p = push->second.get<picojson::object>();
     const auto type = p.find("type");
-    // The page's lobby commands name their game; a controller snapshot never does.
     const bool controllers = type != p.end() && type->second.is<std::string>() &&
                              type->second.get<std::string>() == "controllers" && !p.count("slug");
     in.kind = controllers ? Inbound::Kind::Controllers : Inbound::Kind::Push;
@@ -410,4 +403,4 @@ bool Heartbeat::Due(std::chrono::steady_clock::time_point now)
   m_next = now + HEARTBEAT_PERIOD;
   return true;
 }
-}  // namespace Orca::Bridge
+}

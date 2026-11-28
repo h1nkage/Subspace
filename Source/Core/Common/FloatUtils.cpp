@@ -156,9 +156,6 @@ double ApproximateReciprocal(double val)
   const s64 sign = integral & (1ULL << 63);
   s64 exponent = integral & (0x7FFLL << 52);
 
-  // Orca: set the sign with integer operations, not std::copysign. On ARM64, Clang builds
-  // copysign's mask by FNEG of a NaN, which FPCR.AH (set in the guest's non-IEEE mode on AFP CPUs)
-  // leaves unchanged, so the mask comes out wrong.
   const auto with_sign = [sign](double magnitude) {
     return std::bit_cast<double>(std::bit_cast<s64>(magnitude) | sign);
   };

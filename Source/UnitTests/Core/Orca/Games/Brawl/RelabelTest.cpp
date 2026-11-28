@@ -1,10 +1,6 @@
 // Copyright 2026 YouGame
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Texture relabels (UX/Relabel.h): the marks' values, which label a stage turn names, where the
-// marks live (READY TO FIGHT!'s palette in the character select's archive, the stage select's
-// textures in its own), and that a mark is written only over the game's value or another mark.
-
 #include <initializer_list>
 #include <map>
 #include <string_view>
@@ -71,21 +67,18 @@ public:
   int writes = 0;
 };
 
-// Where the fake game keeps things (the shapes are the game's, the addresses made up).
 constexpr u32 MANAGER = 0x805B8BA0;
 constexpr u32 SCENE = 0x90FF6340;
 constexpr u32 NAMES = 0x80701000;
 constexpr u32 ARCHIVE_OBJECT = 0x934CDD80;
-constexpr u32 IMAGE = 0x92F67FA0;  // 32-byte aligned
+constexpr u32 IMAGE = 0x92F67FA0;
 constexpr u32 BRES = IMAGE + 0x60;
 constexpr u32 ROOT = BRES + 0x10;
 constexpr u32 TEXTURES = BRES + 0x100;
 constexpr u32 PALETTES = BRES + 0x200;
-constexpr u32 RESOURCES = BRES + 0x300;  // each a 0x40 header and its data
+constexpr u32 RESOURCES = BRES + 0x300;
 constexpr u32 RESOURCE_SIZE = 0x80;
 
-// A bres index group at `group` with the named entries (data offsets from the group), the names
-// written after it, each preceded by its length as the format has it.
 void PutGroup(FakeMemory& m, u32 group, const std::vector<std::pair<std::string_view, u32>>& e)
 {
   const u32 count = static_cast<u32>(e.size());
@@ -110,16 +103,14 @@ struct Texture
   std::string_view name;
   u16 width, height;
   u32 format;
-  std::vector<u8> first;  // its data's first bytes
+  std::vector<u8> first;
 };
 struct Palette
 {
   std::string_view name;
-  std::vector<u16> entries;  // RGB5A3
+  std::vector<u16> entries;
 };
 
-// A scene named `scene` whose archive (at `slot` in the scene object) holds the image `image`
-// with MiscData `file`: a bres with these textures and palettes.
 FakeMemory Screen(std::string_view scene, u32 slot, std::string_view image, u16 file,
                   const std::vector<Texture>& textures, const std::vector<Palette>& palettes)
 {
@@ -131,11 +122,9 @@ FakeMemory Screen(std::string_view scene, u32 slot, std::string_view image, u16 
   m.Fill(SCENE, 0x800);
   m.Put32(SCENE, NAMES);
   m.Put32(SCENE + slot, ARCHIVE_OBJECT);
-  // The gfArchive: one of its words is the image.
   m.Fill(ARCHIVE_OBJECT, 0x80);
   m.Put32(ARCHIVE_OBJECT, 0x934CDCE0);
   m.Put32(ARCHIVE_OBJECT + 0x20, IMAGE);
-  // The image: one MiscData entry, the bres.
   const u32 count = static_cast<u32>(textures.size() + palettes.size());
   const u32 size = 0x300 + RESOURCE_SIZE * count;
   m.Fill(IMAGE, 0x60);
@@ -169,7 +158,7 @@ FakeMemory Screen(std::string_view scene, u32 slot, std::string_view image, u16 
   {
     m.Put32(at, 0x504C5430);
     m.Put32(at + 0x10, 0x40);
-    m.Put32(at + 0x18, 2);  // RGB5A3
+    m.Put32(at + 0x18, 2);
     m.Put16(at + 0x1C, static_cast<u16>(p.entries.size()));
     for (size_t i = 0; i < p.entries.size(); ++i)
       m.Put16(at + 0x40 + 2 * static_cast<u32>(i), p.entries[i]);
@@ -178,13 +167,10 @@ FakeMemory Screen(std::string_view scene, u32 slot, std::string_view image, u16 
   }
   PutGroup(m, TEXTURES, tex_entries);
   PutGroup(m, PALETTES, plt_entries);
-  // The match block's memory, the game's dead code.
   m.Fill(Block::BASE, Block::SIZE, 0x3A);
   return m;
 }
 
-// READY TO FIGHT!'s palettes: Brawl's transparent 0x0222 at 0 (white 0x0FFF at 1, 0xFFFF at 14),
-// Project+'s 0x0000 at 15 (0x9084 at 0).
 std::vector<u16> BrawlBand()
 {
   std::vector<u16> e(16, 0x8421);
@@ -208,9 +194,6 @@ FakeMemory CharacterSelect(std::vector<u16> band)
                 {{"MenSelchrReady01_2", std::move(band)}});
 }
 
-// The stage select (Brawl's sizes, or Project+'s STAGE SELECT and its legend); STAGE SELECT's
-// first byte the game's (Brawl's texel 1, Project+'s 0) unless given.
-// `slot`: the scene word holding the archive (the game's +0x450, or another the scan finds).
 FakeMemory StageSelect(bool pplus, int line_first = -1, u32 slot = 0x450)
 {
   if (line_first < 0)
@@ -236,12 +219,10 @@ void PutHeader(FakeMemory& m, Block::Mode mode)
   m.bytes[Block::MODE] = static_cast<u8>(mode);
   m.bytes[Block::RULESET] = 1;
 }
-}  // namespace
+}
 
 TEST(OrcaRelabel, TheMarksValues)
 {
-  // A palette entry steps by the label; a nibble wraps within its byte's high half and keeps the
-  // low one; a byte steps.
   const Slot entry{Slot::Kind::PaletteEntry, 0, 0x0222, 3};
   EXPECT_EQ(entry.ValueFor(0, 0x0222), 0x0222);
   EXPECT_EQ(entry.ValueFor(2, 0x0222), 0x0224);
@@ -252,7 +233,7 @@ TEST(OrcaRelabel, TheMarksValues)
   EXPECT_EQ(nibble.ValueFor(4, 0x1A), 0x5A);
   EXPECT_EQ(nibble.ValueFor(13, 0x5A), 0xEA);
   EXPECT_EQ(nibble.LabelOf(0xEA), 13);
-  EXPECT_EQ(nibble.LabelOf(0xFA), std::nullopt);  // 15: no label's
+  EXPECT_EQ(nibble.LabelOf(0xFA), std::nullopt);
   EXPECT_EQ(nibble.LabelOf(0x0A), std::nullopt);
   const Slot byte{Slot::Kind::Byte, 0, 0, 1};
   EXPECT_EQ(byte.ValueFor(1, 0), 1);
@@ -262,14 +243,14 @@ TEST(OrcaRelabel, TheMarksValues)
 TEST(OrcaRelabel, StageTurnsAsTheLabelsNameThem)
 {
   using Ranked::StepKind;
-  EXPECT_EQ(LineFor(static_cast<u8>(StepKind::Strike), 0, 1), 1);  // P1 STRIKES 1
+  EXPECT_EQ(LineFor(static_cast<u8>(StepKind::Strike), 0, 1), 1);
   EXPECT_EQ(LineFor(static_cast<u8>(StepKind::Strike), 0, 3), 3);
-  EXPECT_EQ(LineFor(static_cast<u8>(StepKind::Strike), 1, 2), 5);  // P2 STRIKES 2
-  EXPECT_EQ(LineFor(static_cast<u8>(StepKind::Strike), 1, 9), 6);  // never past 3
-  EXPECT_EQ(LineFor(static_cast<u8>(StepKind::Ban), 0, 1), 7);     // P1 BANS 1
-  EXPECT_EQ(LineFor(static_cast<u8>(StepKind::Ban), 1, 2), 10);    // P2 BANS 2
-  EXPECT_EQ(LineFor(static_cast<u8>(StepKind::Pick), 0, 1), 11);   // P1 PICKS
-  EXPECT_EQ(LineFor(static_cast<u8>(StepKind::Pick), 1, 1), 12);   // P2 PICKS
+  EXPECT_EQ(LineFor(static_cast<u8>(StepKind::Strike), 1, 2), 5);
+  EXPECT_EQ(LineFor(static_cast<u8>(StepKind::Strike), 1, 9), 6);
+  EXPECT_EQ(LineFor(static_cast<u8>(StepKind::Ban), 0, 1), 7);
+  EXPECT_EQ(LineFor(static_cast<u8>(StepKind::Ban), 1, 2), 10);
+  EXPECT_EQ(LineFor(static_cast<u8>(StepKind::Pick), 0, 1), 11);
+  EXPECT_EQ(LineFor(static_cast<u8>(StepKind::Pick), 1, 1), 12);
   EXPECT_EQ(LineFor(static_cast<u8>(StepKind::Pick), Ranked::BOTH, 1), LINE_PICK_A_STAGE);
   EXPECT_EQ(LineFor(static_cast<u8>(StepKind::Prefer), Ranked::BOTH, 1), LINE_PICK_A_STAGE);
   EXPECT_EQ(LineFor(0, 0, 1), LINE_GAME);
@@ -284,16 +265,13 @@ TEST(OrcaRelabel, ReadyToFightsMarkIsItsPalettesTransparentEntry)
   const FakeMemory pplus = CharacterSelect(PPlusBand());
   const Slot p = FindBand(pplus);
   ASSERT_EQ(p.kind, Slot::Kind::PaletteEntry);
-  EXPECT_EQ(p.address, b.address + 30);  // entry 15
-  // A palette this doesn't know, or the entry holding anything but the game's value or a mark:
-  // not the texture this knows.
+  EXPECT_EQ(p.address, b.address + 30);
   std::vector<u16> other = BrawlBand();
   other[0] = 0x1234;
   EXPECT_EQ(FindBand(CharacterSelect(other)).kind, Slot::Kind::None);
   other = BrawlBand();
   other[1] = 0x0EEE;
   EXPECT_EQ(FindBand(CharacterSelect(other)).kind, Slot::Kind::None);
-  // Off the character select: none.
   FakeMemory off = CharacterSelect(BrawlBand());
   off.PutString(NAMES, "scSelStage");
   EXPECT_EQ(FindBand(off).kind, Slot::Kind::None);
@@ -301,7 +279,6 @@ TEST(OrcaRelabel, ReadyToFightsMarkIsItsPalettesTransparentEntry)
 
 TEST(OrcaRelabel, NothingCalledForPutsTheGamesWordsBack)
 {
-  // No queue room: the band is the game's; a mark left from before (label 2) goes, and only it.
   FakeMemory m = CharacterSelect(BrawlBand());
   const Slot band = FindBand(m);
   Shown shown;
@@ -326,11 +303,9 @@ TEST(OrcaRelabel, TheStageSelectsTitleSaysTheMode)
     const Slot title = FindTitle(m);
     ASSERT_EQ(title.kind, Slot::Kind::HighNibble);
     ASSERT_EQ(FindLine(m).kind, Slot::Kind::HighNibble);
-    // No header: the game's.
     Shown shown;
     EXPECT_EQ(Apply(m, {}, &shown), 0);
     EXPECT_EQ(shown.title, Title::Game);
-    // A ranked room's, then a casual one's: the first texel's high nibble, the low one kept.
     PutHeader(m, Block::Mode::Ranked);
     EXPECT_EQ(Apply(m, {}, &shown), 1);
     EXPECT_EQ(shown.title, Title::Ranked);
@@ -339,7 +314,6 @@ TEST(OrcaRelabel, TheStageSelectsTitleSaysTheMode)
     Apply(m, {}, &shown);
     EXPECT_EQ(m.Read8(title.address), 0x25);
     EXPECT_EQ(shown.title, Title::Casual);
-    // No turn under way (no stage flow): STAGE SELECT stays the game's; the legend too.
     EXPECT_EQ(shown.line, LINE_GAME);
     EXPECT_FALSE(shown.legend);
     EXPECT_EQ(Apply(m, {}, &shown), 0);
@@ -348,24 +322,18 @@ TEST(OrcaRelabel, TheStageSelectsTitleSaysTheMode)
 
 TEST(OrcaRelabel, StageSelectsStaleMarkGoesAndTheLegendIsProjectPlusOwn)
 {
-  // Brawl's STAGE SELECT starts at 1 (its S's edge): a mark left from a turn (P2 STRIKES 1, 4)
-  // goes back to 1 when no turn is under way.
   FakeMemory brawl = StageSelect(false, 0x5A);
   const Slot line = FindLine(brawl);
   ASSERT_EQ(line.kind, Slot::Kind::HighNibble);
   EXPECT_EQ(Apply(brawl, {}), 1);
   EXPECT_EQ(brawl.Read8(line.address), 0x1A);
   EXPECT_EQ(FindLegend(brawl)[0].kind, Slot::Kind::None);
-  // Project+'s starts at 0, and has the legend: its words (I4) and its buttons (IA8's intensity
-  // after a 0 alpha).
   const FakeMemory pplus = StageSelect(true, 0x0A);
   EXPECT_EQ(FindLine(pplus).kind, Slot::Kind::HighNibble);
   const std::array<Slot, 2> legend = FindLegend(pplus);
   EXPECT_EQ(legend[0].kind, Slot::Kind::HighNibble);
   EXPECT_EQ(legend[1].kind, Slot::Kind::Byte);
   EXPECT_EQ(legend[1].address, legend[0].address + RESOURCE_SIZE + 1);
-  // A first texel the game never has: not the texture this knows.
   EXPECT_EQ(FindLine(StageSelect(false, 0x0A)).kind, Slot::Kind::None);
-  // The archive in another word of the scene than the game's +0x450: the scan finds it.
   EXPECT_EQ(FindLine(StageSelect(false, -1, 0x1F0)).kind, Slot::Kind::HighNibble);
 }

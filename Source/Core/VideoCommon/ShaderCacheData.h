@@ -12,8 +12,6 @@
 
 #include "Common/Crypto/SHA1.h"
 
-// Orca: integrity envelopes for Metal's cached MSL. Context binds a payload to its identity,
-// stage or UID. Length-prefix fields so different identities cannot alias by concatenation.
 namespace VideoCommon::ShaderCacheData
 {
 inline constexpr u32 VERSION = 1;

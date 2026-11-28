@@ -18,13 +18,12 @@ void Print(std::string_view line)
   if (!line.empty())
     Status::Line(line);
 }
-}  // namespace
+}
 
 OrbCombo::Step OrbCombo::Next(u16 buttons)
 {
   const bool start = (buttons & START) != 0;
   Step step;
-  // Start pressed (not held from before) while Up is down.
   if (!m_held && start && !m_start && (buttons & UP) != 0)
   {
     m_held = true;
@@ -39,7 +38,6 @@ OrbCombo::Step OrbCombo::Next(u16 buttons)
   m_start = start;
   if (m_held)
   {
-    // Unmask once both Start and the D-pad are released.
     if ((buttons & (START | DPAD)) == 0)
       m_held = false;
     buttons &= static_cast<u16>(~(START | DPAD));
@@ -91,7 +89,6 @@ GCPadStatus FilterCoSeatPad(GCPadStatus pad, OrbCombo& combo, bool first_run, bo
 
 void LocalPadWaiting(std::optional<u16> buttons, OverlayKey::Ms now)
 {
-  // Not s_combo: its mask moves with frames only, so the pads the session sends stay the same.
   OverlayKey::Press& press = OverlayKey::Pad();
   if (!press.IsDown() || !buttons)
     return;
@@ -105,4 +102,4 @@ void LocalPadStopped()
 {
   Print(OverlayKey::Pad().Cancel());
 }
-}  // namespace Orca::UX
+}

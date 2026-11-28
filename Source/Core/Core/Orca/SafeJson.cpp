@@ -18,7 +18,6 @@ namespace
 constexpr int MAX_JSON_DEPTH = 16;
 constexpr int MAX_JSON_DIGITS = 17;
 
-// The index just past the string starting at `at` (a quote), or npos if it never ends.
 size_t SkipJsonString(std::string_view text, size_t at)
 {
   for (size_t i = at + 1; i < text.size(); ++i)
@@ -31,7 +30,6 @@ size_t SkipJsonString(std::string_view text, size_t at)
   return std::string_view::npos;
 }
 
-// The index of the bracket closing the array or object opened at `at`, or npos.
 size_t MatchingClose(std::string_view text, size_t at)
 {
   int depth = 0;
@@ -80,9 +78,8 @@ bool SafeNumber(std::string_view number, NumberPolicy numbers)
   return true;
 }
 
-}  // namespace
+}
 
-// Values outside the protocol limits become null. Unclosed strings or brackets are refused.
 std::optional<std::string> SanitizeJson(std::string_view text, NumberPolicy numbers)
 {
   std::string out;
@@ -163,4 +160,4 @@ std::string ParseWholeJson(std::string_view text, picojson::value* value)
   }
   return {};
 }
-}  // namespace Orca::Json
+}

@@ -59,7 +59,6 @@ double Ms(Clock::time_point from, Clock::time_point to)
   return std::chrono::duration<double, std::milli>(to - from).count();
 }
 
-// Mean, percentiles and max of a sample, as one log fragment.
 template <typename T>
 std::string Describe(std::vector<T> v)
 {
@@ -86,10 +85,9 @@ struct SnapTimes
   double state = 0, mem1 = 0, mem2 = 0;
   int saves = 0;
   std::vector<float> port_saves, port_loads;
-  // Copy-on-write saves and the faults between them.
   double cow_state = 0, cow_protect = 0;
   int cow_saves = 0;
-  std::vector<float> cow_faults, cow_recorded, cow_copied;  // per first-pass frame
+  std::vector<float> cow_faults, cow_recorded, cow_copied;
   bool cow_sampled = false;
   Rollback::Cow::Counters cow_last;
   std::vector<float> ring_loads, ring_load_blocks;
@@ -102,10 +100,9 @@ struct PageDiff
     int frame = -1;
     std::vector<u8> mem1, mem2;
   };
-  std::deque<Copy> history;  // newest first, frames f-1 .. f-4
-  // [gap index][0 = MEM1, 1 = MEM2]: pages differing per frame
+  std::deque<Copy> history;
   std::array<std::array<std::vector<int>, 2>, GAPS.size()> counts;
-  std::vector<u64> mem1_buckets, mem2_buckets;  // 1-frame gap, dirty pages per 1 MB
+  std::vector<u64> mem1_buckets, mem2_buckets;
 } s_pages;
 
 int CountDirty(const u8* live, const std::vector<u8>& old, std::vector<u64>* buckets)
@@ -149,7 +146,6 @@ void SamplePages(Core::System& system, int frame)
           CountDirty(mem2, old->mem2, g == 0 ? &s_pages.mem2_buckets : nullptr));
     }
   }
-  // Keep frames f .. f-3 for the next boundary (it needs f, f-1 and f-3).
   PageDiff::Copy copy;
   if (s_pages.history.size() >= GAPS.back())
   {
@@ -183,7 +179,7 @@ std::string TopBuckets(const std::vector<u64>& buckets, u32 base)
   }
   return out;
 }
-}  // namespace
+}
 
 bool KeepThrottle()
 {
@@ -345,22 +341,19 @@ namespace
 struct JitCodeWord
 {
   u32 word = 0;
-  u32 clears = 0;       // s_jit_clears when it was compiled
-  bool guest = false;   // invalidated by the guest (icbi, dcbst/dcbf) since
-  bool forced = false;  // invalidated by a rollback restore since
+  u32 clears = 0;
+  bool guest = false;
+  bool forced = false;
 };
 FILE* const s_jit_code_file = [] {
   const char* path = std::getenv("ORCA_JITCODE_LOG");
   return path && *path ? std::fopen(path, "w") : nullptr;
 }();
 std::unordered_map<u32, JitCodeWord> s_jit_words;
-// The words each block's latest compile read, by block start.
 std::unordered_map<u32, std::vector<std::pair<u32, u32>>> s_jit_block_words;
 u32 s_jit_clears = 0;
 int s_jit_frame = 0;
 
-// The word at an address in MEM1 or MEM2, or nothing. Avoids Memory::Read_U32, which raises a
-// panic alert for other addresses.
 std::optional<u32> RamWord(Memory::MemoryManager& memory, u32 address)
 {
   const u32 physical = address & 0x3FFFFFFF;
@@ -375,8 +368,6 @@ std::optional<u32> RamWord(Memory::MemoryManager& memory, u32 address)
   return std::nullopt;
 }
 
-// What an instruction fetch at `address` reads now, including the profile's kept game code
-// (Orca::KeptInstruction).
 std::optional<u32> FetchWord(Memory::MemoryManager& memory, u32 address)
 {
   const std::optional<u32> ram = RamWord(memory, address);
@@ -384,7 +375,7 @@ std::optional<u32> FetchWord(Memory::MemoryManager& memory, u32 address)
     return std::nullopt;
   return Orca::KeptInstruction(address & 0x3FFFFFFF, *ram);
 }
-}  // namespace
+}
 
 const bool g_jit_code_log = s_jit_code_file != nullptr;
 
@@ -433,7 +424,7 @@ void JitCodeCensus(const Core::CPUThreadGuard& guard, const char* why)
     return;
   Core::System& system = guard.GetSystem();
   auto& memory = system.GetMemory();
-  std::map<u32, std::pair<u32, u32>> stale;  // address -> (compiled, RAM)
+  std::map<u32, std::pair<u32, u32>> stale;
   std::size_t blocks = 0;
   system.GetJitInterface().RunOnBlocks(guard, [&](const JitBlock& block) {
     ++blocks;
@@ -495,4 +486,4 @@ void AddPortLoad(double ms)
 {
   s_snap.port_loads.push_back(static_cast<float>(ms));
 }
-}  // namespace Rollback::Diag
+}

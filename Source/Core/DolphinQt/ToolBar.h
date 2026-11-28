@@ -23,6 +23,7 @@ public:
 signals:
   void OpenPressed();
   void RefreshPressed();
+  void NetPlayPressed();
   void PlayPressed();
   void PausePressed();
   void StopPressed();
@@ -50,6 +51,7 @@ private:
 
   QAction* m_open_action;
   QAction* m_refresh_action;
+  QAction* m_netplay_action;
   QAction* m_pause_play_action;
   QAction* m_stop_action;
   QAction* m_fullscreen_action;

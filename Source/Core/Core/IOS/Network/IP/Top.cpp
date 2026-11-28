@@ -479,7 +479,6 @@ std::optional<IPCReply> NetIPTopDevice::IOCtl(const IOCtlRequest& request)
 {
   if (Common::OfflineReplay() || Core::WantsDeterminism())
   {
-    // Orca: said in the log, so a trace shows every refusal (an Orca session never networks).
     INFO_LOG_FMT(IOS_NET, "IOS_NET: {} ioctl {:#x} refused (determinism wanted)",
                  GetDeviceName(), request.request);
     return IPCReply(IPC_EACCES);

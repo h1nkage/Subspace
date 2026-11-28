@@ -15,30 +15,6 @@ namespace Orca::Net
 {
 namespace
 {
-// Input delay, Slippi-style: two frames (Config::input_delay), and rollback hides the rest of the
-// link, spikes included. Delay costs every input all the time, while a rollback or stall costs only
-// the frames it touches, so the adaptive delay covers only what rollback can't and a little delay
-// cures. It rises for two reasons:
-//
-// - The typical link (LatencyDelay): the median of this player's recent relay round trips and the
-//   slowest peer's reported median. A median ignores spikes in up to half the window but follows a
-//   link that really got slower. Never a maximum or a mean.
-// - Stalls the others had on this player's inputs. Each side reports how many of its stalls ended
-//   within 1..4 frames (Packet::spared), i.e. how many a little more delay would have spared.
-//   A raise is taken only when it would have spared stalls in RAISE_SPARED windows per frame: one
-//   frame on every input is costly, so random spikes and long dropouts don't raise it. A player
-//   raises its own delay only on others' stalls, and only from a player whose lag on its inputs
-//   reached max_rollback. Stalls don't count when they coincide with a hitch on either machine, are
-//   caused by the other side's own stall, happen while catching up or within SETTLE_SECONDS of a
-//   plug-in, or while waiting for a peer's first packet.
-//
-// Rollbacks never move the delay; that's rollback doing its job.
-//
-// The delay comes back down a frame per window: a link-driven raise once the link has wanted less
-// for LINK_HOLD_WINDOWS, a stall-driven one after STALL_HOLD_WINDOWS quiet windows. A step down
-// also needs two frames of room, judged from how far the others ran past this player's inputs
-// ("reach") over the last ROOM_WINDOWS. A raise soon after a step down undoes it and doubles the
-// quiet run the next try needs. A delay the player chose (Config::fixed_delay) never adapts.
 constexpr int MIN_RTT_SAMPLES = 3;
 constexpr int LINK_HOLD_WINDOWS = 3;
 constexpr int EDGE_WINDOWS = 3;
@@ -48,55 +24,27 @@ constexpr int LONE_WINDOWS = 1;
 constexpr int STALL_HOLD_WINDOWS = ROOM_WINDOWS;
 constexpr int MAX_STALL_HOLD_WINDOWS = 8 * STALL_HOLD_WINDOWS;
 constexpr int PROBATION_WINDOWS = 60;
-// A window with nothing to say (Session::m_need_history).
 constexpr int NO_NEED = INT_MIN / 4;
-// A stall measured this much over k frames still counts as within k (the stalled boundary is polled
-// about every millisecond).
 constexpr double SPARED_SLACK_MS = 2.0;
-// Settling time after a plug-in (a match start or a drop-in): the game is loading, or a joiner that
-// just caught up runs behind until time sync evens it out. No stall counts until then.
 constexpr int SETTLE_SECONDS = 10;
-// What the link needs: an input arrives one way after sampling and runs at the next boundary (up to
-// a frame later); one more frame is kept free for jitter.
 constexpr int LATENCY_SLACK_FRAMES = 2;
-// Hysteresis: the link raises the delay only once its one-way time is this far past a frame
-// boundary, and lowers it only once this far short, so a median wandering by a ms doesn't flip it.
 constexpr double LINK_DEAD_BAND_MS = 4.0;
-// A stall that began within this many frames after a hitch on any machine (or overlapped one) is
-// the hitch's fault, not the link's.
 constexpr int HITCH_FRAMES = 30;
-// No working relay is ten seconds away.
 constexpr int MAX_RTT_MS = 10000;
-// Time sync averages this many frames, waits at most once per that many, and only when it is more
-// than this many frames ahead on average; anything less is jitter.
 constexpr int TIME_SYNC_FRAMES = 30;
 constexpr double TIME_SYNC_LEAD = 1.0;
-// Input lateness. An honest packet carries its sender's inputs up to its own frame plus its delay
-// less one, whatever the link: both come from the same packet. A player whose inputs keep coming
-// after its own frame, by more than LATE_SLACK frames on average for LATE_WINDOWS windows of
-// LATE_WINDOW_FRAMES in a row, holds them back (a lag switch: this machine would run on guesses up
-// to the rollback limit every frame). Such a player gets LATE_STALL_LIMIT frames of guesses rather
-// than max_rollback, until it comes on time for LATE_WINDOWS windows again. Two-player sessions
-// only: with a third player catching up, a sender's packets carry that player's oldest inputs
-// first.
 constexpr int LATE_WINDOW_FRAMES = 60;
 constexpr double LATE_SLACK = 2.0;
 constexpr int LATE_WINDOWS = 3;
 constexpr int LATE_STALL_LIMIT = 3;
-// Snapshot spacing: one more predicted frame between snapshots per this many ms a save costs (about
-// what a non-rendered re-run frame costs on a slow PC), with hysteresis around each step.
 constexpr double SAVE_MS_PER_SPACING = 3.0;
 constexpr double SPACING_DEAD_BAND_MS = 0.25;
-// Drop-in. A joiner counts as caught up within this many frames (plus the round trip) of the host.
-// History goes out in bounded chunks (frames per packet, runs of equal pads, and distance past the
-// joiner's reported frame) so a packet stays a few KB; an unacknowledged send is repeated after
-// this many packets.
 constexpr int CATCH_UP_SLACK = 8;
 constexpr int MAX_HISTORY_RUNS = 32;
 constexpr int MULTI_PEER_HISTORY_FRAMES = 128;
 constexpr int HISTORY_AHEAD = 4096;
 constexpr int HISTORY_RESEND_PACKETS = 120;
-}  // namespace
+}
 
 double Game::NowMs() const
 {
@@ -153,9 +101,6 @@ Session::Session(const Config& config, Game& game, Transport& transport)
   m_window_start = m_frame;
   m_sync_start = m_frame;
   m_last_checksum_frame = m_frame - m_frame % m_config.checksum_every;
-  // Frames before the input delay have no sampled input: both sides treat them as neutral (or as
-  // the host's held pad when a friend just arrived). Sending them explicitly lets the other side
-  // confirm them like any other frame.
   if (Plugged(m_config.local_seat, m_frame))
   {
     for (int f = m_frame; f < m_frame + m_delay; ++f)
@@ -194,9 +139,7 @@ bool Session::Plugged(int seat, int frame) const
 bool Session::RerunFrom(int frame)
 {
   if (frame >= m_frame)
-    return true;  // nothing ran yet
-  // As a rollback to `frame` would: the newest snapshot at or before it, within the window.
-  // Confirmed frames have none (only predicted and checksum frames are saved).
+    return true;
   const auto after = m_saved.upper_bound(frame);
   const int from = after == m_saved.begin() ? -1 : *std::prev(after);
   if (m_frame - frame > m_config.max_rollback || from < 0 ||
@@ -210,7 +153,6 @@ bool Session::RerunFrom(int frame)
 
 int Session::StallLimit() const
 {
-  // How far past the slowest player's inputs this player may run.
   if (CatchingUp())
     return 0;
   for (int s = 0; s < m_config.seats; ++s)
@@ -278,7 +220,6 @@ void Session::UpdateLateness()
 
 int Session::SettleFrom() const
 {
-  // The newest plug-in of this player's controller or of any other player still in play.
   int newest = INT_MIN / 2;
   for (int s = 0; s < m_config.seats; ++s)
   {
@@ -396,8 +337,6 @@ bool Session::ApplyGroups(const Packet& packet)
       if (m_own_live_from[seat] != NEVER)
         continue;
       const SeatPlan& co = (*packet.roster)[seat];
-      // A never-plugged co-seat carries its cancelled admission in the unplug frame. This
-      // distinguishes cancellation before our first roster from an incomplete admission.
       if (co.live_from == NEVER && co.plug_from == NEVER && co.unplug_from == own.live_from &&
           groups[seat] == -1)
       {
@@ -459,7 +398,6 @@ bool Session::ApplyGroups(const Packet& packet)
       m_group_known[seat] = false;
     }
   }
-  // Retired copies belong to one lead stay, never a replacement connection in its port.
   for (auto& retired : m_retired_co_leads)
     retired &= ~ended_leads;
   return true;
@@ -504,7 +442,6 @@ int Session::AuthorityFrame() const
 void Session::AdvanceReceived(int seat)
 {
   int& received = m_received[seat];
-  // The log holds every seat's pads, and a seat's pads before it plugs in are known (unplugged).
   received = std::max(received, LogEnd() - 1);
   if (m_plan[seat].plug_from != NEVER)
     received = std::max(received, m_plan[seat].plug_from - 1);
@@ -526,7 +463,6 @@ int Session::KnownThrough(int seat) const
 {
   const SeatPlan& plan = m_plan[seat];
   int known = m_received[seat];
-  // A friend may hear another seat ahead of the host. Only the host's acknowledged prefix is final.
   if (m_config.per_peer_inputs && m_config.authority_seat >= 0 &&
       m_config.local_seat != m_config.authority_seat && LeadOf(seat) != m_config.authority_seat)
     known = std::min(known, m_authority_ack[seat]);
@@ -571,8 +507,6 @@ void Session::SetLog(int base, std::vector<Pads> log)
 
 std::vector<Pads> Session::TakeLog(int* base)
 {
-  // Every frame that ran is final for the machine handing its log back (the host going solo with
-  // the others dropped): their last run is what its state holds.
   while (LogEnd() < m_frame)
   {
     const auto it = m_used.find(LogEnd());
@@ -662,8 +596,6 @@ void Session::AddPeerBatch(const std::vector<int>& seats, int live_from, int his
   };
   if (gate_needed())
   {
-    // Keep the same beginning until every in-play peer has acknowledged past the old end.
-    // A peer may still hold its open-ended version if it missed the end-frame updates.
     gate_from = std::min(gate_from, m_start_gate->first);
     if (m_start_gate->second != NEVER)
       m_previous_start_gates.push_back(*m_start_gate);
@@ -683,7 +615,6 @@ void Session::AddPeerBatch(const std::vector<int>& seats, int live_from, int his
     AdmitSeat(seat, live_from, history_from);
     m_plug_batch.insert(seat);
   }
-  // Replacing a live group retires its previous stay before admitting this one.
   for (const int seat : batch)
     if (seat >= 0 && seat < m_config.seats && !IsLocal(seat))
     {
@@ -691,8 +622,6 @@ void Session::AddPeerBatch(const std::vector<int>& seats, int live_from, int his
       m_group_known[seat] = known[seat];
     }
   m_start_gate = {gate_from, NEVER};
-  // Extending a confirmed gate may cover a gap already run with Start up. Only changed,
-  // unconfirmed pads need a rollback; confirmed log entries retain their exact inputs.
   for (auto used = m_used.lower_bound(LogEnd()); used != m_used.end(); ++used)
     if (used->first < m_frame && used->second != PadsFor(used->first))
       m_dirty = std::min(m_dirty, used->first);
@@ -772,8 +701,6 @@ void Session::RetireSeat(int seat, bool preserve_unplug)
     }
     if (m_config.per_peer_inputs)
     {
-      // Keep one contiguous prefix across successive stays. A rebuilding friend may still need
-      // an earlier stay even after another rebuild has begun. Pads also record unplugged gaps.
       DepartedInputs prefix;
       prefix.from = prefix.first_frame = std::min(m_log_base, plan.unplug_from);
       prefix.until = plan.unplug_from;
@@ -791,11 +718,11 @@ void Session::RetireSeat(int seat, bool preserve_unplug)
           if (input == inputs.end())
           {
             if (preserve_unplug && local_co && frame >= m_frame)
-              pad = Pad{};  // after the remove request, future samples are connected neutral
+              pad = Pad{};
             else if (preserve_unplug)
             {
               m_departed_owner[seat] = lead;
-              break;  // the former owner's reply completes this scheduled stay
+              break;
             }
             else
             {
@@ -911,12 +838,6 @@ void Session::ApplyRoster(const std::array<SeatPlan, MAX_SEATS>& roster)
     SeatPlan& mine = m_plan[s];
     if (now == mine)
       continue;
-    // Until the host takes this player in, its roster can still hold whoever had the seat before:
-    // this same player, back after its room connection dropped (bug reports 6afb0948, 22ba6446,
-    // 96e56887), with that stay's plug-in, and its live_from (before the host heard of the drop) or
-    // none (after). The host takes a joiner in from a frame at or after the keyframe this session
-    // starts at, so a seat plan with an earlier live_from, or none, is an earlier stay's. Once the
-    // host has named this player's live frame (m_own_live_from[s]), every change applies.
     if (IsLocal(s) && m_own_live_from[s] == NEVER &&
         (now.live_from == NEVER || now.live_from < m_config.start_frame))
     {
@@ -924,9 +845,6 @@ void Session::ApplyRoster(const std::array<SeatPlan, MAX_SEATS>& roster)
     }
     if (IsLocal(s))
     {
-      // This player's own seat. The host names its live frame once; plugs it in once, at a frame
-      // not yet run, and only once this machine holds the history up to that live frame; and only
-      // ever brings its unplug frame earlier. Anything else ends the session.
       if (now.live_from != NEVER)
       {
         if (m_own_live_from[s] == NEVER)
@@ -955,7 +873,6 @@ void Session::ApplyRoster(const std::array<SeatPlan, MAX_SEATS>& roster)
         return;
       }
     }
-    // Frames that ran with this seat plugged in where it now isn't, or the reverse, run again.
     int changed = INT_MAX;
     if (now.plug_from != mine.plug_from)
       changed = std::min(now.plug_from, mine.plug_from);
@@ -967,7 +884,6 @@ void Session::ApplyRoster(const std::array<SeatPlan, MAX_SEATS>& roster)
       m_dirty = std::min(m_dirty, changed);
     if (!IsLocal(s) && mine.live_from == NEVER && now.live_from != NEVER)
       m_acked[s] = now.live_from - 1;
-    // A different player in the seat: its packets count from 1 again.
     if (!IsLocal(s) && now.live_from != mine.live_from && now.live_from != NEVER)
     {
       if (m_config.per_peer_inputs)
@@ -995,7 +911,7 @@ void Session::ApplyRoster(const std::array<SeatPlan, MAX_SEATS>& roster)
 void Session::ReceiveHistory(const Packet& packet)
 {
   if (packet.history_first > LogEnd() || packet.history.size() > MAX_HISTORY_IN_PACKET)
-    return;  // a gap: the host sends it again
+    return;
   for (size_t i = 0; i < packet.history.size(); ++i)
   {
     const int f = packet.history_first + static_cast<int>(i);
@@ -1011,9 +927,6 @@ void Session::ReceiveHistory(const Packet& packet)
       }
       continue;
     }
-    // New history: the host's game before this player plays in it. Never past what the host ever
-    // sends ahead of this machine (HISTORY_AHEAD; the rest comes again), and never a frame from this
-    // player's live frame or plug-in on (set once each): those run with its own inputs.
     if (f > m_frame + HISTORY_AHEAD)
       break;
     bool awaiting_roster = false;
@@ -1059,7 +972,6 @@ void Session::AppendConfirmedToLog()
     const auto& [seat, stay] = entry;
     if (LogEnd() < stay.until)
       return false;
-    // The host also retains the prefix for every seated peer that has not confirmed it yet.
     if (m_config.local_seat == m_config.authority_seat)
       for (int peer = 0; peer < m_config.seats; ++peer)
         if (InPlay(peer) && LeadOf(peer) == peer && m_peer_ack[peer][seat] < stay.until - 1 &&
@@ -1105,9 +1017,6 @@ void Session::PlugCaughtUpPeers()
       m_plug_batch.clear();
     }
   }
-  // The host plugs a joiner in once it has replayed the history and caught up, far enough ahead
-  // that every machine hears of it before running that frame: the joiner may be up to its delay
-  // plus a rollback window ahead of what the host last heard.
   for (int s = 0; s < m_config.seats; ++s)
   {
     if (!InPlay(s) || LeadOf(s) != s || m_plug_batch.contains(s))
@@ -1115,7 +1024,6 @@ void Session::PlugCaughtUpPeers()
     SeatPlan& plan = m_plan[s];
     if (plan.plug_from != NEVER || m_history_acked[s] < plan.live_from - 1)
       continue;
-    // Every player, the newcomer included, holds the values this seat plugs in with.
     bool values_held = true;
     for (int p = 0; p < m_config.seats; ++p)
     {
@@ -1160,12 +1068,9 @@ Step Session::OnBoundary(int completed_frame, const Pad& local_pad, const Pads* 
 {
   if (!m_error.empty())
     return {StepKind::Ended, m_frame};
-  // A re-run needs nothing from the transport: a connection lost mid re-run fails the session at
-  // the next normal boundary.
   if (!m_transport.Connected() && m_resim_until < 0)
     return Fail("Connection lost");
 
-  // A re-run frame just completed.
   if (m_resim_until >= 0)
   {
     const int next = completed_frame + 1;
@@ -1178,8 +1083,6 @@ Step Session::OnBoundary(int completed_frame, const Pad& local_pad, const Pads* 
       m_game.SetPads(next, pads);
       return {StepKind::Run, next};
     }
-    // Caught up with the newest frame already run: back to normal flow. This boundary's local input
-    // was sampled and sent before the rollback started.
     m_resim_until = -1;
     m_game.SetResimulating(false);
   }
@@ -1193,8 +1096,6 @@ Step Session::OnBoundary(int completed_frame, const Pad& local_pad, const Pads* 
     if (NeedsSnapshot(m_frame) && !SaveOnce(m_frame))
       return Fail(fmt::format("Saving frame {} failed", m_frame));
 
-    // Running ahead of the others: give a frame back now, before it causes a stall here and deep
-    // rollbacks there. Decided before sampling, so the frame's input is sampled after the wait.
     if (m_wait_pending)
     {
       m_wait_pending = false;
@@ -1208,8 +1109,6 @@ Step Session::OnBoundary(int completed_frame, const Pad& local_pad, const Pads* 
   ReceivePackets();
   if (!m_error.empty())
     return {StepKind::Ended, m_frame};
-  // A stall ends when the input it waited on arrives, even if a rollback comes first; its length is
-  // measured up to here (Packet::spared).
   if (m_stalling && m_stall_ended_ms < 0 && m_frame - ConfirmedFrame() <= StallLimit())
     m_stall_ended_ms = m_game.NowMs();
   CheckChecksums();
@@ -1219,16 +1118,12 @@ Step Session::OnBoundary(int completed_frame, const Pad& local_pad, const Pads* 
     PlugCaughtUpPeers();
   SendPacket();
 
-  // A frame already ran with a wrong guess: load the newest snapshot at or before it and re-run to
-  // the newest frame. Frames before the wrong one re-run with the same inputs, so they come out the
-  // same.
   if (m_dirty < m_frame)
   {
     const int dirty = m_dirty;
     m_dirty = INT_MAX;
     if (m_frame - dirty > m_config.max_rollback)
       return Fail(fmt::format("Rollback of {} frames exceeds the limit", m_frame - dirty));
-    // There is always a snapshot at most k - 1 frames before any rollback target (NeedsSnapshot).
     const auto after = m_saved.upper_bound(dirty);
     const int from = after == m_saved.begin() ? -1 : *std::prev(after);
     const int depth = m_frame - from;
@@ -1237,7 +1132,6 @@ Step Session::OnBoundary(int completed_frame, const Pad& local_pad, const Pads* 
     m_last_saved = -1;
     if (!m_game.Load(from))
       return Fail(fmt::format("Loading frame {} failed", from));
-    // Snapshots after the loaded frame belong to the history being replaced.
     m_saved.erase(m_saved.upper_bound(from), m_saved.end());
     ++m_stats.rollbacks;
     m_stats.resimulated_frames += depth;
@@ -1251,8 +1145,6 @@ Step Session::OnBoundary(int completed_frame, const Pad& local_pad, const Pads* 
     return {StepKind::Rollback, from};
   }
 
-  // Too far ahead of the slowest player's inputs: wait without running. A player still replaying
-  // the host's game runs only confirmed frames, since guessing there would only roll back.
   if (m_frame - ConfirmedFrame() > StallLimit())
   {
     if (!m_stalling)
@@ -1267,9 +1159,6 @@ Step Session::OnBoundary(int completed_frame, const Pad& local_pad, const Pads* 
     m_stall_ended_ms = -1;
     return {StepKind::Stall, m_frame};
   }
-  // A stall just ended; judge it now that the packet ending it (and any hitch or stall it reports)
-  // is in. See the rules at the top of this file. Its length, up to when the awaited input arrived,
-  // says how many more frames of the others' delay would have spared it (Packet::spared).
   if (m_stalling && m_stall_after_input && m_last_hitch_frame < m_stall_frame - HITCH_FRAMES &&
       m_last_peer_stall_frame < m_stall_frame - HITCH_FRAMES)
   {
@@ -1284,14 +1173,12 @@ Step Session::OnBoundary(int completed_frame, const Pad& local_pad, const Pads* 
     }
     m_stats.spared_stalls = m_spared[0];
   }
-  // After a stall or a wait, the time it held is not made up.
   if (m_stalling || m_waiting)
     m_game.ResetPacing();
   m_stalling = false;
   m_waiting = false;
 
   const int run = m_frame;
-  // Every frame runs with this player's own input for it, the same one the others receive.
   for (int seat = 0; seat < m_config.seats; ++seat)
   {
     if (!IsLocal(seat))
@@ -1315,7 +1202,6 @@ Step Session::OnBoundary(int completed_frame, const Pad& local_pad, const Pads* 
   UpdateLateness();
 
   AppendConfirmedToLog();
-  // The host's call: a player who unplugged and whose last inputs are in is gone.
   if (m_config.authority_seat == m_config.local_seat)
   {
     for (int s = 0; s < m_config.seats; ++s)
@@ -1333,9 +1219,6 @@ Step Session::OnBoundary(int completed_frame, const Pad& local_pad, const Pads* 
     }
   }
 
-  // History older than the deepest possible rollback (a snapshot up to MAX_SNAPSHOT_EVERY - 1
-  // frames before the first wrong frame) is no longer needed. Keep one remote input before the
-  // window, since predictions repeat the last known input.
   const int oldest = m_frame - m_config.max_rollback - MAX_SNAPSHOT_EVERY - 1;
   int oldest_unacked = INT_MAX;
   for (int s = 0; s < m_config.seats; ++s)
@@ -1343,8 +1226,6 @@ Step Session::OnBoundary(int completed_frame, const Pad& local_pad, const Pads* 
     if (InPlay(s) && LeadOf(s) == s)
       oldest_unacked = std::min(oldest_unacked, m_acked[s] + 1);
   }
-  // A seated friend hears the batch after its live frame was chosen. Keep a replay-sized prefix
-  // until the roster arrives and its new recipient ack can retain the exact range.
   const int keep_local = std::min({oldest, oldest_unacked,
       m_config.per_peer_inputs ? m_frame - HISTORY_AHEAD : oldest});
   std::erase_if(m_local, [keep_local](const auto& e) { return e.first < keep_local; });
@@ -1379,9 +1260,6 @@ bool Session::SaveOnce(int frame)
 
 void Session::ChooseSnapshotEvery()
 {
-  // A save that costs more than a re-run frame is worth spreading out: one more predicted frame per
-  // SAVE_MS_PER_SPACING. Re-chosen once a window; changing it at any frame is safe because
-  // NeedsSnapshot measures from the newest snapshot, not from frame numbers.
   if (m_config.snapshot_every > 0)
   {
     m_snapshot_every = m_config.snapshot_every;
@@ -1410,7 +1288,6 @@ void Session::SampleLocal(const Pad& local_pad, const Pads* co_pads)
       continue;
     auto& inputs = seat == m_config.local_seat ? m_local : m_co_local[seat];
     const int newest = inputs.empty() ? plan.plug_from - 1 : inputs.rbegin()->first;
-    // A lower or a repeated boundary never overwrites an input already sent.
     if (target <= newest)
       continue;
     const Pad held = inputs.empty() ? Pad{} : inputs.rbegin()->second;
@@ -1430,8 +1307,6 @@ void Session::SampleLocal(const Pad& local_pad, const Pads* co_pads)
 
 int Session::DelayOfInput(int frame) const
 {
-  // The delay the input for `frame` was sampled at: the newest mark at or before it (the first
-  // delay if none).
   for (auto it = m_delay_marks.rbegin(); it != m_delay_marks.rend(); ++it)
   {
     if (it->first <= frame)
@@ -1442,7 +1317,6 @@ int Session::DelayOfInput(int frame) const
 
 void Session::OnRoundTrip(int rtt_ms)
 {
-  // No working relay measures this; a broken clock or a ping answered after a freeze.
   if (rtt_ms < 0 || rtt_ms > MAX_RTT_MS)
     return;
   m_rtts.push_back(rtt_ms);
@@ -1451,7 +1325,6 @@ void Session::OnRoundTrip(int rtt_ms)
   const int count = static_cast<int>(m_rtts.size());
   if (count < MIN_RTT_SAMPLES)
     return;
-  // The median (the lower one of an even count): what most round trips are, whatever the spikes.
   std::array<int, RTT_SAMPLES> sorted{};
   const auto end = std::copy(m_rtts.begin(), m_rtts.end(), sorted.begin());
   const auto middle = sorted.begin() + (count - 1) / 2;
@@ -1463,8 +1336,6 @@ void Session::OnRoundTrip(int rtt_ms)
 
 void Session::RaiseToLink()
 {
-  // The typical link outgrew the rollback window plus the delay: raise to what it needs at once.
-  // Lowering happens only in AdaptDelay, a frame at a time.
   if (m_fixed_delay || m_config.max_delay <= m_config.input_delay)
     return;
   const std::optional<int> link = LatencyDelay(-LINK_DEAD_BAND_MS);
@@ -1515,7 +1386,6 @@ void Session::SetFixedDelay(std::optional<int> frames)
   }
   else if (m_config.max_delay > m_config.input_delay)
   {
-    // Adaptive again: start from what the link needs, with no stalls on record and a fresh hold.
     m_delay = LatencyDelay(-LINK_DEAD_BAND_MS).value_or(m_config.input_delay);
     m_delay_from_link = true;
     m_link_below_windows = 0;
@@ -1542,8 +1412,6 @@ double Session::FramesFromMs(double ms) const
 
 int Session::RoundTripFrames(int seat) const
 {
-  // Round trip from this machine to `seat` via the relay: our typical one plus theirs (ours twice
-  // while only one is known; six frames while neither is).
   const std::optional<int> theirs = m_peer_rtt[LeadOf(seat)];
   if (!m_typical_rtt && !theirs)
     return 6;
@@ -1554,13 +1422,6 @@ int Session::RoundTripFrames(int seat) const
 
 std::optional<int> Session::LatencyDelay(double margin_ms) const
 {
-  // Input delay covers only what the rollback window alone would stall on. One way through the
-  // relay is half our typical round trip plus half the slowest player's. A sample taken d frames
-  // ahead arrives one way later and runs at the next boundary, with LATENCY_SLACK_FRAMES for
-  // jitter; the other side runs up to max_rollback frames on a guess before stalling. The epsilon
-  // keeps an exact multiple of the frame time from rounding up; margin_ms applies the hysteresis.
-  // Until our median and every other player's are in, the link is unknown (nullopt). Two frames
-  // cover a round trip of about 240 ms between the two players.
   if (!m_typical_rtt)
     return std::nullopt;
   std::optional<int> peer;
@@ -1582,15 +1443,9 @@ std::optional<int> Session::LatencyDelay(double margin_ms) const
 
 void Session::AdaptDelay()
 {
-  // Once a "second" (frame_rate frames run); the rules are at the top of this file.
   m_window_start = m_frame;
   m_last_resimulated = m_guessed_frames - m_window_resimulated;
   m_window_resimulated = m_guessed_frames;
-  // This window's need: the least delay at which the others would have stalled on none of this
-  // player's inputs. Only stalls from a player that was waiting on this one's inputs count (its lag
-  // reached max_rollback within the last EDGE_WINDOWS). A stall that ended within k frames needs k
-  // more frames than its awaited input carried; a longer one needs more than any raise could give.
-  // No window holds more stalls than frames, even from a hostile count.
   int need = NO_NEED;
   for (int s = 0; s < m_config.seats; ++s)
   {
@@ -1622,17 +1477,11 @@ void Session::AdaptDelay()
     m_peer_spared_seen[s] = m_peer_spared[s];
     m_peer_stall_delay[s] = INT_MAX;
   }
-  // And how close to the edge they ran: their furthest reach minus the window is the least delay
-  // that kept them within it. Never above the delay: an uncounted stall (a hitch's, or settling
-  // after a plug-in) is no reason to raise.
   need = std::max(need, std::min(std::exchange(m_window_peer_reach, 0) - m_config.max_rollback,
                                  m_delay));
   std::shift_left(m_need_history.begin(), m_need_history.end(), 1);
   m_need_history.back() = need;
   m_evidence_windows = std::min(m_evidence_windows + 1, NEED_WINDOWS);
-  // Room for a frame less: in none of the last ROOM_WINDOWS would the others have stalled with a
-  // frame less or run within a frame of their window's edge (two frames of room), and at most one
-  // window stalled them even at this delay (a spike it couldn't spare either).
   static_assert(ROOM_WINDOWS <= NEED_WINDOWS && MAX_STALL_HOLD_WINDOWS < INT_MAX / 4);
   int tight = 0;
   int over = 0;
@@ -1642,28 +1491,19 @@ void Session::AdaptDelay()
     over += m_need_history[w] > m_delay ? 1 : 0;
   }
   const bool room = tight == 0 && over <= LONE_WINDOWS;
-  // Consecutive quiet windows: none where a frame less would have left under two frames of room.
   const bool quiet = need < m_delay - 2 || need > m_delay;
   m_quiet_windows = quiet ? std::min(m_quiet_windows + 1, INT_MAX / 2) : 0;
   m_windows_since_lower = std::min(m_windows_since_lower + 1, INT_MAX / 2);
-  // A step down that survived probation: halve the quiet run the next one needs, back toward
-  // STALL_HOLD_WINDOWS.
   if (m_windows_since_lower == PROBATION_WINDOWS)
     m_hold_windows = std::max(m_hold_windows / 2, STALL_HOLD_WINDOWS);
   if (m_fixed_delay || m_config.max_delay <= m_config.input_delay)
     return;
 
-  // What the link needs, with hysteresis. Unknown while another player's median is missing (one who
-  // just arrived): nothing steps down for the link meanwhile, unless ours never came either.
   const int link = LatencyDelay(-LINK_DEAD_BAND_MS).value_or(m_typical_rtt ? m_delay :
                                                                              m_config.input_delay);
   const int link_holds =
       LatencyDelay(LINK_DEAD_BAND_MS).value_or(m_typical_rtt ? m_delay : m_config.input_delay);
   m_link_below_windows = link_holds < m_delay ? m_link_below_windows + 1 : 0;
-  // A raise is worth it once it would have spared the others' stalls in at least RAISE_SPARED
-  // windows per frame, among the windows since the last step down (at most NEED_WINDOWS): sustained
-  // lateness a little delay cures. Raises go a frame at a time; the next window judges the next
-  // frame.
   int raise_for = 0;
   int spared_windows = 0;
   for (int k = 1; m_delay + k <= m_config.max_delay && raise_for == 0; ++k)
@@ -1677,15 +1517,10 @@ void Session::AdaptDelay()
       spared_windows = spared;
     }
   }
-  // A link-driven delay follows the link back down once it has wanted less for a few windows (e.g.
-  // a first median inflated by a keyframe transfer); a stall-driven one waits out the quiet hold,
-  // then steps down a frame per window while there is room.
   const bool link_down = m_delay_from_link && m_link_below_windows >= LINK_HOLD_WINDOWS;
   const int from = m_delay;
   if (raise_for > 0)
   {
-    // Stalls soon after a step down mean it was wrong: undo it, and require a longer quiet run next
-    // time.
     std::string needs;
     for (int w = NEED_WINDOWS - m_evidence_windows; w < NEED_WINDOWS; ++w)
     {
@@ -1723,8 +1558,6 @@ void Session::AdaptDelay()
   }
   else if (m_delay > link_holds && room && (link_down || m_quiet_windows >= m_hold_windows))
   {
-    // Above what the link needs, with room for a frame less: step down one. Earlier windows are
-    // spent (the lateness that raised it has passed).
     std::string needs;
     for (int w = NEED_WINDOWS - ROOM_WINDOWS; w < NEED_WINDOWS; ++w)
     {
@@ -1751,16 +1584,11 @@ void Session::AdaptDelay()
 
 void Session::TrackAdvantage()
 {
-  // GGPO-style time sync: a player running ahead keeps running frames the others' inputs haven't
-  // reached, so it rolls back deep and stalls while they never wait. Each side reports its lead
-  // (its frame minus the other's last reported one). Both leads include the same relay transit, so
-  // half their difference is how far ahead this side really is.
   if (!m_config.time_sync || CatchingUp())
     return;
   std::optional<double> balance;
   for (int s = 0; s < m_config.seats; ++s)
   {
-    // A player still catching up is behind by design: nothing to give back to it.
     if (IsLocal(s) || LeadOf(s) != s || !m_advantage[s] || !InPlay(s) || !Plugged(s, m_frame))
       continue;
     auto& smoothed = m_smoothed_advantage[s];
@@ -1791,7 +1619,6 @@ void Session::TrackAdvantage()
 
 Pads Session::PadsFor(int frame)
 {
-  // The host's log decides every seat of a logged frame.
   if (frame >= m_log_base && frame < LogEnd())
     return m_log[frame - m_log_base];
   Pads pads{};
@@ -1819,7 +1646,6 @@ Pads Session::PadsFor(int frame)
       pads[s] = exact->second;
       continue;
     }
-    // Prediction: the last input known before this frame.
     const auto after = inputs.upper_bound(frame);
     if (after != inputs.begin())
       pads[s] = std::prev(after)->second;
@@ -1841,19 +1667,10 @@ Pads Session::PadsFor(int frame)
 
 bool Session::NeedsSnapshot(int frame) const
 {
-  // Checksum frames are always saved, since their hash comes from the snapshot.
   if (frame % m_config.checksum_every == 0)
     return true;
-  // A rollback only targets a frame that ran on a guess, which is past the newest confirmed one, so
-  // the state at the start of a confirmed frame is never loaded.
   if (frame <= ConfirmedFrame())
     return false;
-  // Save a predicted frame once it is k frames past the newest snapshot of this history. Any
-  // rollback target ran predicted, so it was saved or has a snapshot less than k frames before it
-  // that is still there (only a rollback to an earlier frame drops it, and that re-runs the target
-  // too). So a rollback never re-runs more than k - 1 frames before the first wrong one. Saving
-  // every frame divisible by k would not work: confirmed frames aren't saved, which could leave no
-  // snapshot nearby.
   const auto newer = m_saved.lower_bound(frame);
   return newer == m_saved.begin() || frame - *std::prev(newer) >= m_snapshot_every;
 }
@@ -1865,7 +1682,6 @@ int Session::ConfirmedFrame() const
   {
     confirmed = std::min(confirmed, IsLocal(s) ? DepartedThrough(s) : KnownThrough(s));
   }
-  // No seat has inputs still to come: everything that ran is confirmed.
   return confirmed >= NEVER ? m_frame : confirmed;
 }
 
@@ -1899,7 +1715,6 @@ void Session::ReceivePackets()
         return;
       }
       seen[seat] = true;
-      // A roster can retire and re-admit a co-seat before its last input copy arrives.
       if ((!InPlay(seat) || LeadOf(seat) != lead) &&
           (m_retired_co_leads[seat] & (1u << lead)))
         continue;
@@ -1930,11 +1745,6 @@ void Session::ReceiveOne(const Packet& packet, bool input_only)
   const int s = packet.seat;
   if (s < 0 || s >= m_config.seats || IsLocal(s) || !InPlay(s))
     return;
-  // Packets come from another machine: bound everything before using it. No honest peer sends
-  // more than a packet's worth of inputs, inputs for frames it can't have reached, or frame
-  // numbers near overflow. A joiner is far behind the host by design, so the host's frame and
-  // checksums may be anywhere ahead (the host never sends inputs beyond what the joiner said it
-  // can take).
   const int window = MAX_FRAMES_AHEAD + m_config.max_delay;
   const int far_limit = CatchingUp() ? (1 << 30) : m_frame + window;
   if (packet.pads.size() > static_cast<size_t>(MAX_PADS_IN_PACKET) || packet.first_frame < 0 ||
@@ -1948,11 +1758,6 @@ void Session::ReceiveOne(const Packet& packet, bool input_only)
     FailPeer(fmt::format("Player {} sent an invalid packet", s + 1));
     return;
   }
-  // A packet can arrive twice (direct link and relay) and out of order. Inputs, history, acks,
-  // running counts, a leave and a checksum are identical in every copy or only grow, so each copy
-  // adds them. Fields that say where the sender is now (roster, frame, lead, round trip) come
-  // only from a packet newer than any before it from that seat; an older one would set the roster
-  // or time sync back.
   const bool stale = packet.sequence > 0 && packet.sequence <= m_peer_sequence[s];
   m_peer_sequence[s] = std::max(m_peer_sequence[s], packet.sequence);
   const bool from_authority = !input_only && s == m_config.authority_seat;
@@ -2036,8 +1841,6 @@ void Session::ReceiveOne(const Packet& packet, bool input_only)
           std::min(until, m_start_gate->second) : from;
       if (changed < m_frame && changed >= LogEnd())
         m_dirty = std::min(m_dirty, changed);
-      // The authority may already have confirmed its earlier batch while this peer still
-      // needs to rerun it. Keep that interval until our own confirmed log covers it.
       if (m_start_gate && from != m_start_gate->first && m_start_gate->second != NEVER &&
           m_start_gate->second > LogEnd())
         m_previous_start_gates.push_back(*m_start_gate);
@@ -2068,8 +1871,6 @@ void Session::ReceiveOne(const Packet& packet, bool input_only)
       m_history_stuck[s] = 0;
     }
     m_values_acked[s] = std::max(m_values_acked[s], packet.values_ack);
-    // A player asks to leave: its controller unplugs a little ahead, so every machine hears of it
-    // first. A lead's request takes its entire group.
     if (packet.leaving)
     {
       if (m_plan[s].plug_from == NEVER)
@@ -2081,7 +1882,6 @@ void Session::ReceiveOne(const Packet& packet, bool input_only)
           DropSeat(s);
         else
         {
-          // Preserve the single-seat pre-admission leave path.
           m_plan[s].live_from = NEVER;
           m_lead[s] = s;
           m_group_known[s] = false;
@@ -2095,11 +1895,8 @@ void Session::ReceiveOne(const Packet& packet, bool input_only)
   {
     const int f = packet.first_frame + static_cast<int>(i);
     const Pad& pad = packet.pads[i];
-    // Inputs for frames this seat isn't plugged in at never run, so ignore them.
     if (!Plugged(s, f) || f < LogEnd())
       continue;
-    // New input for a frame that already ran and can no longer be checked: the stall rule should
-    // make this impossible, so fail loudly rather than drift.
     if (f > m_received[s] && f < m_frame && !m_used.contains(f) && !m_remote[s].contains(f))
     {
       Fail(fmt::format("Player {}'s input for frame {} arrived after that frame could be re-run",
@@ -2116,7 +1913,6 @@ void Session::ReceiveOne(const Packet& packet, bool input_only)
       }
       continue;
     }
-    // A frame that already ran with a different guess must be re-run.
     if (const auto used = m_used.find(f); used != m_used.end() && used->second[s] != PadsFor(f)[s])
       m_dirty = std::min(m_dirty, f);
   }
@@ -2136,30 +1932,20 @@ void Session::ReceiveOne(const Packet& packet, bool input_only)
   const int acked_before = m_acked[s];
   if (ack >= -1 && ack <= m_frame + window)
     m_acked[s] = std::max(m_acked[s], ack);
-  // An older copy: its checksum may still be new. Running counts below never exceed a newer
-  // packet's.
   if (stale)
   {
     AddPeerChecksum(s, packet);
     return;
   }
-  // How far this player ran past the newest of our inputs it had, while it needed them: how deep
-  // a change to them would roll it back. AdaptDelay's lowers watch this, and its stalls count for
-  // our delay only when it reached max_rollback. Bounded, and ignored around a hitch on either
-  // machine.
   if (ack >= 0 && Plugged(m_config.local_seat, packet.current_frame) &&
       Plugged(s, packet.current_frame) && m_last_hitch_frame < m_frame - HITCH_FRAMES)
   {
     const int lag = std::clamp(packet.current_frame - ack, 0, MAX_FRAMES_AHEAD);
-    // Plus the delay that input carried: how far its frame ran ahead of this player's sampling (a
-    // lag clamped at 0 makes it an upper bound).
     m_window_peer_reach = std::max(m_window_peer_reach, lag + DelayOfInput(ack));
     if (lag >= m_config.max_rollback)
       m_edge_frame[s] = m_frame;
   }
   m_remote_frame[s] = packet.current_frame;
-  // How far its inputs trail its own frame (UpdateLateness). Time sync places it no further on
-  // than its inputs have come: holding them back makes this machine wait as real lag would.
   int peer_frame = packet.current_frame;
   if (!CatchingUp() && PeersInPlay() == 2 && Plugged(s, packet.current_frame) &&
       m_received[s] >= m_plan[s].plug_from)
@@ -2168,9 +1954,7 @@ void Session::ReceiveOne(const Packet& packet, bool input_only)
     ++m_late_samples[s];
     peer_frame = std::min(peer_frame, m_received[s] + 1);
   }
-  // Our lead over this peer, transit included (it cancels against the peer's own figure).
   m_advantage[s] = m_frame - peer_frame;
-  // Its own lead and round trip: telemetry, bounded rather than trusted.
   if (packet.advantage)
   {
     constexpr int bound = MAX_FRAMES_AHEAD * 10;
@@ -2187,10 +1971,6 @@ void Session::ReceiveOne(const Packet& packet, bool input_only)
     }
     RaiseToLink();
   }
-  // Running counts only grow (a lower number is stale or hostile), and no more stalls can be
-  // short than there were. A new stall of theirs just ended, so a stall here around now was
-  // caused by it. It waited on the input after the newest of ours it had, whose delay AdaptDelay
-  // judges it against.
   if (packet.stalls > m_peer_stalls[s])
   {
     m_peer_stalls[s] = packet.stalls;
@@ -2217,8 +1997,6 @@ void Session::ReceiveOne(const Packet& packet, bool input_only)
 
 void Session::AddPeerChecksum(int seat, const Packet& packet)
 {
-  // A seat's checksums go out in frame order, one per packet: a frame at or before the newest taken
-  // is a duplicate copy, already compared.
   if (!packet.checksum_frame || *packet.checksum_frame <= m_peer_checksum_frame[seat])
     return;
   m_peer_checksum_frame[seat] = *packet.checksum_frame;
@@ -2227,15 +2005,13 @@ void Session::AddPeerChecksum(int seat, const Packet& packet)
 
 void Session::CheckChecksums()
 {
-  // The state at the start of frame f is final once every input before f is confirmed and no
-  // earlier frame is waiting to be re-run.
   const int final_up_to = std::min({m_frame, ConfirmedFrame() + 1, m_dirty});
   int f = m_last_checksum_frame + m_config.checksum_every;
   while (f <= final_up_to)
   {
     const std::optional<u64> hash = m_game.SnapshotChecksum(f);
     if (!hash)
-      break;  // not saved yet
+      break;
     m_local_checksums[f] = *hash;
     m_pending_checksum = f;
     m_last_checksum_frame = f;
@@ -2366,8 +2142,6 @@ void Session::AddDeparted(Packet* packet, int recipient) const
 
 void Session::AddHistory(Packet* packet)
 {
-  // The host sends one joiner at a time the log frames it lacks, from where the last send stopped
-  // (the relay is ordered and reliable), or again from its acknowledgement if that stalls.
   const bool rotate = m_config.per_peer_inputs && PeersInPlay() > 2;
   for (int offset = 0; offset < m_config.seats; ++offset)
   {
@@ -2432,8 +2206,6 @@ void Session::SendPacket()
   if (m_local.empty() && !drop_in)
     return;
   int oldest_unacked = INT_MAX;
-  // The furthest frame every player still waiting for inputs can take. A catching-up player reports
-  // its progress; beyond MAX_FRAMES_AHEAD past that, its bounds check would refuse the packet.
   int take_up_to = INT_MAX;
   for (int s = 0; s < m_config.seats; ++s)
   {
@@ -2448,7 +2220,6 @@ void Session::SendPacket()
                                 std::max({oldest_unacked, newest - m_config.max_pads_per_packet + 1,
                                           m_local.begin()->first});
   int last = newest;
-  // A catching-up player needs the oldest inputs first, as many as fit.
   if (drop_in && !m_local.empty() && oldest_unacked != INT_MAX &&
       oldest_unacked >= m_local.begin()->first &&
       newest - oldest_unacked + 1 > m_config.max_pads_per_packet)
@@ -2457,14 +2228,11 @@ void Session::SendPacket()
     last = std::min(newest, first + MAX_PADS_IN_PACKET - 1);
   }
   last = std::min(last, take_up_to);
-  // Nothing new and no checksum to report: stay quiet. A drop-in session always sends, since a
-  // joiner paces itself on its frame, acks and roster.
   if (!drop_in && newest == m_last_sent_newest && !m_pending_checksum && first > newest)
     return;
 
   Packet packet;
   packet.seat = m_config.local_seat;
-  // Sequence numbers stop short of the wire format's bound; 1 << 30 packets is years of play.
   m_send_sequence = std::min(m_send_sequence + 1, (1 << 30) - 1);
   packet.sequence = m_send_sequence;
   packet.first_frame = first <= last ? first : 0;
@@ -2497,7 +2265,6 @@ void Session::SendPacket()
   }
   for (int s = 0; s < m_config.seats; ++s)
     packet.ack[s] = IsLocal(s) ? -1 : std::min(m_received[s], DepartedThrough(s));
-  // A rebuilding seat can also need several packets of its own completed prefix.
   const auto completed = m_departed.find(m_config.local_seat);
   if (m_config.per_peer_inputs && completed != m_departed.end())
     packet.ack[m_config.local_seat] =
@@ -2512,7 +2279,6 @@ void Session::SendPacket()
         packet.ack[seat] = std::min(DepartedThrough(seat), prefix->second.until - 1);
       else if (m_plan[seat].live_from == NEVER && m_plan[seat].unplug_from != NEVER &&
                LogEnd() >= m_plan[seat].unplug_from)
-        // A removed local co-seat can already be entirely in the log when the host retires it.
         packet.ack[seat] = m_plan[seat].unplug_from - 1;
     }
   packet.current_frame = m_frame;
@@ -2579,4 +2345,4 @@ void Session::SendPacket()
   AddDeparted(&packet, -1);
   m_transport.Send(packet);
 }
-}  // namespace Orca::Net
+}

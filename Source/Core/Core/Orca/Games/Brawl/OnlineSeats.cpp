@@ -23,7 +23,6 @@ namespace B = MatchBlock;
 constexpr u32 GAME_GLOBAL = 0x805A00E0;
 constexpr u32 AREA_KIND = 0x1B4;
 
-// Where the executable's vtables are (both games run the same one).
 constexpr u32 VTABLES_FROM = 0x80400000;
 constexpr u32 VTABLES_TO = 0x80600000;
 
@@ -35,7 +34,6 @@ bool Pointer(const GuestMemory& m, u32 p)
   return p % 4 == 0 && m.Valid(p) && m.Valid(p + 3);
 }
 
-// gmSelCharData, if it can be read.
 u32 Record(const GuestMemory& m)
 {
   if (!Pointer(m, GAME_GLOBAL))
@@ -47,8 +45,6 @@ u32 Record(const GuestMemory& m)
   return Pointer(m, record) ? record : 0;
 }
 
-// The character select's player area of port `port` (0-3) with its kind readable, on the
-// character select only.
 u32 Area(const GuestMemory& m, int port)
 {
   const u32 area = Rules::ReadCssArea(m, port);
@@ -59,7 +55,7 @@ bool Supported()
 {
   return Rules::ProfileRuleset() != Rules::Ruleset::None;
 }
-}  // namespace
+}
 
 bool Online(const Rules::Header& header, u32 pick, int players)
 {
@@ -78,8 +74,6 @@ bool SeatHidden(bool online, const Rules::Header& header, int port, u32 kind, bo
 {
   if (!online || kind != AREA_KIND_NONE || plugged)
     return false;
-  // The opponent's seat on a queue select: always in a queue room, and on the queue's own select
-  // while it searches (the SEARCHING plate).
   if (port == 1 && header.Locked() && (!header.Solo() || searching))
     return false;
   return true;
@@ -87,7 +81,6 @@ bool SeatHidden(bool online, const Rules::Header& header, int port, u32 kind, bo
 
 bool HandMayPressA(const Rules::CssHand& hand)
 {
-  // An unreadable hand (the select being built or torn down) gets no A.
   if (!hand.valid)
     return false;
   if (hand.target == Rules::CSS_HAND_BUTTON &&
@@ -95,7 +88,6 @@ bool HandMayPressA(const Rules::CssHand& hand)
   {
     return false;
   }
-  // A NaN position fails this test: no A.
   return hand.y >= TYPE_BUTTONS_A_FLOOR;
 }
 
@@ -194,12 +186,9 @@ int ApplySeats(GuestMemory& m, u8 plugged, u8* hidden_out)
       const u32 model = m.Read32(object + MUOBJECT_SCENE_MODEL);
       if (!Pointer(m, model) || !Pointer(m, model + SCENE_MODEL_FLAGS))
         continue;
-      // An nw4r scene object starts with its vtable, in the executable's data.
       if (const u32 vtable = m.Read32(model); vtable < VTABLES_FROM || vtable >= VTABLES_TO)
         continue;
       const u32 flags = m.Read32(model + SCENE_MODEL_FLAGS);
-      // Only the game's flags, with or without Orca's two bits: anything else isn't a panel model,
-      // so leave it alone.
       if ((flags & ~MODEL_FLAGS_HIDDEN) != MODEL_FLAGS_GAME)
         continue;
       const u32 want = hide ? (flags | MODEL_FLAGS_HIDDEN) : (flags & ~MODEL_FLAGS_HIDDEN);
@@ -221,7 +210,6 @@ Rollback::InputGate::Masks GateMasks(const GuestMemory& m)
   if (ReadSceneName(m) != SCENE_CSS)
     return masks;
   const Rules::Header header = Rules::ReadHeader(m);
-  // Under a header the online rules pass A only in the grid (OnlineRules.h).
   const u8 plugged = PluggedInMemory(m);
   if (header.Locked() || !Online(header, CssTitle::ReadPick(m), std::popcount(plugged)))
     return masks;
@@ -236,12 +224,10 @@ Rollback::InputGate::Masks GateMasks(const GuestMemory& m)
                               hand.target == Rules::CSS_HAND_BUTTON &&
                               hand.button == Rules::CSS_BUTTON_PLAYER_TYPE && hand.panel == port;
     const bool list = Rules::ReadCssNameList(m, port);
-    // Returning the held token to one's own human panel lets this friend sit out next round.
     if (return_token)
     {
       masks[port].a_centres_stick = true;
     }
-    // The player's own tag and its controls: A on their own name button and in its list.
     else if (Rules::CssNameTakesA(hand, port, list))
     {
       masks[port].a_centres_stick = true;
@@ -268,7 +254,6 @@ void ClearFrame(const Core::CPUThreadGuard& guard, int frame, bool resimulating,
   GuardMemory m(guard);
   const int record = ClearRecord(m, plugged);
   const int panels = ClearPanels(m, plugged);
-  // Log first runs only: a re-run from an earlier snapshot writes the same bytes again.
   if ((record > 0 || panels > 0) && !resimulating)
   {
     NOTICE_LOG_FMT(ROLLBACK,
@@ -291,4 +276,4 @@ void SeatsFrame(const Core::CPUThreadGuard& guard, int frame, bool resimulating,
                    frame, hidden, written);
   }
 }
-}  // namespace Orca::UX::OnlineSeats
+}

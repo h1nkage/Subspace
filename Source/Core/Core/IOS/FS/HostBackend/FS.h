@@ -65,9 +65,6 @@ public:
 
   void SetNandRedirects(std::vector<NandRedirect> nand_redirects) override;
 
-  // Orca rollback: rollback snapshots keep no NAND contents. Each records a journal mark instead
-  // (DoState), and loading one undoes every NAND change journaled after its mark. Journaling starts
-  // with the first snapshot. The snapshot ring forgets changes older than its oldest snapshot.
   u64 LastJournalMark() const { return m_journal_mark; }
   void JournalTrim(u64 mark);
   // Stops journaling and forgets every change (no snapshot remains to undo to).
@@ -79,8 +76,6 @@ public:
   // without them, and a rollback that undoes it fails (TakeJournalError) instead of memory growing.
   static constexpr u64 JOURNAL_MAX_BYTES = u64{128} << 20;
   u64 JournalBytes() const { return m_journal_bytes; }
-  // Orca drop-in: the NAND's host folder, and re-reading the FST after its files were replaced
-  // with a keyframe's (no handle may be open on them: load the keyframe's state next).
   const std::string& HostRoot() const { return m_root_path; }
   // Windows opens host files unshared: while the game has a NAND file open, nothing can read,
   // copy or delete it by path. These close (and so flush) every open host file, and reopen them
@@ -118,7 +113,6 @@ private:
   };
   Handle* AssignFreeHandle();
 
-  // Orca rollback journal (Journal.cpp). Paths are host paths. Entries are undone newest first.
   struct JournalEntry
   {
     enum class Kind

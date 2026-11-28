@@ -1,9 +1,6 @@
 // Copyright 2026 YouGame
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Rulesets as data (Orca split S5): the strict JSON reader, the one-schema interpreter and the
-// ruleset reader, against the shared vectors the site's validator runs too.
-
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -63,7 +60,6 @@ std::string ToHex(std::string_view bytes)
   return out;
 }
 
-// A JSON pointer's parent and last token (no escapes in the vectors).
 std::pair<picojson::value*, std::string> Parent(picojson::value* root, const std::string& pointer)
 {
   picojson::value* at = root;
@@ -152,7 +148,7 @@ std::string CaseText(const picojson::value& vectors, const picojson::value& c)
   }
   return text;
 }
-}  // namespace
+}
 
 TEST(OrcaRuleset, CompiledSchemaIsTheFile)
 {
@@ -170,13 +166,10 @@ TEST(OrcaRuleset, SchemaListsTheInterpretersKeywords)
     EXPECT_EQ(listed[i].get<std::string>(), keywords[i]);
 }
 
-// Every case of the shared vectors: Orca and the site agree on each.
 TEST(OrcaRuleset, Vectors)
 {
-  // The vectors file holds non-integers on purpose (cases' "set" values), so picojson reads it.
   picojson::value vectors;
   ASSERT_EQ(picojson::parse(vectors, ReadText("Tools/orca/mods/ruleset-vectors.json")), "");
-  // baseText is the builtin file, and base the same value.
   EXPECT_EQ(vectors.get("baseText").get<std::string>(),
             ReadText("Source/Core/Core/Orca/Games/Brawl/Rulesets/brawl-supernova-2025.json"));
   EXPECT_EQ(Json(vectors.get("baseText").get<std::string>()), vectors.get("base"));
@@ -224,13 +217,10 @@ TEST(OrcaRuleset, StrictJson)
   EXPECT_TRUE(refused("  "));
   EXPECT_TRUE(refused("tru"));
   EXPECT_TRUE(refused("\xEF\xBB\xBF{}"));
-  // Depth: the root is level 1; [[1]] has three levels.
   EXPECT_FALSE(refused("[[1]]", 3));
   EXPECT_TRUE(refused("[[1]]", 2));
   EXPECT_TRUE(refused(std::string(100000, '['), 16));
-  // Size, before anything is read.
   EXPECT_TRUE(!ReadStrictJson("[1]", 2, 16, &error));
-  // Numbers: exact integers, the same in every locale.
   const auto n = [&](std::string_view text) { return ReadStrictJson(text, 64, 2, &error)->get<double>(); };
   EXPECT_EQ(n("30"), 30.0);
   EXPECT_EQ(n("30.0"), 30.0);
@@ -240,14 +230,11 @@ TEST(OrcaRuleset, StrictJson)
   EXPECT_EQ(n("9007199254740991"), 9007199254740991.0);
   EXPECT_EQ(n("0e-400"), 0.0);
   EXPECT_EQ(n("3E+1"), 30.0);
-  // Only exact integers within 2^53 - 1, as written, and at most 32 bytes: no host's decimal
-  // conversion decides anything.
   for (const char* text : {"9007199254740992", "2.5", "1e-400", "1.0000000000000001",
                            "0.99999999999999999", "1e16", "30.000000000000000000000000000000"})
   {
     EXPECT_TRUE(refused(text)) << text;
   }
-  // Escapes.
   EXPECT_EQ(ReadStrictJson(R"("\"\\\/\b\f\n\r\t\u0041\u00e9")", 64, 2, &error)->get<std::string>(),
             "\"\\/\b\f\n\r\tA\xC3\xA9");
 }
@@ -306,7 +293,6 @@ TEST(OrcaRuleset, MismatchesNameThePath)
   EXPECT_EQ(SchemaMismatch(schema, doc), "(root): unknown key \"extra\"");
 }
 
-// The same text reads to the same ruleset, field for field (no host state, no locale).
 TEST(OrcaRuleset, ReadingIsAPureFunction)
 {
   const std::string text = ReadText("Source/Core/Core/Orca/Games/Brawl/Rulesets/brawl-supernova-2025.json");

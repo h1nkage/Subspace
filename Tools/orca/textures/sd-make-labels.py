@@ -3,12 +3,12 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Orca's Online menu labels: original art, drawn in each game's style with open-licence fonts.
 
-Writes the texture pack Orca loads in every session (Data/Sys/Orca/Textures/RSBE01; see ORCA.md
+Writes the texture pack Orca loads in every session (Data/Sys/Subspace/Textures/RSBE01; see ORCA.md
 "Online menu" and "On-screen UI"). Each PNG uses a Dolphin hires texture name, so it replaces
 one game texture on screen and never touches emulated memory. Brawl and Project+ both load
 textures as RSBE01, but their labels hash differently, so one folder serves both.
 
-  python3 Tools/orca/textures/make-labels.py [--out <dir>] [--sheet <preview.png>]
+  python3 Tools/orca/textures/sd-make-labels.py [--out <dir>] [--sheet <preview.png>]
 
 Needs Pillow. The fonts sit next to this script with their SIL Open Font License 1.1 texts: Archivo
 Black (Brawl's labels), Anton (Project+'s labels, Brawl's title bar, STAGE SELECT, Project+'s
@@ -397,7 +397,7 @@ def mips(label, im):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--out", default=os.path.join(REPO, "Data", "Sys", "Orca", "Textures", "RSBE01"))
+    p.add_argument("--out", default=os.path.join(REPO, "Data", "Sys", "Subspace", "Textures", "RSBE01"))
     p.add_argument("--sheet", help="also write a preview of every label on the menus' colours")
     a = p.parse_args()
     os.makedirs(a.out, exist_ok=True)

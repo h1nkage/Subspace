@@ -13,15 +13,13 @@
 namespace Orca::GpuDiagnostics
 {
 using Clock = std::chrono::steady_clock;
-// Callers serialize and update last only when taking a sample. Boot, error and loss samples
-// force a snapshot; periodic samples share a sixty-second limit across successive boots.
 bool SampleDue(Clock::time_point now, std::optional<Clock::time_point> last, bool force = false);
 std::optional<u64> FrameNumber(int frame);
 
 struct Memory
 {
   std::optional<u64> commit, limit, available, working_set, private_bytes;
-  std::string_view job = "none";  // none, yes, or unknown
+  std::string_view job = "none";
   std::optional<u64> job_peak, job_limit;
   bool process_limit = false;
 };
@@ -44,8 +42,6 @@ struct Render
   u64 presented = 0;
   std::optional<u64> frame, scene_frame;
 };
-// Byte counts are displayed in whole MiB (labelled MB, as in existing Orca logs). Unknown
-// values remain unknown rather than looking like zero. All output is bounded and terminated.
 size_t FormatMemory(char* out, size_t size, const Memory& memory);
 size_t FormatGpuMemory(char* out, size_t size, const Segment& local, const Segment& non_local);
 size_t FormatAdapter(char* out, size_t size, const Adapter& adapter);
@@ -58,9 +54,7 @@ void LogMemory(bool force = false);
 void ResetScene();
 void NoteFrame(int frame);
 void NoteScene(std::string_view scene, int frame);
-// Counts successful GX shaders, including disk cache loads, cumulatively for this boot.
-// Recompiles after a graphics reload count again; failed and pending shaders do not.
 void ShaderCreated(bool pixel, bool uber);
 void LogRender(Render render);
 #endif
-}  // namespace Orca::GpuDiagnostics
+}

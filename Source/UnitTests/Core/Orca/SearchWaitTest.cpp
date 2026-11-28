@@ -66,7 +66,6 @@ TEST_F(OrcaUXSearchWait, SoloReadinessStartsOnceCancelsAndRestarts)
 {
   QueueApp::SetSoloReady(true);
   EXPECT_EQ(Search::WaitingLine(), "Waiting for another player… 0:00");
-  // Set an earlier start without sleeping, then exercise the per-frame ready publication.
   Search::SetWaiting(true, m_start);
   QueueApp::SetSoloReady(true);
   EXPECT_EQ(Search::WaitingLine(m_start + 36s), "Waiting for another player… 0:36");
@@ -95,4 +94,4 @@ TEST_F(OrcaUXSearchWait, ReturningReadyFromARoomStartsANewWait)
   QueueApp::SetSoloReady(true);
   EXPECT_EQ(Search::WaitingLine(), "Waiting for another player… 0:00");
 }
-}  // namespace
+}

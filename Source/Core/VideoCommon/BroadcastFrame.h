@@ -14,8 +14,6 @@ class AbstractTexture;
 class AbstractFramebuffer;
 class AbstractStagingTexture;
 
-// GPU thread owns textures; one mapped slot is lent to the worker until it finishes.
-// Busy GPU readbacks and busy writer jobs drop frames, never wait like FrameDumper does.
 class BroadcastFrame
 {
 public:
@@ -36,7 +34,7 @@ private:
   const u8* m_pointer = nullptr;
   size_t m_stride = 0;
   u64 m_next = 0;
-  std::atomic<int> m_job{0};  // 0 free, 1 worker owns mapped slot, 2 finished (GPU unmaps)
+  std::atomic<int> m_job{0};
   std::atomic<bool> m_stop{false};
   std::thread m_worker;
 };

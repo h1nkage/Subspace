@@ -231,7 +231,6 @@ std::optional<IPCReply> NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
   // as such (as opposed to forwarding IPC results or whatever), so -
   if (Core::WantsDeterminism())
   {
-    // Orca: said in the log, so a trace shows every refusal (an Orca session never networks).
     INFO_LOG_FMT(IOS_SSL, "IOS_SSL: {} ioctlv {:#x} refused (determinism wanted)",
                  GetDeviceName(), request.request);
     return IPCReply(IPC_EACCES);

@@ -126,8 +126,6 @@ private:
   // and on the workspace shown.
   bool m_app_viewable = true;
   bool m_surface_visible = true;
-  // Orca's window's size, and whether the presenter has yet to resize to it: a move alone needs no
-  // resize, and one that came before the presenter existed is made once it does.
   int m_embed_width = 0;
   int m_embed_height = 0;
   bool m_resize_pending = false;

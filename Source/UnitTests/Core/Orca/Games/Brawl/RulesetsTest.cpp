@@ -1,13 +1,6 @@
 // Copyright 2026 YouGame
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// The builtin module's rulesets moved out of C++ into data (Orca split S5). These are the values
-// the tables and constants held at split-s3 (RankedSteps.cpp MakeBrawl/MakePPlus, BrawlStages.cpp
-// kStageKinds, RankedPPlus.cpp LEGAL_KINDS, RankedSet.h WINS/TIEBREAK_STREAK_LIMIT/LEDGE_LIMIT*/
-// META_KNIGHT and WriteSetRules' 3/8 and 1/3, OnlineRules.cpp StocksFor and ForceRules' 8 minutes,
-// OnlineRules.h CSS_READY_FRAMES, Policy/Queue.h READY_FRAMES and SKIP_FRAMES, Policy/CharOrder.h
-// PICK_FRAMES): the data must say exactly the same, or the guest writes change.
-
 #include <array>
 #include <filesystem>
 #include <string>
@@ -44,7 +37,7 @@ void ExpectStages(const Ranked::Ruleset& r, const std::vector<std::string>& name
     EXPECT_EQ(r.stage_kinds[i], 0) << i;
   }
 }
-}  // namespace
+}
 
 TEST(OrcaRulesets, BuiltinsAreTheOldTables)
 {
@@ -133,7 +126,6 @@ TEST(OrcaRulesets, BuiltinsAreTheOldTables)
     EXPECT_EQ(Orca::UX::Rulesets::ByBlock(static_cast<u8>(block)), nullptr);
 }
 
-// What is compiled in is the files in the tree, read by the same reader a pack's file gets.
 TEST(OrcaRulesets, CompiledInAreTheFiles)
 {
   for (const char* name : {"brawl-supernova-2025", "pplus-2024"})
@@ -155,8 +147,6 @@ TEST(OrcaRulesets, CompiledInAreTheFiles)
   }
 }
 
-// The stage flows find a stage by the game's id through the ruleset's list; Brawl's stage select
-// tiles (BrawlStages.cpp kTiles, layout data for a later slice) follow the same order.
 TEST(OrcaRulesets, StageIdsComeFromTheRuleset)
 {
   namespace BS = Orca::UX::BrawlStages;
@@ -206,7 +196,6 @@ TEST(OrcaRulesets, RankedBrawlUsesSupernova2026StagesAndTwoOptionalBans)
   EXPECT_EQ(progress.step, 0);
   EXPECT_TRUE(Ranked::Strike(*r, plan, &progress, 7));
   EXPECT_EQ(progress.step, 1);
-  // One ban can be kept while skipping the second, or letting its timer expire.
   for (const bool skip : {false, true})
   {
     auto partial = Ranked::Begin(*r, plan);

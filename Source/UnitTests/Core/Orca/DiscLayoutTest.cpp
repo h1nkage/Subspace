@@ -75,8 +75,6 @@ void Text(std::vector<u8>* bytes, size_t offset, const std::string& value)
   std::copy(value.begin(), value.end(), bytes->begin() + offset);
 }
 
-// A single hash group, invented files, and an invented encrypted ticket field. The normal
-// ticket reader uses default IOSC entries in memory; no dumped keys or Nintendo data.
 class FixtureBlob final : public DiscIO::BlobReader
 {
 public:
@@ -101,7 +99,6 @@ public:
   {
     if (m_size_type == DiscIO::DataSizeType::LowerBound)
     {
-      // NFS semantics: unstored blocks, including the tail, read as zeros.
       if (size > std::numeric_limits<u64>::max() - offset)
         return false;
       const u64 stored = offset < m_data.size() ? std::min(size, m_data.size() - offset) : 0;
@@ -130,7 +127,7 @@ std::vector<u8> BlankTailImage(bool hashes)
   std::vector<u8> image(0x68000);
   Write32(&image, 0x18, DiscIO::WII_DISC_MAGIC);
   image[0x60] = hashes ? 0 : 1;
-  image[0x61] = 1;  // NFS exposes unencrypted sectors to VolumeWii.
+  image[0x61] = 1;
   Write32(&image, 0x40000, 1);
   Write32(&image, 0x40004, 0x40020 / 4);
   Write32(&image, 0x40020, 0x50000 / 4);
@@ -150,7 +147,6 @@ TEST(VolumeWiiBlob, LowerBoundBlankTailMatchesPaddedImage)
     auto padded = stored;
     padded.resize(stored.size() + 4 * Wii::BLOCK_TOTAL_SIZE);
     Wii expected(std::make_unique<FixtureBlob>(padded), false);
-    // Deliberately retain BlobType::PLAIN: the guard must use size semantics, not the type name.
     Wii actual(std::make_unique<FixtureBlob>(stored, DiscIO::DataSizeType::LowerBound), false);
     const auto partition = expected.GetGamePartition();
     ASSERT_EQ(actual.GetGamePartition(), partition);
@@ -212,7 +208,6 @@ TEST(VolumeWiiBlob, FiniteContainerBlankTailsMatchPaddedImage)
       }
       else if (type == DiscIO::BlobType::WBFS)
       {
-        // One stored cluster, followed by unmapped clusters that resolve into cluster zero.
         std::vector<u8> container(0x200000);
         std::memcpy(container.data(), "WBFS", 4);
         Write32(&container, 4, container.size() / 512);
@@ -257,7 +252,6 @@ TEST(VolumeWiiBlob, FiniteContainerBlankTailsMatchPaddedImage)
         ASSERT_TRUE(actual->Read(offset, b.size(), b.data(), partition));
         EXPECT_EQ(a, b);
       }
-      // WBFS also serves unmapped logical clusters beyond the stored cluster.
       if (type == DiscIO::BlobType::WBFS)
       {
         std::array<u8, 32> bytes{};
@@ -372,8 +366,6 @@ std::vector<u8> WiiImage(bool moved, bool changed = false, bool other_gap = fals
   Write32(&data, dol, 0x100);
   Write32(&data, dol + 0x90, 4);
   Text(&data, dol + 0x100, "code");
-  // Root, hello.txt, folder, nested.bin, empty. String offsets intentionally need not
-  // follow table order, and suffix-sharing is supported by the layout representation.
   const u32 hello = odd_strings ? 24 : 0;
   const u32 folder = odd_strings ? 11 : 10;
   const u32 nested = odd_strings ? 0 : 17;
@@ -389,7 +381,6 @@ std::vector<u8> WiiImage(bool moved, bool changed = false, bool other_gap = fals
   Write32(&data, fst + 40, file_b / 4);
   Write32(&data, fst + 44, 3);
   Write32(&data, fst + 48, empty);
-  // Zero-length files can point inside another file and do not consume a gap.
   Write32(&data, fst + 52, 0);
   Text(&data, fst + 60 + hello, "hello.txt");
   Text(&data, fst + 60 + folder, "folder");
@@ -406,8 +397,6 @@ std::vector<u8> WiiImage(bool moved, bool changed = false, bool other_gap = fals
                                              {fst + 0x80, file_a - fst - 0x80},
                                              {file_a + 5, file_b - file_a - 5},
                                              {file_b + 3, data.size() - file_b - 3}}};
-    // Disc mastering and RVZ use 0x8000 decrypted bytes, independently of the
-    // physical sectors' 0x7c00-byte payloads and the layout implementation.
     constexpr u64 junk_unit_size = 0x8000;
     std::vector<u8> junk(junk_unit_size);
     std::mt19937 random(0x12345678);
@@ -468,7 +457,6 @@ std::vector<u8> WiiImage(bool moved, bool changed = false, bool other_gap = fals
   Write32(&ticket, 0, 0x10001);
   Text(&ticket, 0x140, "Invented-XS");
   std::fill_n(ticket.begin() + offsetof(IOS::ES::Ticket, title_key), 16, 0x6b);
-  // These signature bytes are invented markers, never valid signatures.
   std::fill(ticket.begin() + 4, ticket.begin() + 0x104, moved ? 0x41 : 0x42);
   const IOS::ES::TicketReader reader(ticket);
   const auto key = reader.GetTitleKey(IOS::HLE::IOSC{reader.GetConsoleType(), false});
@@ -514,7 +502,6 @@ std::vector<u8> WiiImage(bool moved, bool changed = false, bool other_gap = fals
   Write32(&image, 0x40000, 2);
   Write32(&image, 0x40004, 0x40020 / 4);
   Write32(&image, 0x40020, partition / 4);
-  // A non-game table entry is enough to ensure rebuilding drops it; never read its data.
   Write32(&image, 0x40028, (partition + data_offset + physical_size - 0x8000) / 4);
   Write32(&image, 0x4002c, 1);
   Write32(&image, 0x4e000, 1);
@@ -532,8 +519,6 @@ std::vector<u8> WiiImage(bool moved, bool changed = false, bool other_gap = fals
   std::copy_n(encrypted.begin(), physical_size, image.begin() + partition + data_offset);
   if (gap_data == GapData::PhysicalZeroFormula || gap_data == GapData::PhysicalZeroSeeded)
   {
-    // Like a scrubbed ISO, erase the complete encrypted sectors (including hash/IV
-    // headers), not their plaintext. All affected payloads are outside the files.
     for (size_t block : {size_t{1}, size_t{2}})
       std::fill_n(image.begin() + partition + data_offset + block * 0x8000, 0x8000, 0);
     if (gap_data == GapData::PhysicalZeroFormula)
@@ -541,8 +526,6 @@ std::vector<u8> WiiImage(bool moved, bool changed = false, bool other_gap = fals
   }
   if (gap_data == GapData::PhysicalZeroTree)
   {
-    // Retain the tree generated before erasure: individual leaves, an entire
-    // subgroup, a full group, and a final group containing only three sectors.
     for (size_t block = 0; block < block_count; ++block)
     {
       if (block == 1 || block == 2 || (block >= 8 && block < 16) || (block >= 64 && block < 128) ||
@@ -672,7 +655,6 @@ TEST_F(DiscLayoutTest, ExportsOnlyMetadataAndRegeneratesFST)
 
 TEST(DiscLayoutJunkTest, FormulaMatchesIndependentNKitVectors)
 {
-  // SHA-1 vectors from the supplied MIT gc-junk.ts algorithm, using an invented ID.
   const std::array<std::tuple<u8, u64, const char*>, 3> vectors{{
       {0, 0, "CECDCC2B36FFF5F14AC7580B56C6A149478878A5"},
       {1, 0x8000, "0BD58B6BB1F3C7E95400F72B7EC3B1B168A6D25C"},
@@ -697,7 +679,6 @@ TEST_P(DiscLayoutJunkTest, ClassifiesMetadataAndRebuildsMovedFiles)
 {
   const GapData mode = GetParam();
   ASSERT_TRUE(WriteBytes(original, WiiImage(false, false, false, false, false, false, mode, 1)));
-  // The moved copy has different, scrubbed gaps. Only its files can contribute to the rebuild.
   ASSERT_TRUE(
       WriteBytes(variant, WiiImage(true, false, false, false, false, false, GapData::Zero, 1)));
   ASSERT_NO_FATAL_FAILURE(RefreshLayout());
@@ -740,7 +721,6 @@ TEST_P(DiscLayoutJunkTest, ClassifiesMetadataAndRebuildsMovedFiles)
   EXPECT_NE(summary.find(std::to_string(seeds) + " seeds stored"), std::string::npos);
   EXPECT_EQ(std::count(summary.begin(), summary.end(), '\n'), 1);
 
-  // An explicit key allowlist prevents adding payload fields to the metadata schema.
   picojson::value root;
   ASSERT_TRUE(picojson::parse(root, json).empty());
   const std::set<std::string> allowed{
@@ -827,7 +807,6 @@ TEST_F(DiscLayoutTest, PaddedSeededGapsIncludeTinyUnalignedFragmentsAndRandomRea
   ASSERT_TRUE(blob) << error;
   const auto volume = DiscIO::CreateVolume(original, false);
   ASSERT_TRUE(volume);
-  // These reads cross both 0x7c00 physical data boundaries and 0x8000 junk boundaries.
   for (u64 offset : {0x2471, 0x7bff, 0x7fff, 0x12345, 0x1efff, 0x1e7ffe})
   {
     const u64 size = std::min<u64>(0x9876, layout.DecryptedSize() - offset);
@@ -902,8 +881,6 @@ TEST_F(DiscLayoutTest, PhysicalZeroSectorsRemainDistinctFromDecryptedZeros)
     ASSERT_TRUE(blob) << error;
     const auto volume = DiscIO::CreateVolume(original, false);
     ASSERT_TRUE(volume);
-    // Every gap, including unaligned reads and the 0x8000 unit which is interrupted
-    // by a zero sector at 0x7c00, must match without using the source's gap bytes.
     std::vector<u8> expected(0x8000), actual(0x8000);
     for (const auto& gap : parsed->gaps)
     {
@@ -922,7 +899,6 @@ TEST_F(DiscLayoutTest, PhysicalZeroSectorsRemainDistinctFromDecryptedZeros)
     ASSERT_TRUE(blob->Read(layout.partition_offset + layout.data.offset + 0x8000 - 7, 0x8000 + 14,
                            actual.data()));
     EXPECT_TRUE(std::all_of(actual.begin() + 7, actual.end(), [](u8 b) { return b == 0; }));
-    // Use a bounded raw read entirely inside an erased sector, including its hash header.
     actual.resize(0x8000);
     ASSERT_TRUE(blob->Read(layout.partition_offset + layout.data.offset + 0x8000, actual.size(),
                            actual.data()));
@@ -979,7 +955,6 @@ TEST_F(DiscLayoutTest, ErasedSubtreesRebuildExactlyFromIdentityAndMovedFiles)
     ASSERT_EQ(code, 0);
     auto rebuilt = DiscIO::CreateVolume(output, false);
     ASSERT_TRUE(rebuilt);
-    // A moved source supplies its own signatures. Identity checks the whole header too.
     const u64 first = identity ? 0 : layout.h3.offset;
     for (u64 at = first; at < layout.data.offset + layout.data.size;)
     {
@@ -993,7 +968,6 @@ TEST_F(DiscLayoutTest, ErasedSubtreesRebuildExactlyFromIdentityAndMovedFiles)
     }
     ASSERT_TRUE(File::Delete(output));
   }
-  // Legacy layouts can recover retained metadata from an input with the same H3.
   auto legacy = *parsed;
   legacy.erased_hashes.clear();
   auto blob = Orca::StandardBlob::Create(original, legacy, &error);
@@ -1196,7 +1170,6 @@ TEST_F(DiscLayoutTest, RebuildOverlappingFilesIsRefused)
 
 TEST_F(DiscLayoutTest, RebuildVerificationMismatchDeletesPartial)
 {
-  // An incorrect reference FST is excluded during preflight but checked on the reopened RVZ.
   std::string json;
   ASSERT_TRUE(File::ReadFileToString(reference_path, json));
   picojson::value root;
@@ -1345,7 +1318,6 @@ TEST_F(DiscLayoutTest, HostilePartitionTablesAreRejectedBeforeTraversal)
     Write32(&bytes, 0x40004, table);
     ASSERT_TRUE(WriteBytes(variant, bytes));
 #ifndef _WIN32
-    // A regression must fail in bounded time, rather than stall the test runner.
     EXPECT_EXIT(
         {
           alarm(3);
@@ -1413,7 +1385,6 @@ TEST_F(DiscLayoutTest, WholeDiscVerificationRejectsWrittenRVZCorruption)
   ASSERT_TRUE(expected->ComputeH3(&error)) << error;
   std::vector<u8> intended(expected->GetDataSize());
   ASSERT_TRUE(expected->Read(0, intended.size(), intended.data()));
-  // These are actual written RVZs with altered logical bytes, not changes to the reference.
   for (const u64 offset : {u64{0x20}, u64{0x40024}, u64{0x4e000}, u64{0x49000},
                            layout.partition_offset + layout.h3.offset})
   {
@@ -1753,4 +1724,4 @@ TEST_F(DiscLayoutTest, WADFactoriesKeepContentIntegrity)
   }
 }
 
-}  // namespace
+}

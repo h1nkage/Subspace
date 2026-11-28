@@ -13,7 +13,6 @@ namespace Orca::UX::Rulesets
 {
 namespace
 {
-// The data files, as bytes (CMake writes the lists from Games/Brawl/Rulesets/).
 constexpr char BRAWL_2025[] = {
 #include "brawl-supernova-2025.json.inc"
 };
@@ -35,7 +34,7 @@ Ranked::Ruleset Load(std::string_view name, std::string_view json)
   }
   return std::move(*ruleset);
 }
-}  // namespace
+}
 
 const Ranked::Ruleset& Brawl2025()
 {
@@ -77,4 +76,4 @@ const Ranked::Ruleset* ByBlock(u8 block)
   }
   return nullptr;
 }
-}  // namespace Orca::UX::Rulesets
+}

@@ -27,9 +27,6 @@ using namespace std::chrono_literals;
 
 namespace
 {
-// A localhost proxy in front of the real fixture. STUN servers may cache a response by
-// transaction ID; changing a request must therefore start a new transaction. No credentials
-// from the environment, DNS, or external network are used here.
 class TurnResponseCache
 {
 public:
@@ -159,7 +156,7 @@ void GatherThroughCache(bool stale_nonce)
   EXPECT_EQ(cache.cache_hits, 0);
   EXPECT_EQ(cache.stale_challenges, stale_nonce ? 1 : 0);
 }
-}  // namespace
+}
 
 TEST(OrcaTurnRetry, AllocateAfterChallengeUsesANewTransaction)
 {

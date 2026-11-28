@@ -148,8 +148,6 @@ bool Presenter::Initialize()
   else if (const char* size = std::getenv("ORCA_TEST_PRESENT");
            size && g_gfx->SupportsUtilityDrawing())
   {
-    // Orca tests: a headless run presents into its own image, OSD included, so screenshots show
-    // what a window would. Sizes down to 1x1 are allowed to test very thin windows.
     int width = 0, height = 0;
     if (std::sscanf(size, "%dx%d", &width, &height) != 2 || width < 1 || height < 1 ||
         width > 7680 || height > 4320)
@@ -274,10 +272,6 @@ void Presenter::ImmediateSwap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_
 
   const u64 ticks = m_next_swap_estimated_ticks;
 
-  // Orca: when the throttle schedules that field now. The estimate's own host time was taken at
-  // the field before it, and a rollback's re-run (whose fields run unthrottled) or a stall's pacing
-  // reset may have come since. Single core only: the CPU thread owns the throttle. Not for a
-  // redisplay: a loaded state's ticks belong to another timeline than the throttle's.
   TimePoint due = m_next_swap_estimated_time;
   if (!redisplay && Core::IsCPUThread())
     due = Core::System::GetInstance().GetCoreTiming().GetTargetHostTime(static_cast<s64>(ticks));
@@ -547,7 +541,6 @@ float Presenter::CalculateDrawAspectRatio(bool allow_stretch) const
   // If stretch is enabled, we prefer the aspect ratio of the window.
   if (aspect_mode == AspectMode::Stretch)
   {
-    // Orca: use the layout box (the window, unless an embed `view` sets another box).
     resulting_aspect_ratio =
         m_layout_box.w > 0 && m_layout_box.h > 0 ?
             m_layout_box.w / m_layout_box.h :
@@ -678,8 +671,6 @@ int Presenter::SurfaceRefreshRate()
   return s_surface_refresh_rate.load(std::memory_order_relaxed);
 }
 
-// Orca: the newest embed layout hint. The backbuffer catches up with a window resize a present or
-// two later; until then the presenter keeps using the previous hint (see ChooseLayout).
 static std::mutex s_layout_lock;
 static std::optional<LayoutHint> s_layout_latest;
 
@@ -689,7 +680,6 @@ void Presenter::SetLayoutHint(std::optional<LayoutHint> hint)
   s_layout_latest = hint;
 }
 
-// Orca tests: requested size as width << 32 | height, or 0 when none is pending.
 static std::atomic<u64> s_test_present_size{0};
 
 void Presenter::RequestTestPresentSize(int width, int height)
@@ -834,8 +824,6 @@ std::tuple<float, float> Presenter::ApplyStandardAspectCrop(float width, float h
 
 void Presenter::UpdateDrawRectangle()
 {
-  // Orca: pick the box to lay the picture out in (the window, unless an embed `view` sets one; see
-  // PresentLayout.h). The code below fits the picture to this box as Dolphin fits it to the window.
   {
     std::optional<LayoutHint> latest;
     {
@@ -949,7 +937,6 @@ void Presenter::UpdateDrawRectangle()
     int_draw_height = rect.GetHeight();
   }
 
-  // Orca: centre in the box; it may run past the backbuffer, and Present() crops it.
   m_target_rectangle = PlaceInBox(m_layout_box, int_draw_width, int_draw_height);
 }
 
@@ -1048,8 +1035,6 @@ void Presenter::RepresentLast()
   if (m_xfb_entry && g_vertex_manager->IsFlushed())
   {
     Present();
-    // Orca tests: a screenshot requested during a stall captures this redraw, overlay included.
-    // Never adds an extra frame to a real frame dump.
     if (m_test_target && !Config::Get(Config::MAIN_MOVIE_DUMP_FRAMES) &&
         g_frame_dumper->IsFrameDumping())
     {
@@ -1128,9 +1113,6 @@ void Presenter::Present(PresentInfo* present_info, bool window_requested)
   g_gfx->BeginUtilityDrawing();
   if (m_test_framebuffer)
     g_gfx->SetAndClearFramebuffer(m_test_framebuffer.get(), {{0.0f, 0.0f, 0.0f, 1.0f}});
-  // Orca: time spent blocked on the graphics card (waiting for a back buffer, presenting) counts
-  // toward this machine's speed as its GPU share (Orca/Perf.h). In a session this is the CPU
-  // thread.
   const bool time_gpu = Core::IsCPUThread();
   auto gpu_start = Clock::now();
   const bool backbuffer_bound =
@@ -1183,9 +1165,6 @@ void Presenter::Present(PresentInfo* present_info, bool window_requested)
     }
     else
     {
-      // Orca tests (ORCA_TEST_PRESENT): nothing is presented, so the frame's GPU work is submitted
-      // here instead. Metal otherwise keeps every frame's command buffers open and runs out of GPU
-      // memory after a few thousand frames ("Failed to allocate IOGPUDeviceShmem").
       g_gfx->Flush();
     }
   }
@@ -1221,9 +1200,6 @@ TimePoint Presenter::GetUpdatedPresentationTime(TimePoint intended_presentation_
     return intended_presentation_time;
   }
 
-  // Orca: Immediate XFB frames follow a quantile of recent arrivals instead (PresentPacing.h). The
-  // rule below moves half the way to any late frame at once, so with the copy early in the frame
-  // each rollback's re-run dragged the presents after it.
   if (g_ActiveConfig.bImmediateXFB)
   {
     m_presentation_time_offset = std::chrono::duration_cast<DT>(m_present_pacer.Next(

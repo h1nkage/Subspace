@@ -1,11 +1,6 @@
 // Copyright 2026 YouGame
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// The origin and fresh starts (Core/Rollback/OnlineMatch.h, ORCA.md "Drop-in"): every Orca boots
-// the same way to its origin at the built main menu, and a host goes back there before a queue
-// match, or before a friend joins a game it has played alone for a while, so a join replays only the
-// match's own frames.
-
 #include <chrono>
 #include <map>
 #include <optional>
@@ -24,7 +19,6 @@ using namespace Rollback::OnlineMatch;
 
 namespace
 {
-// A solo host on the menus with an origin, nobody arriving.
 FreshInputs SoloHost(int history_frames = 10 * 60 * 60)
 {
   FreshInputs in;
@@ -33,7 +27,7 @@ FreshInputs SoloHost(int history_frames = 10 * 60 * 60)
   in.history_frames = history_frames;
   return in;
 }
-}  // namespace
+}
 
 TEST(OrcaCanonicalBoot, EveryBootPlaysPort1WithNothingPressedAndNobodyElse)
 {
@@ -42,7 +36,6 @@ TEST(OrcaCanonicalBoot, EveryBootPlaysPort1WithNothingPressedAndNobodyElse)
   const GCPadStatus one = Orca::Net::DecodePad(pads[0]);
   EXPECT_TRUE(one.isConnected);
   EXPECT_EQ(one.button, 0);
-  // As values: the header's constants have no definition to bind to.
   EXPECT_EQ(int{one.stickX}, int{GCPadStatus::MAIN_STICK_CENTER_X});
   EXPECT_EQ(int{one.stickY}, int{GCPadStatus::MAIN_STICK_CENTER_Y});
   for (int port = 1; port < Orca::Net::MAX_SEATS; ++port)
@@ -54,14 +47,11 @@ TEST(OrcaCanonicalBoot, EveryBootPlaysPort1WithNothingPressedAndNobodyElse)
 
 TEST(OrcaCanonicalBoot, TheOriginIsTheMainMenuBuiltForHalfASecond)
 {
-  // 30 frames of a built main menu make the origin (Brawl Rev 2 measures 1524, Project+ 230).
   EXPECT_EQ(DecideOrigin(1441, 0, std::nullopt), OriginStep::Wait);
   EXPECT_EQ(DecideOrigin(1470, ORIGIN_SETTLE_FRAMES - 1, std::nullopt), OriginStep::Wait);
   EXPECT_EQ(DecideOrigin(1471, ORIGIN_SETTLE_FRAMES, std::nullopt), OriginStep::Capture);
-  // Project+: after its JIT clear (frame 2).
   EXPECT_EQ(DecideOrigin(229, ORIGIN_SETTLE_FRAMES, 2u), OriginStep::Capture);
   EXPECT_EQ(DecideOrigin(2, ORIGIN_SETTLE_FRAMES, 2u), OriginStep::Wait);
-  // No built menu in time: no origin.
   EXPECT_EQ(DecideOrigin(ORIGIN_DEADLINE - 1, 3, std::nullopt), OriginStep::Wait);
   EXPECT_EQ(DecideOrigin(ORIGIN_DEADLINE, 3, std::nullopt), OriginStep::Fail);
   EXPECT_EQ(DecideOrigin(ORIGIN_DEADLINE, ORIGIN_SETTLE_FRAMES, std::nullopt), OriginStep::Capture);
@@ -71,19 +61,15 @@ TEST(OrcaFreshStart, AQueueRoomsHostFreshStartsOnceItsWelcomeCame)
 {
   FreshInputs in = SoloHost();
   in.queue_armed = true;
-  // `host` came, the welcome hasn't: no keyframe yet.
   EXPECT_EQ(DecideFreshStart(in), FreshStep::Hold);
-  in.waiting = true;  // the opponent's hello came first
+  in.waiting = true;
   EXPECT_EQ(DecideFreshStart(in), FreshStep::Hold);
   in.in_queue_room = true;
   EXPECT_EQ(DecideFreshStart(in), FreshStep::Now);
-  // However short the host's history.
   in.history_frames = 3;
   EXPECT_EQ(DecideFreshStart(in), FreshStep::Now);
-  // Under way (or a keyframe being made): wait for it.
   in.busy = true;
   EXPECT_EQ(DecideFreshStart(in), FreshStep::Hold);
-  // Done (the arm is spent): the opponent joins in place, never a second fresh start in that room.
   in.busy = false;
   in.queue_armed = false;
   EXPECT_EQ(DecideFreshStart(in), FreshStep::None);
@@ -94,16 +80,13 @@ TEST(OrcaFreshStart, AQueueRoomsHostFreshStartsOnceItsWelcomeCame)
 TEST(OrcaFreshStart, AFriendAfterTenSecondsFreshStartsTheHost)
 {
   FreshInputs in = SoloHost(FRESH_FRIENDS_AFTER + 1);
-  // Nobody arriving: nothing.
   EXPECT_EQ(DecideFreshStart(in), FreshStep::None);
   in.waiting = true;
   EXPECT_EQ(DecideFreshStart(in), FreshStep::Now);
-  // A host that just booted or just fresh-started takes the friend in place.
   in.history_frames = FRESH_FRIENDS_AFTER;
   EXPECT_EQ(DecideFreshStart(in), FreshStep::None);
   in.history_frames = 120;
   EXPECT_EQ(DecideFreshStart(in), FreshStep::None);
-  // The test knob's threshold.
   in.fresh_after = 60;
   EXPECT_EQ(DecideFreshStart(in), FreshStep::Now);
   in.fresh_after = 0;
@@ -113,15 +96,12 @@ TEST(OrcaFreshStart, AFriendAfterTenSecondsFreshStartsTheHost)
 
 TEST(OrcaFreshStart, AFriendTakenInPlaceStaysInPlace)
 {
-  // Arrived at 9 s of history: in place. Its keyframe takes a second to store, and the history
-  // passes 10 s meanwhile: still in place, no fresh start under it.
   FreshInputs in = SoloHost(FRESH_FRIENDS_AFTER - 60);
   in.waiting = true;
   EXPECT_EQ(DecideFreshStart(in), FreshStep::None);
   in.in_place = true;
   in.history_frames = FRESH_FRIENDS_AFTER + 60;
   EXPECT_EQ(DecideFreshStart(in), FreshStep::None);
-  // The next friend, once nobody waits, decides again.
   in.in_place = false;
   EXPECT_EQ(DecideFreshStart(in), FreshStep::Now);
 }
@@ -160,7 +140,6 @@ TEST(OrcaFreshStart, NoOriginMeansWaitingAndTheKnobTurnsItOff)
   in.origin_ready = true;
   in.busy = true;
   EXPECT_EQ(DecideFreshStart(in), FreshStep::Hold);
-  // ORCA_TEST_FRESH=off, or a game whose origin is its first frame: joins in place.
   in.busy = false;
   in.enabled = false;
   EXPECT_EQ(DecideFreshStart(in), FreshStep::None);
@@ -171,7 +150,6 @@ TEST(OrcaFreshStart, NoOriginMeansWaitingAndTheKnobTurnsItOff)
 
 TEST(OrcaFreshStart, AFriendInAQueueRoomIsTheQueuesBusiness)
 {
-  // A queue room's opponent never takes the friends path.
   FreshInputs in = SoloHost();
   in.waiting = true;
   in.in_queue_room = true;
@@ -192,9 +170,6 @@ TEST(OrcaFreshStart, AFriendLandsOnTheSelectTheHostIsOn)
   EXPECT_FALSE(Orca::Net::ValidMenuExit(24));
 }
 
-// A queue room's host runs its hold for the room's header and its own pick being put back unseen
-// and unthrottled, like the tail, but never longer than FRESH_UNSEEN_LIMIT frames; a friend's fresh
-// start has neither, so nothing of it runs unseen past the tail.
 TEST(OrcaFreshStart, AQueueHostsHoldAndSteerRunUnseenUpToALimit)
 {
   for (int frames = 0; frames < FRESH_UNSEEN_LIMIT; ++frames)
@@ -202,14 +177,10 @@ TEST(OrcaFreshStart, AQueueHostsHoldAndSteerRunUnseenUpToALimit)
   EXPECT_FALSE(FreshUnseen(true, FRESH_UNSEEN_LIMIT));
   EXPECT_FALSE(FreshUnseen(true, FRESH_UNSEEN_LIMIT + 1000));
   EXPECT_FALSE(FreshUnseen(false, 0));
-  // About two seconds at 60 fps, well past the ~70 frames the steer takes, far short of the
-  // steer's own 10 s limit, which would freeze the picture for seconds.
   EXPECT_GE(FRESH_UNSEEN_LIMIT, 100);
   EXPECT_LE(FRESH_UNSEEN_LIMIT, 180);
 }
 
-// The header goes in during the unseen hold (it is a first run, so the hook writes and records it),
-// never in a tail (a re-run) or a joiner's rebuild.
 TEST(OrcaFreshStart, TheHeaderGoesInOnlyDuringTheUnseenHold)
 {
   EXPECT_TRUE(HeaderFreeWhileCatchingUp(true, false, false));
@@ -219,9 +190,6 @@ TEST(OrcaFreshStart, TheHeaderGoesInOnlyDuringTheUnseenHold)
   EXPECT_FALSE(HeaderFreeWhileCatchingUp(false, true, true));
 }
 
-// The queue room's header limit counts only boundaries that run at the game's pace: a tail's and
-// an unseen hold's don't count, so the join never fails sooner in real time because they ran
-// unthrottled. Once the header is in, the hold is ready at once, unseen or not.
 TEST(OrcaFreshStart, UnseenBoundariesNeverCountTowardTheHeaderLimit)
 {
   int waited = 0;
@@ -232,11 +200,9 @@ TEST(OrcaFreshStart, UnseenBoundariesNeverCountTowardTheHeaderLimit)
   }
   EXPECT_EQ(waited, 0);
   EXPECT_EQ(HeaderWaitAt(&waited, false, true, true, true, true), HeaderWait::Ready);
-  // Shown again with the header still not in: the usual limit, counted from there.
   for (int i = 0; i < HEADER_FAIL_BOUNDARIES; ++i)
     ASSERT_EQ(HeaderWaitAt(&waited, false, false, false, true, true), HeaderWait::Wait) << i;
   EXPECT_EQ(HeaderWaitAt(&waited, false, false, false, true, true), HeaderWait::Fail);
-  // Unchanged outside a fresh start: a friends room makes the keyframe anyway after its wait.
   waited = 0;
   for (int i = 0; i < HEADER_WAIT_BOUNDARIES; ++i)
     ASSERT_EQ(HeaderWaitAt(&waited, false, false, false, true, false), HeaderWait::Wait) << i;
@@ -361,7 +327,6 @@ TEST(OrcaResetStart, FriendsJoinInPlaceThroughThreeMinutesAtAnyFrameRate)
       EXPECT_EQ(DecideFreshStart(in), seconds > 180 ? FreshStep::Now : FreshStep::None);
     }
   }
-  // A paused host or a held game frame does not turn wall time into replay history.
   in.history_frames = 100000;
   in.history_time = std::chrono::seconds(1);
   EXPECT_EQ(DecideFreshStart(in), FreshStep::None);
@@ -372,7 +337,7 @@ TEST(OrcaResetStart, FriendsJoinInPlaceThroughThreeMinutesAtAnyFrameRate)
   EXPECT_EQ(DecideFreshStart(in), FreshStep::None);
   in.in_place = false;
   in.history_frames = 2;
-  in.fresh_after = 1;  // The explicit test knob still counts frames.
+  in.fresh_after = 1;
   EXPECT_EQ(DecideFreshStart(in), FreshStep::Now);
 }
 
@@ -397,7 +362,7 @@ TEST(OrcaResetStart, QueueRestartsOnceAndOnlyASoloHostCanRestart)
   in.origin_ready = false;
   EXPECT_EQ(DecideFreshStart(in), FreshStep::Hold);
   in.origin_ready = true;
-  in.enabled = false;  // a frame-0 origin never enables fresh starts
+  in.enabled = false;
   EXPECT_EQ(DecideFreshStart(in), FreshStep::None);
   in.enabled = true;
   in.queue_armed = false;
@@ -438,7 +403,6 @@ TEST(OrcaResetStart, NewHistoryRecordsNoMenuExitOrSeed)
     Orca::Net::ReplayRecordingScope::RecordPads(1801, CanonicalBootPads());
   }
   EXPECT_TRUE(Orca::Net::HeadersFitRuleset(reset, 0));
-  // Brawl's existing typed events retain their exact first-frame values.
   for (const u8 exit : {Orca::Net::MENU_EXIT_FRIENDS, Orca::Net::MENU_EXIT_CASUAL,
                         Orca::Net::MENU_EXIT_RANKED})
   {
@@ -453,7 +417,6 @@ TEST(OrcaResetStart, NewHistoryRecordsNoMenuExitOrSeed)
 
 TEST(OrcaOriginNand, GameCubeNeedsNoIosAndWiiKeepsItsSessionRootRequirement)
 {
-  // The preflight used by capture, restore, and the joiner, with a real no-IOS system.
   auto& system = Core::System::GetInstance();
   ASSERT_EQ(system.GetIOS(), nullptr);
   struct RestoreBootKind
@@ -515,13 +478,11 @@ TEST(OrcaResetStart, WarnsBeforeSchedulingAFriendsReset)
   EXPECT_EQ(step(t0 + 2999ms), FreshStep::Hold);
   EXPECT_EQ(step(t0 + 3s), FreshStep::Now);
   EXPECT_EQ(step(t0 + 4s), FreshStep::Now);
-  // Leaving cancels the pending warning. A later arrival receives the full notice again.
   in.waiting = false;
   EXPECT_EQ(step(t0 + 5s), FreshStep::None);
   EXPECT_FALSE(warned_at);
   in.waiting = true;
   EXPECT_EQ(step(t0 + 6s), FreshStep::Warn);
-  // A single-player hold also cancels it: warn anew once resetting becomes possible again.
   in.single_player = true;
   EXPECT_EQ(step(t0 + 7s), FreshStep::Hold);
   EXPECT_FALSE(warned_at);
@@ -591,20 +552,15 @@ TEST(OrcaCoSeats, SetOverButtonsKeepTheLeadSample)
   }
 }
 
-// The offer gate remains absolute frame 300. A friend's settled tail reaches it unseen,
-// so the following boundary can capture immediately instead of showing frames 266-299.
 TEST(OrcaFreshStart, FriendsTailReachesTheOfferGateBeforeShowing)
 {
   EXPECT_FALSE(FreshTailSettled(FreshKind::Menu, FRESH_CSS_SETTLE, 37, 265, 300));
   EXPECT_FALSE(FreshTailSettled(FreshKind::Menu, FRESH_CSS_SETTLE, 71, 299, 300));
   EXPECT_TRUE(FreshTailSettled(FreshKind::Menu, FRESH_CSS_SETTLE, 72, 300, 300));
-  // Gate reached still needs CSS settling or the existing tail limit.
   EXPECT_FALSE(FreshTailSettled(FreshKind::Menu, FRESH_CSS_SETTLE - 1, 72, 300, 300));
   EXPECT_TRUE(FreshTailSettled(FreshKind::Menu, 0, FRESH_TAIL_LIMIT, 828, 300));
-  // Flag off / queue tails supply no extra gate. Reset games retain their one-frame tail.
   EXPECT_TRUE(FreshTailSettled(FreshKind::Menu, FRESH_CSS_SETTLE, 37, 265, 0));
   EXPECT_TRUE(FreshTailSettled(FreshKind::Reset, 0, 1, 229, 300));
-  // Vanilla Brawl's origin already exceeds the absolute gate.
   EXPECT_TRUE(FreshTailSettled(FreshKind::Menu, FRESH_CSS_SETTLE, 37, 1560, 300));
 }
 
@@ -639,7 +595,7 @@ TEST(OrcaFightHold, OnlyASoloHostsWaitingFriendHolds)
   in.enabled = false;
   EXPECT_FALSE(FightJoinHeld(in));
   in.enabled = true;
-  in.fight = false;  // CSS or menu
+  in.fight = false;
   EXPECT_FALSE(FightJoinHeld(in));
   in.fight = true;
   in.waiting = false;
@@ -652,7 +608,6 @@ TEST(OrcaFightHold, RecoveringFriendsRejoinInPlaceEvenWithANewFriendWaiting)
   fight.fight = true;
   fight.waiting = true;
   EXPECT_TRUE(FightJoinHeld(fight));
-  // HostEvents supplies any_of(recovering), including the mixed recovering/new batch.
   fight.recovering = true;
   EXPECT_FALSE(FightJoinHeld(fight));
   auto start = SoloHost();
@@ -672,7 +627,7 @@ TEST(OrcaFightHold, WaitingMessageRenewsOncePerExpiryAndOnHoldChange)
   EXPECT_TRUE(timer.Due(start + lifetime, lifetime));
   EXPECT_FALSE(timer.Due(start + lifetime, lifetime));
   EXPECT_TRUE(timer.Due(start + lifetime * 2, lifetime));
-  timer.Reset();  // A different hold kind replaces the text immediately.
+  timer.Reset();
   EXPECT_TRUE(timer.Due(start + lifetime * 2, lifetime));
   EXPECT_FALSE(timer.Due(start + lifetime * 2, lifetime));
 }

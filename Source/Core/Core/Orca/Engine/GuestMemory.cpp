@@ -39,4 +39,4 @@ void GuardMemory::Write32(u32 address, u32 value)
   Orca::Engine::NoteWrite(address, 4);
   PowerPC::MMU::HostWrite<u32>(m_guard, value, address);
 }
-}  // namespace Orca::UX
+}

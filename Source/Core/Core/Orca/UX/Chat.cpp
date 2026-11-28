@@ -9,7 +9,6 @@ namespace Orca::UX::Chat
 {
 namespace
 {
-// What encodeURIComponent leaves as it is.
 bool Unreserved(char c)
 {
   return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' ||
@@ -28,7 +27,6 @@ int HexValue(char c)
   return -1;
 }
 
-// No control characters or Unicode line/paragraph separators: they would break the toast's layout.
 bool Shown(char32_t c)
 {
   if (c < 0x20 || c == 0x7f || (c >= 0x80 && c <= 0x9f))
@@ -36,7 +34,6 @@ bool Shown(char32_t c)
   return c != 0x2028 && c != 0x2029;
 }
 
-// Counts the code points of valid UTF-8 that are all Shown(); -1 for anything else.
 long CountShown(std::string_view s)
 {
   long points = 0;
@@ -68,7 +65,7 @@ long CountShown(std::string_view s)
     }
     else
     {
-      return -1;  // stray continuation byte, overlong lead (C0, C1), or past F4
+      return -1;
     }
     if (i + len > s.size())
       return -1;
@@ -79,7 +76,6 @@ long CountShown(std::string_view s)
         return -1;
       c = (c << 6) | (cont & 0x3f);
     }
-    // Reject overlong 3- and 4-byte forms, surrogates, and code points past U+10FFFF.
     if ((len == 3 && c < 0x800) || (len == 4 && (c < 0x10000 || c > 0x10ffff)) ||
         (c >= 0xd800 && c <= 0xdfff))
     {
@@ -92,7 +88,7 @@ long CountShown(std::string_view s)
   }
   return points;
 }
-}  // namespace
+}
 
 std::optional<std::string> DecodeField(std::string_view field, std::size_t max_encoded,
                                        std::size_t max_points)
@@ -139,11 +135,10 @@ std::optional<Line> Parse(std::string_view line)
   const std::size_t space = rest.find(' ');
   if (space == std::string_view::npos)
     return std::nullopt;
-  // A second space fails the text's decoding, since ' ' is never valid in an encoded field.
   std::optional<std::string> name = DecodeField(rest.substr(0, space), NAME_ENCODED, NAME_POINTS);
   std::optional<std::string> text = DecodeField(rest.substr(space + 1), TEXT_ENCODED, TEXT_POINTS);
   if (!name || !text)
     return std::nullopt;
   return Line{std::move(*name), std::move(*text)};
 }
-}  // namespace Orca::UX::Chat
+}

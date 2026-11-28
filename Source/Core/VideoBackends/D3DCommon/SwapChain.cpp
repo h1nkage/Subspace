@@ -34,9 +34,6 @@ static bool GetFullscreenState(IDXGISwapChain* swap_chain)
   return SUCCEEDED(swap_chain->GetFullscreenState(&fs, nullptr)) && fs;
 }
 
-// Orca: a short name for what a refused resize returns. No allocation: this runs on the CPU
-// thread, where a throw ends Orca without a word (Orca/CrashNote.h), and running out of memory is
-// one of the causes.
 static const char* ResizeErrorName(HRESULT hr)
 {
   switch (hr)
@@ -168,7 +165,6 @@ bool SwapChain::CreateSwapChain(bool stereo, bool hdr)
 
   if (FAILED(hr))
   {
-    // Orca: a lost device is reported and stops the run (DeviceLost.h); anything else is a panic.
     if (!CheckDeviceLost(hr, "a new swap chain"))
       PanicAlertFmt("Failed to create swap chain: {}", Common::HRWrap(hr));
     return false;
@@ -232,7 +228,6 @@ bool SwapChain::CreateSwapChain(bool stereo, bool hdr)
     return false;
   }
 
-  // Orca: a new swap chain starts with buffers (ResizeSwapChain's notes count from here).
   m_buffers_ok = true;
   m_resize_error = S_OK;
   m_frames_without_buffers = 0;
@@ -274,12 +269,6 @@ bool SwapChain::ResizeSwapChain()
     m_height = desc.BufferDesc.Height;
   }
 
-  // Orca: a ResizeBuffers that fails after letting the old buffers go (it could not make the new
-  // ones: out of memory, a lost device, a window past 16384 px) leaves the swap chain with none,
-  // and GetBuffer fails with DXGI_ERROR_INVALID_CALL. Upstream asserts there, which ends a release
-  // build (Orca 0.3.30-0.3.34 on Windows, exit 0x80000003). The backends skip the picture and ask
-  // for the resize again instead (Gfx::BindBackbuffer); the game's log says why, once per change.
-  // stderr, not the VIDEO log: an embedded Orca's log has only NETPLAY and ROLLBACK.
   m_buffers_error = S_OK;
   const bool ok = CreateSwapChainBuffers();
   if (ok)
@@ -390,8 +379,6 @@ bool SwapChain::Present()
   HRESULT hr = m_swap_chain->Present(static_cast<UINT>(g_ActiveConfig.bVSyncActive), present_flags);
   if (FAILED(hr))
   {
-    // Orca: a hung or removed device usually says so here first (DXGI_ERROR_DEVICE_REMOVED); it
-    // used to be a warning, and the next frame drew on the dead device.
     if (!CheckDeviceLost(hr, "present"))
       WARN_LOG_FMT(VIDEO, "Swap chain present failed: {}", Common::HRWrap(hr));
     return false;

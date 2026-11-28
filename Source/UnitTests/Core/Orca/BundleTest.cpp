@@ -45,7 +45,6 @@ namespace
 {
 using Orca::Mod::PublicKey;
 
-// The bundle-flat TEST key (Bundle.cpp), trusted only by a build with ORCA_BUNDLE_TRUST_TEST_KEY.
 [[maybe_unused]] constexpr char TEST_KEY_HEX[] =
     "afb9463d5c16f0f617432d76f75f37a8c649e36d7c626088ba00b19dea115a43";
 
@@ -61,7 +60,6 @@ void SetEnv(const char* name, const std::string& value)
 #endif
 }
 
-// Sets an environment variable for one scope.
 class ScopedEnv
 {
 public:
@@ -97,7 +95,6 @@ std::vector<u8> FromHex(const std::string& hex)
   return out;
 }
 
-// A signing key made from a fixed seed (Externals/ed25519, as the engine verifies).
 struct Signer
 {
   unsigned char public_key[32]{};
@@ -124,8 +121,6 @@ struct Signer
   }
 };
 
-// Project+'s flat mod.json as make-bundle.py --flat writes it, for a card of `sd_bytes` with this
-// chunked SHA-256.
 std::string PPlusFlat(u64 sd_bytes, const std::string& sha256)
 {
   return fmt::format(R"({{
@@ -171,13 +166,11 @@ constexpr char BRAWL_FLAT[] = R"({
 
 const std::string PATCHES = "# A patch file with no patches.\n";
 
-// A flat bundle folder: its files as written, then mod.sig over them (computed here, not with the
-// engine's own helpers, so the two can disagree).
 struct Flat
 {
   std::string dir;
-  std::map<std::string, std::string> files;  // every file but mod.sig, mod.json included
-  std::string sd_name;                       // left out of the signed lines
+  std::map<std::string, std::string> files;
+  std::string sd_name;
 
   void Put(const std::string& name, const std::string& contents)
   {
@@ -187,7 +180,7 @@ struct Flat
   std::string Message() const
   {
     std::string text = "orca-flat-bundle 1\n";
-    for (const auto& [name, contents] : files)  // std::map: sorted by name, byte order
+    for (const auto& [name, contents] : files)
     {
       if (name != sd_name)
         text += fmt::format("{}\t{}\t{}\n", name, Orca::Mod::Sha256Hex(contents), contents.size());
@@ -207,7 +200,6 @@ struct Flat
   }
 };
 
-// Project+ (launcher, a small card, patches, JIT seed) in `dir`, signed.
 Flat MakePPlus(const std::string& dir, const Signer& signer)
 {
   Flat f{dir, {}, "sd.raw"};
@@ -244,60 +236,55 @@ void PutBE16(std::string* out, u16 value)
   out->push_back(static_cast<char>(value));
 }
 
-// A small big-endian PowerPC executable as devkitPPC links one (Project M 3.6's launcher is one):
-// the ELF header, one loadable code segment at `entry` (a branch to itself), no sections. Written
-// here byte by byte, not with the engine's structs. Its header fields are big-endian in the file,
-// so a reader that byte-swaps them where they lie no longer holds the file.
 std::string MinimalElf(u32 entry)
 {
   constexpr u32 code_offset = 0x60, code_size = 0x20;
   std::string elf = "\x7f" "ELF";
-  elf += '\x01';  // 32-bit
-  elf += '\x02';  // big-endian
-  elf += '\x01';  // version 1
+  elf += '\x01';
+  elf += '\x02';
+  elf += '\x01';
   elf.resize(16, '\0');
-  PutBE16(&elf, 2);   // e_type: ET_EXEC
-  PutBE16(&elf, 20);  // e_machine: EM_PPC
-  PutBE32(&elf, 1);   // e_version
+  PutBE16(&elf, 2);
+  PutBE16(&elf, 20);
+  PutBE32(&elf, 1);
   PutBE32(&elf, entry);
-  PutBE32(&elf, 52);  // e_phoff: right after this header
-  PutBE32(&elf, 0);   // e_shoff: no sections
-  PutBE32(&elf, 0);   // e_flags
-  PutBE16(&elf, 52);  // e_ehsize
-  PutBE16(&elf, 32);  // e_phentsize
-  PutBE16(&elf, 1);   // e_phnum
-  PutBE16(&elf, 40);  // e_shentsize
-  PutBE16(&elf, 0);   // e_shnum
-  PutBE16(&elf, 0);   // e_shstrndx: SHN_UNDEF
-  PutBE32(&elf, 1);   // p_type: PT_LOAD
+  PutBE32(&elf, 52);
+  PutBE32(&elf, 0);
+  PutBE32(&elf, 0);
+  PutBE16(&elf, 52);
+  PutBE16(&elf, 32);
+  PutBE16(&elf, 1);
+  PutBE16(&elf, 40);
+  PutBE16(&elf, 0);
+  PutBE16(&elf, 0);
+  PutBE32(&elf, 1);
   PutBE32(&elf, code_offset);
-  PutBE32(&elf, entry);  // p_vaddr
-  PutBE32(&elf, entry);  // p_paddr
+  PutBE32(&elf, entry);
+  PutBE32(&elf, entry);
   PutBE32(&elf, code_size);
   PutBE32(&elf, code_size);
-  PutBE32(&elf, 5);  // p_flags: PF_R | PF_X
-  PutBE32(&elf, 4);  // p_align
+  PutBE32(&elf, 5);
+  PutBE32(&elf, 4);
   elf.resize(code_offset, '\0');
   for (u32 i = 0; i < code_size / 4; ++i)
-    PutBE32(&elf, 0x48000000);  // b .
+    PutBE32(&elf, 0x48000000);
   return elf;
 }
 
-// A small DOL: the 0x100-byte header and one 0x20-byte text section at `entry` (a branch to itself).
 std::string MinimalDol(u32 entry)
 {
   std::string dol;
   for (u32 word = 0; word < 0x40; ++word)
   {
     const u32 offset = word * 4;
-    PutBE32(&dol, offset == 0x00 ? 0x100u :  // text 0's file offset
-                      offset == 0x48 ? entry :   // text 0's address
-                      offset == 0x90 ? 0x20u :   // text 0's size
-                      offset == 0xe0 ? entry :   // the entry point
+    PutBE32(&dol, offset == 0x00 ? 0x100u :
+                      offset == 0x48 ? entry :
+                      offset == 0x90 ? 0x20u :
+                      offset == 0xe0 ? entry :
                                        0u);
   }
   for (u32 i = 0; i < 8; ++i)
-    PutBE32(&dol, 0x48000000);  // b .
+    PutBE32(&dol, 0x48000000);
   return dol;
 }
 
@@ -330,8 +317,6 @@ std::string Without(std::string json, const std::string& key)
   return v.serialize();
 }
 
-// A launcher bundle as Project+'s (a .dol launcher) and Project M 3.6's (an .elf) are laid out: the
-// launcher `name` holding `contents`, a small card, patches and JIT seed, signed.
 Flat MakeLauncherPack(const std::string& dir, const Signer& signer, const std::string& name,
                       const std::string& contents)
 {
@@ -346,10 +331,8 @@ Flat MakeLauncherPack(const std::string& dir, const Signer& signer, const std::s
   f.Sign(signer);
   return f;
 }
-}  // namespace
+}
 
-// Python's signer (Tools/orca/mods/sign-bundle.py, ed25519ref.py) and the engine's verifier agree:
-// the same key and signature from the same seed, and the message is the documented one.
 TEST(OrcaBundle, SignatureVector)
 {
   std::string text;
@@ -372,13 +355,11 @@ TEST(OrcaBundle, SignatureVector)
   ASSERT_TRUE(parsed);
   EXPECT_TRUE(Orca::Mod::VerifySignature(parsed->first, parsed->second, message));
   EXPECT_FALSE(Orca::Mod::VerifySignature(parsed->first, parsed->second, message + "x"));
-  // The vector's message is FlatSignedMessage's for those two lines.
   const std::vector<Orca::Mod::TreeFile> lines{
       {"PPLUS32.patches", Orca::Mod::Sha256Hex("# none\n"), 7},
       {"mod.json", Orca::Mod::Sha256Hex("{}"), 2}};
   EXPECT_EQ(Orca::Mod::FlatSignedMessage(lines), message);
 
-  // mod.sig's form: one line, lowercase hex, one optional newline.
   EXPECT_TRUE(Orca::Mod::ParseSignature(sig_line.substr(0, sig_line.size() - 1)));
   EXPECT_FALSE(Orca::Mod::ParseSignature(sig_line + "\n"));
   EXPECT_FALSE(Orca::Mod::ParseSignature("ed25519  " + sig_line.substr(8)));
@@ -389,8 +370,6 @@ TEST(OrcaBundle, SignatureVector)
   EXPECT_FALSE(Orca::Mod::ParseSignature(sig_line.substr(0, 100)));
 }
 
-// The build trusts exactly the keys CMake gave it (the same definitions reach this file): the
-// pinned key, the TEST key only when asked for, and none at all without either.
 TEST(OrcaBundle, PinnedKey)
 {
   std::vector<std::string> expected;
@@ -415,7 +394,6 @@ TEST(OrcaBundle, PinnedKey)
   }
   const Signer other(7);
   EXPECT_FALSE(Orca::Mod::IsTestKey(other.Key()));
-  // Tests can trust none: nothing loads.
   const PublicKey none{};
   Orca::Mod::TrustKeysForTests(std::span(&none, 0));
   EXPECT_TRUE(Orca::Mod::TrustedKeys().empty());
@@ -423,8 +401,6 @@ TEST(OrcaBundle, PinnedKey)
   EXPECT_EQ(Orca::Mod::TrustedKeys().size(), expected.size());
 }
 
-// The SD image's pin (Bundle.h SD_HASH_HEADER): the engine's parallel hash, the definition written
-// out here, and Python's (sd-hash-vector.json, from sign-bundle.py) agree, across a chunk boundary.
 TEST(OrcaBundle, ChunkedSha256)
 {
   std::string text;
@@ -433,7 +409,6 @@ TEST(OrcaBundle, ChunkedSha256)
   ASSERT_EQ(picojson::parse(v, text), "");
   const u64 bytes = static_cast<u64>(v.get("bytes").get<double>());
   ASSERT_GT(bytes, Orca::Mod::SD_HASH_CHUNK_BYTES);
-  // Byte i is (i * 131 + 7) mod 251.
   std::string data(bytes, '\0');
   for (u64 i = 0; i < bytes; ++i)
     data[i] = static_cast<char>((i * 131 + 7) % 251);
@@ -451,7 +426,6 @@ TEST(OrcaBundle, ChunkedSha256)
   const std::string hash = Orca::Mod::ChunkedSha256File(root + "card", bytes);
   EXPECT_EQ(hash, Orca::Mod::Sha256Hex(written));
   EXPECT_EQ(hash, v.get("chunkedSha256").get<std::string>());
-  // The first bytes only; a file shorter than asked is unreadable.
   EXPECT_EQ(Orca::Mod::ChunkedSha256File(root + "card", 1000),
             Orca::Mod::Sha256Hex(fmt::format("orca-chunked-sha256 1\n1000 {}\n{}\n",
                                               Orca::Mod::SD_HASH_CHUNK_BYTES,
@@ -481,7 +455,6 @@ TEST(OrcaBundle, FlatNames)
   }
 }
 
-// mod.schema.json states the flat form's limits as the engine has them.
 TEST(OrcaBundle, SchemaKnowsTheFlatForm)
 {
   std::string text;
@@ -526,12 +499,10 @@ TEST(OrcaBundle, ParsesTheFlatForm)
                                                       "PPLUS32.patches", "PPLUS32.jitwarm"}));
   EXPECT_TRUE(Orca::Mod::ParseManifest(BRAWL_FLAT, &error)) << error;
 
-  // Format 2 has no built card; format 1 has no flat files.
   EXPECT_TRUE(Refused(With(pplus, "sd", R"({"bytes": 2097152000})")));
   EXPECT_TRUE(Refused(With(pplus, "format", "1")));
   EXPECT_TRUE(Refused(With(pplus, "format", "3")));
   EXPECT_TRUE(Refused(With(Without(BRAWL_FLAT, "patches"), "format", "1") + ""));
-  // Names: flat, never one of the bundle's own, never twice (also without case).
   EXPECT_TRUE(Refused(With(pplus, "launcher", R"("../Project+ Netplay Launcher.dol")")));
   EXPECT_TRUE(Refused(With(pplus, "launcher", R"("run/launcher.dol")")));
   EXPECT_TRUE(Refused(With(pplus, "launcher", R"("launcher.txt")")));
@@ -545,10 +516,8 @@ TEST(OrcaBundle, ParsesTheFlatForm)
   EXPECT_TRUE(Refused(With(BRAWL_FLAT, "patches", R"("RSBE01.patches")")));
   EXPECT_TRUE(Refused(
       With(BRAWL_FLAT, "patches", R"(["a.patches", "b.patches", "c.patches", "d.patches", "e.patches"])")));
-  // At most eight files with mod.json and mod.sig: a launcher, a card, four patches and a seed are 9.
   EXPECT_TRUE(Refused(With(pplus, "patches", R"(["a.patches", "b.patches", "c.patches", "d.patches"])")));
   EXPECT_FALSE(Refused(With(pplus, "patches", R"(["a.patches", "b.patches", "c.patches"])")));
-  // The pinned card: by size and chunked SHA-256 (never XXH3).
   const auto image = [&](const std::string& fields) {
     return With(pplus, "sdImage", "{" + fields + "}");
   };
@@ -566,7 +535,6 @@ TEST(OrcaBundle, ParsesTheFlatForm)
   EXPECT_TRUE(Refused(image("\"file\": \"sd/sd.raw\", \"bytes\": 100, " + sha)));
   EXPECT_TRUE(Refused(image("\"file\": \"sd.raw\", \"bytes\": 100, " + sha + ", \"xxh3\": \"x\"")));
   EXPECT_TRUE(Refused(image("\"file\": \"PPLUS32.patches\", \"bytes\": 100, " + sha)));
-  // Its listing and serial.
   EXPECT_TRUE(Refused(Without(pplus, "listing")));
   EXPECT_TRUE(Refused(With(pplus, "listing", R"("Project-Rollback")")));
   EXPECT_TRUE(Refused(With(pplus, "listing", R"("../open-brawl")")));
@@ -577,7 +545,6 @@ TEST(OrcaBundle, ParsesTheFlatForm)
   EXPECT_TRUE(Refused(With(pplus, "serial", "1.5")));
   EXPECT_TRUE(Refused(With(pplus, "serial", R"("2")")));
   EXPECT_FALSE(Refused(With(pplus, "serial", "4096")));
-  // Textures stay the engine's.
   EXPECT_TRUE(Refused(With(pplus, "textures", R"("bundle")")));
   EXPECT_FALSE(Refused(Without(pplus, "textures")));
 }
@@ -587,7 +554,6 @@ TEST(OrcaBundle, LoadsASignedBundle)
   const Signer signer(1);
   const std::string root = TempDir();
   Flat p = MakePPlus(root + "pplus/", signer);
-  // The app's own hidden file beside the bundle (desktop orca-files.ts) is left alone.
   ASSERT_TRUE(File::WriteStringToFile(p.dir + ".copies.json", "{}"));
   std::string error;
   const auto bundle = p.Load(signer, &error);
@@ -599,7 +565,6 @@ TEST(OrcaBundle, LoadsASignedBundle)
   ASSERT_EQ(bundle->patches.size(), 1u);
   EXPECT_EQ(bundle->patches[0].first, "PPLUS32.patches");
   EXPECT_EQ(bundle->patches[0].second, PATCHES);
-  // The tree: every signed file by name; its hash leaves the JIT seed out.
   ASSERT_EQ(bundle->tree.files.size(), 4u);
   EXPECT_EQ(bundle->tree.files[0].path, "PPLUS32.jitwarm");
   EXPECT_EQ(bundle->tree.files[3].path, "mod.json");
@@ -622,7 +587,6 @@ TEST(OrcaBundle, LoadsASignedBundle)
   EXPECT_EQ(profile->mod->flat_jitwarm, "warm");
   EXPECT_EQ(profile->mod->sd_image_hash, bundle->sd_image_hash);
 
-  // The launcher boot uses the card as it is, with the hash checked at load.
   auto boot = *profile;
   const std::string launcher = p.dir + "Project+ Netplay Launcher.dol";
   if (const char* disc = std::getenv("ORCA_TEST_DISC"))
@@ -645,7 +609,6 @@ TEST(OrcaBundle, LoadsASignedBundle)
   File::DeleteDirRecursively(root);
 }
 
-// Hostile bundles: each refused with a reason, whole (LoadFlatBundle returns nothing).
 TEST(OrcaBundle, RefusesTamperedBundles)
 {
   const Signer signer(1), stranger(2);
@@ -662,7 +625,6 @@ TEST(OrcaBundle, RefusesTamperedBundles)
     File::DeleteDirRecursively(root);
     ++n;
   };
-  // The untampered bundles load.
   {
     const std::string root = TempDir();
     std::string error;
@@ -674,7 +636,7 @@ TEST(OrcaBundle, RefusesTamperedBundles)
   const auto flip = [](Flat& f, const std::string& name, size_t at) {
     std::string bytes = f.files[name];
     bytes[at] ^= 0x01;
-    ASSERT_TRUE(File::WriteStringToFile(f.dir + name, bytes));  // same size, one byte changed
+    ASSERT_TRUE(File::WriteStringToFile(f.dir + name, bytes));
   };
   refused("a patches byte", [&](Flat& f) { flip(f, "PPLUS32.patches", 3); }, "doesn't match");
   refused("a mod.json byte", [&](Flat& f) { flip(f, "mod.json", f.files["mod.json"].find("600") + 2); },
@@ -696,7 +658,6 @@ TEST(OrcaBundle, RefusesTamperedBundles)
           "doesn't match");
   refused("another key", [&](Flat& f) { f.Sign(stranger); }, "doesn't trust");
   refused("no signature", [&](Flat& f) { File::Delete(f.dir + "mod.sig"); }, "mod.sig is missing");
-  // Under the app (a listing) the same bundle without mod.sig loads (UnsignedAppBundle... below).
   {
     const std::string root = TempDir();
     for (const bool pplus : {true, false})
@@ -733,7 +694,7 @@ TEST(OrcaBundle, RefusesTamperedBundles)
               File::WriteStringToFile(f.dir + fmt::format(".hidden{}", i), "");
           },
           "entries");
-#ifndef _WIN32  // (a symbolic link needs an elevated or developer-mode Windows)
+#ifndef _WIN32
   refused("a link",
           [&](Flat& f) {
             File::Delete(f.dir + "PPLUS32.patches");
@@ -787,7 +748,6 @@ TEST(OrcaBundle, RefusesTamperedBundles)
   refused("no mod.json", [&](Flat& f) { File::Delete(f.dir + "mod.json"); }, "no mod.json");
   EXPECT_GE(n, 24);
 
-  // The listing and the launcher the boot runs.
   const std::string root = TempDir();
   Flat p = MakePPlus(root + "p/", signer);
   std::string error;
@@ -803,8 +763,6 @@ TEST(OrcaBundle, RefusesTamperedBundles)
   EXPECT_FALSE(p.Load(signer, &error, &other_name));
   EXPECT_NE(error.find("the boot runs Other.dol, not the bundle's launcher"), std::string::npos)
       << error;
-  // What the boot read is what is checked: other bytes are refused even with the file intact, and
-  // the file changing after the boot read it changes nothing.
   std::vector<u8> changed = bytes;
   changed[100] ^= 1;
   const Orca::Mod::BootLauncher changed_bytes{"Project+ Netplay Launcher.dol", changed};
@@ -813,19 +771,14 @@ TEST(OrcaBundle, RefusesTamperedBundles)
   ASSERT_TRUE(File::WriteStringToFile(p.dir + "Project+ Netplay Launcher.dol", "swapped"));
   EXPECT_TRUE(p.Load(signer, &error, &same)) << error;
   EXPECT_FALSE(p.Load(signer, &error));
-  // A Brawl bundle has no launcher: a launcher boot isn't its.
   Flat b = MakeBrawl(root + "b/", signer);
   EXPECT_FALSE(b.Load(signer, &error, &same));
   EXPECT_NE(error.find("not the bundle's launcher (none)"), std::string::npos) << error;
-  // No key trusted: nothing loads.
   EXPECT_FALSE(Orca::Mod::LoadFlatBundle(b.dir, {}, &error));
   EXPECT_NE(error.find("trusts no bundle key"), std::string::npos) << error;
   File::DeleteDirRecursively(root);
 }
 
-// The app's bundle (a listing) may come without mod.sig: The service's download checked its files. It
-// gets every other check, and the same tree hash (so the same key) as the signed bundle of the
-// same files. A mod.sig that is there is checked as ever, and without a listing it is required.
 TEST(OrcaBundle, UnsignedAppBundleLoadsAndSignedStaysStrict)
 {
   const Signer signer(1), stranger(2);
@@ -833,7 +786,6 @@ TEST(OrcaBundle, UnsignedAppBundleLoadsAndSignedStaysStrict)
   const Common::ScopeGuard done([&] { File::DeleteDirRecursively(root); });
   std::string error;
 
-  // Brawl and Project+ without mod.sig load under their listing, as the signed bundle does.
   for (const bool pplus : {true, false})
   {
     SCOPED_TRACE(pplus);
@@ -853,16 +805,13 @@ TEST(OrcaBundle, UnsignedAppBundleLoadsAndSignedStaysStrict)
     EXPECT_EQ(unsigned_bundle->patches, signed_bundle->patches);
     EXPECT_EQ(unsigned_bundle->jitwarm, signed_bundle->jitwarm);
     EXPECT_TRUE(Orca::LoadFlatProfile(*unsigned_bundle, &error)) << error;
-    // A build that trusts no key loads it too, under the app only.
     EXPECT_TRUE(Orca::Mod::LoadFlatBundle(f.dir, {}, &error, nullptr, listing)) << error;
     EXPECT_FALSE(Orca::Mod::LoadFlatBundle(f.dir, {}, &error));
     EXPECT_NE(error.find("trusts no bundle key"), std::string::npos) << error;
-    // Without a listing (a dev ORCA_MOD_DIR run) mod.sig is still required.
     EXPECT_FALSE(f.Load(signer, &error));
     EXPECT_EQ(error, "mod.sig is missing");
   }
 
-  // Unsigned, every other check still refuses.
   int n = 0;
   const auto refused = [&](const std::string& what, const std::function<void(Flat&)>& tamper,
                            const std::string& reason,
@@ -898,7 +847,7 @@ TEST(OrcaBundle, UnsignedAppBundleLoadsAndSignedStaysStrict)
   refused("patches that don't parse",
           [&](Flat& f) { f.Put("PPLUS32.patches", "this is not a patch\n"); }, "PPLUS32.patches:");
   refused("a folder", [&](Flat& f) { File::CreateDir(f.dir + "Textures"); }, "not a file");
-#ifndef _WIN32  // (a symbolic link needs an elevated or developer-mode Windows)
+#ifndef _WIN32
   refused("a link",
           [&](Flat& f) {
             File::Delete(f.dir + "PPLUS32.patches");
@@ -908,8 +857,6 @@ TEST(OrcaBundle, UnsignedAppBundleLoadsAndSignedStaysStrict)
           },
           "is a link");
 #endif
-  // A mod.sig that is there is checked, under the app too: by a key the build doesn't trust, not
-  // over these files, malformed, or on a build that trusts no key.
   refused("another key", [&](Flat& f) { f.Sign(stranger); }, "doesn't trust");
   refused("a patches byte after signing",
           [&](Flat& f) {
@@ -928,7 +875,6 @@ TEST(OrcaBundle, UnsignedAppBundleLoadsAndSignedStaysStrict)
     EXPECT_FALSE(Orca::Mod::LoadFlatBundle(f.dir, {}, &error, nullptr, "open-brawl"));
     EXPECT_NE(error.find("trusts no bundle key"), std::string::npos) << error;
   }
-  // The launcher the boot runs, unsigned.
   {
     Flat p = MakePPlus(root + "boot/", signer);
     ASSERT_TRUE(File::Delete(p.dir + "mod.sig"));
@@ -943,10 +889,6 @@ TEST(OrcaBundle, UnsignedAppBundleLoadsAndSignedStaysStrict)
   }
 }
 
-// A launcher as the boot reads it (BootParameters::GenerateFromFile's reader, whose GetBytes()
-// BootManager hands ResolveBundle) is checked as its file's bytes, read once: an .elf launcher's
-// (Project M 3.6's) as well as a .dol's. The ELF reader parses its own copy of those bytes, made
-// before Initialize() byte-swaps the copy's headers, so what runs comes from what was signed.
 TEST(OrcaBundle, BootLauncherIsCheckedAsItsFile)
 {
   const ScopedEnv session("ORCA_SESSION", "1");
@@ -959,14 +901,12 @@ TEST(OrcaBundle, BootLauncherIsCheckedAsItsFile)
   ASSERT_FALSE(root.empty());
   using Orca::Mod::BundleKind;
   std::string error;
-  // The session's decision for this launcher boot, from the boot's own reader.
   const auto resolve = [](const BootParameters::Executable& launcher) {
     Orca::Mod::ResetResolvedBundle();
     Orca::Mod::ResolveBundleForTests(&launcher.path, launcher.reader->GetBytes(), true);
     return Orca::Mod::ResolvedKind();
   };
 
-  // Every copy an ELF reader makes, as it is made.
   struct Seen
   {
     std::vector<u8> file, copy;
@@ -986,7 +926,6 @@ TEST(OrcaBundle, BootLauncherIsCheckedAsItsFile)
                         copy_bytes.data()});
       });
 
-  // Project M 3.6's layout: an .elf launcher.
   const std::string elf_name = "Project M Launcher.elf";
   Flat pm = MakeLauncherPack(root + "pm/", signer, elf_name, MinimalElf(0x80004000));
   const std::string elf_path = pm.dir + elf_name;
@@ -1002,33 +941,26 @@ TEST(OrcaBundle, BootLauncherIsCheckedAsItsFile)
     EXPECT_EQ(launcher->reader->GetEntryPoint(), 0x80004000u);
     const std::vector<u8>& hashed = launcher->reader->GetBytes();
 
-    // The reader's copy, before Initialize() ran: the bytes hashed, which are the file's, in a
-    // buffer of its own; the hashed bytes are the reader's one read of the file.
     ASSERT_EQ(seen.size(), 1u);
     EXPECT_EQ(seen[0].file, elf_signed);
     EXPECT_EQ(seen[0].copy, elf_signed);
     EXPECT_EQ(seen[0].copy, hashed);
     EXPECT_EQ(seen[0].file_data, hashed.data());
     EXPECT_NE(seen[0].copy_data, hashed.data());
-    // After it: the copy is what the reader parsed (its header now byte-swapped), and the hashed
-    // bytes are still the file's.
     const auto& elf = static_cast<const ElfReader&>(*launcher->reader);
     EXPECT_EQ(elf.GetPtr(0), seen[0].copy_data);
     EXPECT_NE(std::memcmp(elf.GetPtr(0), elf_signed.data(), 52), 0);
     EXPECT_EQ(hashed, elf_signed);
 
-    // The pack passes, as LoadFlatBundle and as the session's decision.
     const Orca::Mod::BootLauncher elf_boot{elf_name, hashed};
     EXPECT_TRUE(pm.Load(signer, &error, &elf_boot)) << error;
     EXPECT_EQ(resolve(*launcher), BundleKind::Flat) << Orca::Mod::ResolvedError();
-    // The parsed copy (what the boot checked before) is not the signed file.
     const std::vector<u8> parsed(elf.GetPtr(0), elf.GetPtr(0) + hashed.size());
     const Orca::Mod::BootLauncher parsed_boot{elf_name, parsed};
     EXPECT_FALSE(pm.Load(signer, &error, &parsed_boot));
     EXPECT_NE(error.find("doesn't match"), std::string::npos) << error;
   }
 
-  // One byte changed in the .elf, in its code or in its header: refused.
   for (const size_t at : {size_t{0x60}, size_t{0x1b}})
   {
     std::string changed = elf_file;
@@ -1052,7 +984,6 @@ TEST(OrcaBundle, BootLauncherIsCheckedAsItsFile)
   }
   ASSERT_TRUE(File::WriteStringToFile(elf_path, elf_file));
 
-  // Project+'s layout, a .dol launcher: its reader holds the file as read, as before; no ELF copy.
   const size_t elf_copies = seen.size();
   const std::string dol_name = "Project+ Netplay Launcher.dol";
   Flat pplus = MakeLauncherPack(root + "pplus/", signer, dol_name, MinimalDol(0x80003100));
@@ -1092,11 +1023,8 @@ TEST(OrcaBundle, BootLauncherIsCheckedAsItsFile)
   File::DeleteDirRecursively(root);
 }
 
-// The key: mod mode over the signed lines and the card; a JIT seed change keeps it, anything that
-// reaches the game moves it; never a legacy key.
 TEST(OrcaBundle, KeyMovesWithTheBundleOnly)
 {
-  // A launcher profile's key reads the running game's ID (SConfig), as in a session.
   SConfig::Init();
   struct ConfigDone
   {
@@ -1131,7 +1059,6 @@ TEST(OrcaBundle, KeyMovesWithTheBundleOnly)
   p.Put("PPLUS32.patches", "# Another patch file with no patches.\n");
   p.Sign(signer);
   EXPECT_NE(key_of(p), parts);
-  // Legacy: "orca|..." (OrcaMod.LegacyKeyIsUnchanged pins the rest).
   const auto legacy = Orca::LoadProfileFrom(RepoPath("Data/Sys/"), "RSBE01", 2, &error);
   ASSERT_TRUE(legacy) << error;
   Orca::SetActiveProfile(legacy);
@@ -1140,9 +1067,6 @@ TEST(OrcaBundle, KeyMovesWithTheBundleOnly)
   File::DeleteDirRecursively(root);
 }
 
-// A pack session (mod mode, flat bundle) offers the engine caps "talk" and "rumble" like a legacy
-// one, last, whatever its builtin's guards say: they are the app's and the engine's, not the game's.
-// The builtin caps (results, locks, ...) stay behind the guards (OrcaMod.ModeGates).
 TEST(OrcaBundle, PackSessionsOfferTheEngineCaps)
 {
   SConfig::Init();
@@ -1169,14 +1093,12 @@ TEST(OrcaBundle, PackSessionsOfferTheEngineCaps)
     ASSERT_TRUE(profile) << error;
     Orca::SetActiveProfile(profile);
     ASSERT_NE(Orca::Mod::ActiveMod(), nullptr) << f.dir;
-    // Guards not read yet, then held, then failed: the engine caps are there every time.
     EXPECT_TRUE(ends_with_tail()) << Orca::Status::OfferedCaps();
     Orca::Mod::NoteGuards(true, 2);
     EXPECT_TRUE(ends_with_tail()) << Orca::Status::OfferedCaps();
     Orca::Mod::NoteGuards(false, 5000);
     EXPECT_TRUE(Orca::Mod::GuardsFailed());
     EXPECT_TRUE(ends_with_tail()) << Orca::Status::OfferedCaps();
-    // And the app's agreement turns them on, as in legacy.
     Orca::Status::SetAppCaps("join talk rumble");
     EXPECT_TRUE(Orca::Status::Cap(Orca::Status::TALK_CAP));
     EXPECT_TRUE(Orca::Status::Cap(Orca::Status::RUMBLE_CAP));
@@ -1244,11 +1166,8 @@ TEST(OrcaBundle, LocalTreeLoadsOfflineAndHasItsOwnKey)
   const std::string local_key = Orca::Online::CompatibilityKey();
   const std::string parts = Orca::Online::CompatibilityKeyParts();
   EXPECT_NE(parts.find("|tree=" + profile->mod->tree.hash + "|"), std::string::npos);
-  // Local packs never reach a room (Online::Enabled, StartLocked), so the key needs no marker
-  // and the key code stays the released one.
   EXPECT_FALSE(Orca::Online::Enabled());
   Orca::Mod::SetLocalPack({});
-  // The original unsigned tree path remains available in a release session.
   {
     const ScopedEnv session("ORCA_SESSION", "1");
     const ScopedEnv dir("ORCA_MOD_DIR", root);
@@ -1268,7 +1187,6 @@ TEST(OrcaBundle, LocalTreeLoadsOfflineAndHasItsOwnKey)
 
 TEST(OrcaBundle, LocalPackRefusesPublicQueueAndFriendsRooms)
 {
-  // Even an online-enabled caller cannot create a transport, request a ticket or report a result.
   const ScopedEnv dev_game("ORCA_TEST_DEV_GAME", "local-fixture");
   Orca::Mod::SetLocalPack("local-pack");
   const Common::ScopeGuard done([] { Orca::Mod::SetLocalPack({}); });
@@ -1278,7 +1196,6 @@ TEST(OrcaBundle, LocalPackRefusesPublicQueueAndFriendsRooms)
   EXPECT_EQ(Orca::Online::Transport(), nullptr);
   for (bool joining : {false, true})
   {
-    // StartRoom(..., false) is the matched public queue path; friends use true.
     for (bool friends_room : {false, true})
     {
       Orca::Online::StartRoom("queue123", joining, friends_room);
@@ -1392,7 +1309,6 @@ TEST(OrcaBundle, LocalPackConsoleStatusUsesOnlyTheFolderName)
   const auto* recorded = file.get();
   auto* logs = LogManager::GetInstance();
   logs->RegisterListener(LogListener::FILE_LISTENER, std::move(file));
-  // Model Windows' redirected console on every platform.
   logs->RegisterListener(LogListener::CONSOLE_LISTENER, std::make_unique<StdoutConsole>());
   logs->EnableListener(LogListener::FILE_LISTENER, true);
   logs->EnableListener(LogListener::CONSOLE_LISTENER, true);
@@ -1489,9 +1405,6 @@ TEST(OrcaBundle, FindsItsFolder)
   File::DeleteDirRecursively(root);
 }
 
-// What a session decides at boot: a good bundle is mod mode; no mod.json is legacy; a refused one
-// refuses the session, whether Orca found it by itself or ORCA_MOD_DIR named it (state.md item 7:
-// never the built-in game in a refused pack's place).
 TEST(OrcaBundle, ResolvesOrRefuses)
 {
   const auto resolve = [](const std::string* executable_path,
@@ -1510,17 +1423,14 @@ TEST(OrcaBundle, ResolvesOrRefuses)
   File::CreateFullPath(root + "user/");
   using Orca::Mod::BundleKind;
 
-  // Nothing resolved yet: as before bundles.
   Orca::Mod::ResetResolvedBundle();
   EXPECT_FALSE(Orca::Mod::ResolvedKind());
   EXPECT_FALSE(Orca::Mod::Requested());
 
-  // No folder, or one with no mod.json: legacy.
   resolve(nullptr);
   EXPECT_EQ(Orca::Mod::ResolvedKind(), BundleKind::None);
   EXPECT_FALSE(Orca::Mod::Requested());
 
-  // Brawl's run folder with a signed bundle: mod mode, from that folder.
   Orca::Mod::ResetResolvedBundle();
   Flat b = MakeBrawl(root + "run/open-brawl/", signer);
   resolve(nullptr);
@@ -1528,13 +1438,10 @@ TEST(OrcaBundle, ResolvesOrRefuses)
   EXPECT_TRUE(Orca::Mod::Requested());
   ASSERT_NE(Orca::Mod::ResolvedFlat(), nullptr);
   EXPECT_EQ(Orca::Mod::Dir(), root + "user/../run/open-brawl/");
-  // Once per process: a change after the check isn't seen until the next process.
   b.Put("RSBE01.patches", "# changed\n");
   resolve(nullptr);
   EXPECT_EQ(Orca::Mod::ResolvedKind(), BundleKind::Flat);
 
-  // The same folder tampered with, in a new process: the session is refused, with the reason the
-  // player reads (no folder path), not played as legacy.
   Orca::Mod::ResetResolvedBundle();
   resolve(nullptr);
   EXPECT_EQ(Orca::Mod::ResolvedKind(), BundleKind::Refused);
@@ -1549,13 +1456,11 @@ TEST(OrcaBundle, ResolvesOrRefuses)
   resolve(nullptr);
   EXPECT_EQ(Orca::Mod::ResolvedKind(), BundleKind::Flat);
 
-  // A build that trusts no key: a mod.json it finds refuses the session.
   Orca::Mod::TrustKeysForTests({});
   Orca::Mod::ResetResolvedBundle();
   resolve(nullptr);
   EXPECT_EQ(Orca::Mod::ResolvedKind(), BundleKind::Refused);
   EXPECT_NE(Orca::Mod::ResolvedError().find("trusts no bundle key"), std::string::npos);
-  // Unless it is the app's bundle without mod.sig (SUBSPACE_GAME set): that plays, keyed or not.
   ASSERT_TRUE(File::Delete(b.dir + "mod.sig"));
   Orca::Mod::ResetResolvedBundle();
   resolve(nullptr);
@@ -1566,7 +1471,6 @@ TEST(OrcaBundle, ResolvesOrRefuses)
   Orca::Mod::ResetResolvedBundle();
   resolve(nullptr);
   EXPECT_EQ(Orca::Mod::ResolvedKind(), BundleKind::Flat) << Orca::Mod::ResolvedError();
-  // A mod.sig that is there is checked, under the app too.
   b.Sign(stranger);
   Orca::Mod::ResetResolvedBundle();
   resolve(nullptr);
@@ -1575,7 +1479,6 @@ TEST(OrcaBundle, ResolvesOrRefuses)
       << Orca::Mod::ResolvedError();
   b.Sign(signer);
   Orca::Mod::TrustKeysForTests(std::span(&key, 1));
-  // Without a mod.json in the folder that build is legacy, exactly as before bundles.
   {
     const ScopedEnv game("SUBSPACE_GAME", "no-pack-here");
     Orca::Mod::TrustKeysForTests({});
@@ -1586,7 +1489,6 @@ TEST(OrcaBundle, ResolvesOrRefuses)
     Orca::Mod::TrustKeysForTests(std::span(&key, 1));
   }
 
-  // Project+: the launcher's own folder; the boot must run the bundle's launcher, for its listing.
   const ScopedEnv pplus_game("SUBSPACE_GAME", "project-rollback");
   Flat p = MakePPlus(root + "run/project-rollback/", signer);
   const std::string launcher = p.dir + "Project+ Netplay Launcher.dol";
@@ -1596,20 +1498,18 @@ TEST(OrcaBundle, ResolvesOrRefuses)
   resolve(&launcher, dol_bytes);
   EXPECT_EQ(Orca::Mod::ResolvedKind(), BundleKind::Flat);
   Orca::Mod::ResetResolvedBundle();
-  resolve(&launcher);  // no reader bytes: the file
+  resolve(&launcher);
   EXPECT_EQ(Orca::Mod::ResolvedKind(), BundleKind::Flat);
   const std::string other = p.dir + "sd.raw";
   Orca::Mod::ResetResolvedBundle();
   resolve(&other);
   EXPECT_EQ(Orca::Mod::ResolvedKind(), BundleKind::Refused);
-  // Under another listing: refused.
   {
     const ScopedEnv game("SUBSPACE_GAME", "open-brawl");
     Orca::Mod::ResetResolvedBundle();
     resolve(&launcher, dol_bytes);
     EXPECT_EQ(Orca::Mod::ResolvedKind(), BundleKind::Refused);
   }
-  // Signed by a key the build doesn't pin: refused.
   const PublicKey stranger_key = stranger.Key();
   Orca::Mod::TrustKeysForTests(std::span(&stranger_key, 1));
   Orca::Mod::ResetResolvedBundle();
@@ -1618,7 +1518,6 @@ TEST(OrcaBundle, ResolvesOrRefuses)
   EXPECT_TRUE(Orca::Mod::Requested());
   Orca::Mod::TrustKeysForTests(std::span(&key, 1));
 
-  // A launcher folder without mod.json (legacy Project+): legacy, with a key or without one.
   {
     File::CreateFullPath(root + "legacy-pplus/");
     const std::string legacy_launcher = root + "legacy-pplus/Project+ Netplay Launcher.dol";
@@ -1635,13 +1534,11 @@ TEST(OrcaBundle, ResolvesOrRefuses)
     Orca::Mod::TrustKeysForTests(std::span(&key, 1));
   }
 
-  // ORCA_MOD_DIR names the folder: a good bundle plays; anything refused refuses the session.
   {
     const ScopedEnv dir("ORCA_MOD_DIR", p.dir);
     Orca::Mod::ResetResolvedBundle();
     resolve(&launcher, dol_bytes);
     EXPECT_EQ(Orca::Mod::ResolvedKind(), BundleKind::Flat);
-    // A launcher bundle for a disc boot.
     Orca::Mod::ResetResolvedBundle();
     resolve(nullptr);
     EXPECT_EQ(Orca::Mod::ResolvedKind(), BundleKind::Refused);
@@ -1649,18 +1546,15 @@ TEST(OrcaBundle, ResolvesOrRefuses)
     EXPECT_EQ(Orca::Mod::ResolvedFlat(), nullptr);
     EXPECT_NE(Orca::Mod::ResolvedError().find("this boot is a disc's"), std::string::npos)
         << Orca::Mod::ResolvedError();
-    // The player reads it (orca error): the new name, and never the folder's path.
     EXPECT_TRUE(Orca::Mod::ResolvedError().starts_with("Subspace refused this game's pack: "))
         << Orca::Mod::ResolvedError();
     EXPECT_EQ(Orca::Mod::ResolvedError().find(root), std::string::npos)
         << Orca::Mod::ResolvedError();
-    // No key trusted.
     Orca::Mod::TrustKeysForTests({});
     Orca::Mod::ResetResolvedBundle();
     resolve(&launcher, dol_bytes);
     EXPECT_EQ(Orca::Mod::ResolvedKind(), BundleKind::Refused);
     EXPECT_NE(Orca::Mod::ResolvedError().find("trusts no bundle key"), std::string::npos);
-    // Without mod.sig: plays under the app (SUBSPACE_GAME set), keyed or not.
     ASSERT_TRUE(File::Delete(p.dir + "mod.sig"));
     Orca::Mod::ResetResolvedBundle();
     resolve(&launcher, dol_bytes);
@@ -1669,7 +1563,6 @@ TEST(OrcaBundle, ResolvesOrRefuses)
     Orca::Mod::ResetResolvedBundle();
     resolve(&launcher, dol_bytes);
     EXPECT_EQ(Orca::Mod::ResolvedKind(), BundleKind::Flat) << Orca::Mod::ResolvedError();
-    // A dev run (no SUBSPACE_GAME) still needs mod.sig, and a key.
     {
       const ScopedEnv no_game("SUBSPACE_GAME", "");
       Orca::Mod::ResetResolvedBundle();
@@ -1696,7 +1589,6 @@ TEST(OrcaBundle, ResolvesOrRefuses)
     EXPECT_NE(Orca::Mod::ResolvedError().find("neither tree.json nor mod.json"), std::string::npos);
   }
 
-  // ORCA_MOD_DIR with a tree.json: mods phase 1's tree bundle, as before.
   {
     File::CreateFullPath(root + "tree/");
     File::WriteStringToFile(root + "tree/tree.json", "{}");
@@ -1707,7 +1599,6 @@ TEST(OrcaBundle, ResolvesOrRefuses)
     EXPECT_TRUE(Orca::Mod::Requested());
     EXPECT_EQ(Orca::Mod::Dir(), root + "tree/");
   }
-  // Outside a session nothing is looked at.
   {
     const ScopedEnv no_session("ORCA_SESSION", "");
     Orca::Mod::ResetResolvedBundle();
@@ -1750,11 +1641,9 @@ TEST(OrcaBundle, FlatRunsRequireAJailAndLegacyRunsKeepTheirBehavior)
     EXPECT_EQ(Orca::Mod::ResolvedFlat(), nullptr);
     EXPECT_TRUE(Orca::Mod::Requested());
   };
-  // A valid signed run/<slug>/mod.json is refused before it can supply a boot profile.
   Orca::Mod::ResetResolvedBundle();
   Orca::Mod::ResolveBundleForTests(nullptr, {}, false);
   refused();
-  // Direct launcher boots also require the jail when session mode was not requested.
   {
     const ScopedEnv no_session("ORCA_SESSION", "0");
     const std::string launcher = pack.dir + "game.dol";
@@ -1763,14 +1652,12 @@ TEST(OrcaBundle, FlatRunsRequireAJailAndLegacyRunsKeepTheirBehavior)
     EXPECT_EQ(Orca::Mod::ResolvedKind(), Orca::Mod::BundleKind::Refused);
     EXPECT_EQ(Orca::Mod::ResolvedFlat(), nullptr);
   }
-  // Naming the same flat folder explicitly does not change the requirement.
   {
     const ScopedEnv explicit_dir("ORCA_MOD_DIR", pack.dir);
     Orca::Mod::ResetResolvedBundle();
     Orca::Mod::ResolveBundleForTests(nullptr, {}, false);
     refused();
   }
-  // Launch switches do not change the OS-confirmed state. Also exercise the production entry.
   const bool jailed = Orca::Sandbox::PackJailed();
   {
     const ScopedEnv marker("ORCA_NET", "internet");
@@ -1785,8 +1672,6 @@ TEST(OrcaBundle, FlatRunsRequireAJailAndLegacyRunsKeepTheirBehavior)
   Orca::Mod::ResetResolvedBundle();
   Orca::Mod::ResolveBundleForTests(nullptr, {}, true);
   EXPECT_EQ(Orca::Mod::ResolvedKind(), Orca::Mod::BundleKind::Flat);
-  // The app's bundle without mod.sig: the jail is required all the same, with a key trusted or
-  // none; jailed, it plays.
   ASSERT_TRUE(File::Delete(pack.dir + "mod.sig"));
   for (const bool keyed : {true, false})
   {
@@ -1806,7 +1691,6 @@ TEST(OrcaBundle, FlatRunsRequireAJailAndLegacyRunsKeepTheirBehavior)
     EXPECT_FALSE(Orca::Mod::ResolvedFlat()->signer);
   }
   Orca::Mod::TrustKeysForTests(std::span(&key, 1));
-  // No mod.json remains legacy, including a launcher's own folder, without a jail.
   {
     const ScopedEnv legacy_game("SUBSPACE_GAME", "legacy");
     Orca::Mod::ResetResolvedBundle();

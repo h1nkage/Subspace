@@ -46,7 +46,7 @@
 
 # --- Main menu: Play Online, the game's own ONLINE page with no connection -----------------------
 
-# The main menu's Wi-Fi button reads PLAY ONLINE (Orca's texture pack, Data/Sys/Orca/Textures, our
+# The main menu's Wi-Fi button reads PLAY ONLINE (Orca's texture pack, Data/Sys/Subspace/Textures, our
 # own art) and opens the game's own ONLINE page (With Friends / With Anyone), relabelled and
 # rewritten so nothing on it is Nintendo's (the breadcrumb by texture; the button's description
 # by Orca's UX, UX/MenuText.h). Every way on from it leaves through the game's own exit to the local
@@ -507,6 +507,18 @@ end
 8089E90C 4BEF8361 4BEF8361    # bl     0x80796C6C (the param's float; guard)
 8089E910 FFE00890 FFE0F090    # fmr    f31, f1 -> fmr f31, f30: the rate is the argument, 0
 8089E914 2C1E0001 2C1E0001    # cmpwi  r30, 1 (the trip's kind; guard)
+
+# --- Character select: no wait for the panel animation --------------------------------------------
+
+# "Lagless Character Select" (`0469D424 FC000040`). In sora_menu_sel_char (loaded at 0x80682800 on
+# the character select), a panel in states 4-9 (+0xA4) waits until its animation (+0x70) reaches
+# its last frame before it moves on (`fcmpo f1, f0` then `cror eq, gt, eq`: frame >= last). The
+# code compares f0 with itself, so the wait ends at once. Original read from the module on the
+# disc (none of these words is relocated); guarded by the words around it, so it lands each time
+# the module loads and never on other code.
+8069D420 EC020028 EC020028    # fsubs  f0, f2, f0 (guard)
+8069D424 FC010040 FC000040    # fcmpo  cr0, f1, f0 -> fcmpo cr0, f0, f0: always "reached"
+8069D428 4C411382 4C411382    # cror   eq, gt, eq (guard)
 
 # --- Character select: change controls from the name list -----------------------------------------
 

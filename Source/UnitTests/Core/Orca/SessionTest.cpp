@@ -44,8 +44,6 @@ namespace OnlineMatch
 {
 class StallBudget;
 }
-// Declared here instead of including Core/Rollback/SessionPort.h, whose includes bring in a
-// `Config` namespace that clashes with this file's Config.
 Orca::Net::Step StepSession(Orca::Net::Session& session, Orca::Net::Game& game, int completed_frame,
                             const std::function<Orca::Net::Pad()>& sample_local,
                             const std::function<bool()>& stopping,
@@ -68,19 +66,17 @@ Orca::Net::Step StepSession(Orca::Net::Session& session, Orca::Net::Game& game, 
                             OnlineMatch::StallBudget* stall_budget = nullptr,
                             const std::function<bool(std::chrono::steady_clock::time_point)>&
                                 room_recovering = {});
-}  // namespace Rollback
+}
 
 using namespace Orca::Net;
 
 namespace
 {
-// A uniform integer in [lo, hi] that is the same on every platform. std::uniform_int_distribution
-// differs between standard libraries, so the same seed would simulate different networks.
 template <typename T>
 T Uniform(std::mt19937& rng, T lo, T hi)
 {
   const u64 span = static_cast<u64>(hi - lo) + 1;
-  constexpr u64 RANGE = u64{1} << 32;  // mt19937 draws 32 bits
+  constexpr u64 RANGE = u64{1} << 32;
   const u64 limit = RANGE - RANGE % span;
   u64 draw;
   do
@@ -96,17 +92,14 @@ u64 Mix(u64 h, u64 v)
   return h * 0xff51afd7ed558ccdull;
 }
 
-// A deterministic "game": its state is a hash of every frame number and every pad it ran with.
 class FakeGame final : public Game
 {
 public:
   bool Save(int frame) override
   {
-    // Saving the same frame twice between loads is wasted work (a full snapshot in Dolphin).
     if (!m_saved_since_load.insert(frame).second)
       ++m_double_saves;
     ++m_saves;
-    // Like SnapshotRing: a new frame takes the next slot, evicting what it held.
     if (ring_slots > 0 && !m_snapshots.contains(frame))
     {
       m_ring.resize(ring_slots, -1);
@@ -125,8 +118,6 @@ public:
       return false;
     m_state = it->second;
     m_loads.emplace_back(frame, m_state);
-    // Like SnapshotRing: the snapshots after the loaded frame are gone (the re-run saves them
-    // again), and the next save takes the slot after the loaded one.
     m_snapshots.erase(m_snapshots.upper_bound(frame), m_snapshots.end());
     if (ring_slots > 0)
     {
@@ -142,7 +133,7 @@ public:
   }
   void SetPads(int frame, const Pads& pads) override
   {
-    m_history[frame] = m_state;  // the state at the start of `frame` (re-runs overwrite)
+    m_history[frame] = m_state;
     m_ran_pads[frame] = pads;
     m_pads_frame = frame;
     m_pads = pads;
@@ -159,7 +150,6 @@ public:
   double SaveMs() const override { return save_ms; }
   double NowMs() const override { return now_ms; }
 
-  // Runs the frame whose pads were set last; returns its number.
   int Run()
   {
     u64 h = Mix(m_state, static_cast<u64>(m_pads_frame));
@@ -167,14 +157,11 @@ public:
       for (u8 b : pad)
         h = Mix(h, b);
     m_state = h;
-    // A bug that corrupts this frame on every run, re-runs included.
     if (m_corrupt_at == m_pads_frame)
       m_state ^= 1;
     return m_pads_frame;
   }
 
-  // Slots like RingPort's ring (0: keep every snapshot), what a save reports it costs, and the
-  // simulated clock (Game::NowMs).
   size_t ring_slots = 0;
   double save_ms = 0;
   double now_ms = 0;
@@ -195,7 +182,6 @@ public:
   std::optional<int> m_corrupt_at;
 };
 
-// Both directions of a link, with latency and jitter counted in ticks (one tick = one frame).
 struct FakeNet
 {
   struct InFlight
@@ -207,18 +193,14 @@ struct FakeNet
   int now = 0;
   int latency = 0;
   int jitter = 0;
-  // Extra latency on the way to each end (index: the receiving end).
   std::array<int, 2> extra{0, 0};
   std::mt19937 rng{1234};
-  // An optional direct link beside the relay (off while direct_latency < 0): unordered, lossy,
-  // and without the drop-in history.
   int direct_latency = -1;
   int direct_jitter = 0;
   int direct_loss_percent = 0;
   std::array<std::vector<InFlight>, 2> direct;
   int direct_delivered = 0;
   bool relay_open = true;
-  // A sender that rewrites its own packets (a modified client), by sending end.
   std::function<void(int from, Packet* packet)> tamper;
 
   class End final : public Transport
@@ -233,7 +215,6 @@ struct FakeNet
       int delay = m_net.latency + m_net.extra[1 - m_index];
       if (m_net.jitter > 0)
         delay += Uniform(m_net.rng, 0, m_net.jitter);
-      // A relayed WebSocket is ordered: never deliver before an earlier packet.
       auto& queue = m_net.queues[1 - m_index];
       int at = m_net.now + delay;
       if (!queue.empty())
@@ -292,7 +273,6 @@ struct Player
   {
   }
 
-  // A game whose snapshots live in a ring as small as RingPort's.
   static FakeGame RingGame(const Config& config)
   {
     FakeGame game;
@@ -300,8 +280,6 @@ struct Player
     return game;
   }
 
-  // Inputs that change every few frames, differently per seat, so guesses are often wrong.
-  // tag_ticks writes the tick into the pad so a test can tell which sample a frame carries.
   Pad LocalPad(int tick) const
   {
     Pad pad{};
@@ -319,9 +297,6 @@ struct Player
     return pad;
   }
 
-  // An independent model of which sample each frame must carry: the sample at frame F goes to
-  // F + delay; frames a raise skips repeat the previous input; a sample whose frame already has
-  // one (after a lower, or a repeated stalled boundary) is dropped.
   void Expect(const Pad& pad, int input_delay, int frame, int delay)
   {
     if (expected.empty())
@@ -347,14 +322,11 @@ struct Player
     last_delay = delay;
   }
 
-  // The tick a tagged pad was sampled at (-1: neutral, never sampled).
   static int TickOf(const Pad& pad) { return pad[4] ? pad[2] | pad[3] << 8 : -1; }
 
-  // One tick of wall time: re-run any frames a rollback needs, then run at most one new frame.
   void Tick(int tick)
   {
     game.now_ms = tick * 1000.0 / 60;
-    // The model applies to the tick's first boundary, which samples unless it is a Wait.
     const int frame = session.CurrentFrame();
     const int delay = session.Delay();
     for (int guard = 0; guard < 64; ++guard)
@@ -383,9 +355,7 @@ struct Player
   int seat;
   int completed = -1;
   bool tag_ticks = false;
-  // Never touch the controller: every guess is right, so nothing rolls back.
   bool still = false;
-  // >= 0: track `expected` (the session's input_delay).
   int model_input_delay = -1;
   std::map<int, Pad> expected;
   int last_delay = -1;
@@ -397,7 +367,6 @@ struct Player
     int frame;
     StepKind kind;
   };
-  // The first boundary of every tick: the frame it was at and what it returned.
   std::vector<First> first_steps;
 };
 
@@ -418,8 +387,6 @@ struct Match
     for (int t = played; t < end; ++t)
     {
       net.now = t;
-      // Both ends measure their round trip to the relay every half second (by default the link's
-      // one-way latency, as the relay sits halfway).
       if (rtt_samples && t % 30 == 0)
       {
         for (int i = 0; i < 2; ++i)
@@ -433,13 +400,11 @@ struct Match
       }
       a->Tick(t);
       b->Tick(t);
-      // A machine whose clock runs fast: one extra frame every `a_extra_every` ticks.
       if (a_extra_every > 0 && t % a_extra_every == a_extra_every - 1)
         a->Tick(t);
     }
     played = end;
   }
-  // Frames both players have confirmed must have identical saved states.
   int CompareConfirmed() const
   {
     const int confirmed = std::min(a->session.GetStats().confirmed_frame,
@@ -458,8 +423,6 @@ struct Match
     return compared;
   }
 
-  // Each frame both players confirmed must carry, on the other side, the sample the model expects.
-  // Returns the frames checked.
   static int CheckSamples(const Player& from, const Player& to)
   {
     const int confirmed = to.session.GetStats().confirmed_frame;
@@ -486,7 +449,6 @@ struct Match
   int played = 0;
 };
 
-// The newest frame this player ran with confirmed inputs (confirmed_frame may run ahead of it).
 int Settled(const Player& p)
 {
   return std::min(p.session.GetStats().confirmed_frame, p.session.CurrentFrame() - 1);
@@ -498,53 +460,32 @@ void ExpectClean(const Match& match)
     EXPECT_TRUE(p->session.Error().empty()) << p->session.Error();
 }
 
-// A match through the service's relay in simulated wall-clock time (microseconds), modelling two Orca
-// processes: each side paces frames like Dolphin's throttle, polls stalls like StepSession, and
-// coalesces and sends packets like RelayRoom's room thread. Packets travel as their JSON.
-//
-// With a DropIn, side 1 joins side 0's running game like OnlineMatch: the host stores a keyframe
-// and starts its session; the joiner loads it, replays the host's log unthrottled until it is
-// within CATCH_UP_BEHIND frames, then plugs in.
 class RelayMatch
 {
 public:
   using Micros = s64;
   static constexpr Micros MS = 1000;
   static constexpr Micros FRAME_US = 16667;
-  // OnlineMatch's: a joiner further behind the host than this runs unthrottled.
   static constexpr int CATCH_UP_BEHIND = 12;
 
   struct Side
   {
-    // Extra delay (plus 0..jitter) on each message this side sends and receives, kept in order,
-    // only between hold_from_s and hold_to_s.
     int hold_out_ms = 0;
     int hold_in_ms = 0;
     int jitter_out_ms = 0;
     int jitter_in_ms = 0;
     int hold_from_s = -1'000'000;
     int hold_to_s = 1'000'000;
-    // One way between this machine and the relay.
     int relay_ms = 8;
-    // Frames per second relative to 60 (1.01: a clock 1% fast).
     double speed = 1.0;
-    // Host time one re-run frame takes.
     Micros rerun_us = 0;
-    // The player changes its input about once every this many frames.
     int input_every = 7;
-    // The room thread's least time between two sends (RelayRoom's SEND_GAP).
     int send_gap_ms = 10;
-    // Host hitches (disc read, shader compile): 5-20 frame stops about every hitch_every_s seconds
-    // (0: never), plus hitch_burst more in the first ten seconds.
     int hitch_every_s = 0;
     int hitch_burst = 0;
     bool report_hitches = true;
-    // Wi-Fi spikes: nothing leaves or reaches this machine for a while, then it all arrives at
-    // once. Fixed (spike_every_s, spike_ms), drawn from ranges (spike_gap_ms, spike_len_ms), or
-    // random Poisson arrivals (spike_mean_gap_ms), only between spike_from_s and spike_to_s.
     int spike_every_s = 0;
     int spike_ms = 0;
-    // A direct link beside the relay (-1: none): unordered, lossy, no drop-in history.
     int direct_ms = -1;
     int direct_jitter_ms = 0;
     int direct_loss_percent = 0;
@@ -553,12 +494,9 @@ public:
     int spike_mean_gap_ms = 0;
     int spike_from_s = 0;
     int spike_to_s = 1'000'000;
-    // The spikes hold only what reaches this machine (its download stalls; what it sends goes).
     bool spike_in_only = false;
   };
 
-  // Side 1 arrives join_s seconds in; the host starts its session keyframe_frames later (storing
-  // the keyframe), and side 1 starts replaying load_ms after that, catch_up_frame_us per frame.
   struct DropIn
   {
     int join_s = 30;
@@ -567,7 +505,6 @@ public:
     Micros catch_up_frame_us = 3000;
   };
 
-  // `seed` varies every random draw.
   RelayMatch(Config config, const Side& a, const Side& b,
              std::optional<DropIn> drop_in = std::nullopt, u32 seed = 0)
       : m_drop_in(drop_in), m_rng(4321 + seed)
@@ -581,7 +518,6 @@ public:
     }
   }
 
-  // Runs until both sides have run `frames` frames (or ten minutes of wall time pass).
   void Play(int frames)
   {
     for (; m_now < END; m_now += MS)
@@ -596,7 +532,6 @@ public:
     }
   }
 
-  // Runs `seconds` more of wall time.
   void PlaySeconds(int seconds)
   {
     const Micros until = m_now + seconds * 1000 * MS;
@@ -612,7 +547,6 @@ public:
   const FakeGame& GameOf(int i) const { return m_peers[i]->game; }
   int HitchesOf(int i) const { return m_peers[i]->hitches_reported; }
   int DirectReceivedBy(int i) const { return m_peers[i]->direct_received; }
-  // The most each side's delay reached since `MarkDelays`, and every delay change it noted.
   int MaxDelayOf(int i) const { return m_peers[i]->max_delay; }
   void MarkDelays()
   {
@@ -620,7 +554,6 @@ public:
       p->max_delay = p->session ? p->session->Delay() : 0;
   }
   const std::vector<std::string>& NotesOf(int i) const { return m_peers[i]->notes; }
-  // Drop-in: the frame the friend's controller plugged in at (-1: not yet).
   int PluggedFrame() const { return m_plugged_frame; }
 
   int CompareConfirmed() const
@@ -648,7 +581,6 @@ public:
     }
   }
 
-  // One line per side, for the record: what a test's numbers were.
   void Print(const char* name) const
   {
     for (int i = 0; i < 2; ++i)
@@ -678,7 +610,7 @@ private:
   {
     Micros due;
     int from;
-    int to;  // == from: a ping, back from the relay as a pong
+    int to;
     Micros ping_sent;
     std::string text;
   };
@@ -707,7 +639,6 @@ private:
     {
       game.ring_slots = static_cast<size_t>(config.max_rollback) + 2;
       link.direct = s.direct_ms >= 0;
-      // The room's start message reaches each machine after its own way from the relay.
       next_call = start;
       pace = start;
       std::mt19937 rng(77 + index + seed * 13);
@@ -737,8 +668,6 @@ private:
         if (at >= s.spike_from_s * 1000 * MS && at < s.spike_to_s * 1000 * MS)
           spikes.emplace_back(at, at + length);
       }
-      // Poisson: a geometric number of milliseconds to the next start (no distribution object, so
-      // every platform draws the same), never inside the spike before it.
       for (Micros at = start; s.spike_mean_gap_ms > 0 && at < END;)
       {
         do
@@ -759,10 +688,8 @@ private:
     Micros period;
     Micros start;
     int completed = -1;
-    // When the emulator next calls the session, and when the current boundary was due.
     Micros next_call;
     Micros pace;
-    // Inside one boundary's StepSession loop (stall polls, a wait).
     bool in_step = false;
     bool waited = false;
     int resets_before = 0;
@@ -774,18 +701,13 @@ private:
     std::vector<int> rtt_history;
     bool seeded = false;
     std::deque<Wire> held_out, uplink, downlink, held_in;
-    // Direct copies on their way to this machine, in no order.
     std::vector<Wire> direct_in;
     int direct_received = 0;
-    // Hitches (start, length), and when the last boundary returned: frame times are measured from
-    // there, so stalls and waits don't count as hitches.
     std::vector<std::pair<Micros, Micros>> hitches;
     size_t next_hitch = 0;
     std::optional<Micros> last_return;
     int hitches_reported = 0;
-    // Each Wi-Fi spike's start and end, in order.
     std::vector<std::pair<Micros, Micros>> spikes;
-    // Drop-in: frames the host ran alone before its session, and whether the joiner is catching up.
     int solo_frame = 0;
     std::vector<Pads> solo_log;
     bool catching_up = false;
@@ -817,7 +739,6 @@ private:
     return static_cast<Micros>(ms + extra) * MS;
   }
 
-  // When this machine's radio can next move a message: now, or the end of the spike it is in.
   static Micros Radio(const Peer& p, Micros now)
   {
     for (const auto& [from, to] : p.spikes)
@@ -876,7 +797,6 @@ private:
     }
   }
 
-  // The pad a player holds at wall time `at`: it changes every few frames.
   static Pad PadAt(const Peer& p, Micros at)
   {
     const int tick = static_cast<int>(at / FRAME_US) + p.seat * 37;
@@ -912,8 +832,6 @@ private:
     const Micros host_starts = arrive + m_drop_in->keyframe_frames * FRAME_US;
     if (!host.session && m_now >= host_starts)
     {
-      // The session starts at the host's next frame with the frames since the keyframe in its
-      // log; the pad held now fills the frames the delay skips.
       const int next = host.solo_frame;
       Config config = DropInConfig(host, next);
       config.start_pad = host.solo_log.empty() ? Pad{} : host.solo_log.back()[0];
@@ -937,7 +855,6 @@ private:
     }
   }
 
-  // The host's game before its session: frames at its own pace, logged.
   void RunSolo(Peer& p)
   {
     while (p.next_call <= m_now)
@@ -998,7 +915,6 @@ private:
           p.rtt_history.push_back(p.rtt);
           continue;
         }
-        // Anything that arrives before this side's session starts is dropped.
         if (!p.session)
           continue;
         Packet packet;
@@ -1042,7 +958,6 @@ private:
       const Micros at = p.next_call;
       if (!p.in_step)
       {
-        // Once per boundary: report a hitch (unless catching up) and feed a new round trip.
         p.in_step = true;
         p.waited = false;
         p.resets_before = p.game.m_pacing_resets;
@@ -1054,7 +969,6 @@ private:
         }
         if (!p.seeded)
         {
-          // At the first boundary the session takes the lobby's recent pings.
           p.seeded = true;
           const size_t n = p.rtt_history.size();
           const size_t keep = static_cast<size_t>(RTT_SAMPLES);
@@ -1100,7 +1014,6 @@ private:
       }
       if (m_drop_in && i == 1)
       {
-        // Unthrottled while far behind the host; pacing restarts once it is close.
         const bool was = p.catching_up;
         p.catching_up = session.CatchingUp() ||
                         session.AuthorityFrame() - step.frame > CATCH_UP_BEHIND;
@@ -1115,7 +1028,6 @@ private:
       }
       p.pace = std::max((reset ? at : p.pace) + p.period, at - 100 * MS);
       p.next_call = std::max(p.pace, at);
-      // A hitch: this frame takes that much longer; the throttle makes up what it can afterwards.
       if (p.next_hitch < p.hitches.size() && p.hitches[p.next_hitch].first <= at)
         p.next_call += p.hitches[p.next_hitch++].second;
     }
@@ -1125,11 +1037,11 @@ private:
   std::optional<DropIn> m_drop_in;
   int m_keyframe = -1;
   int m_plugged_frame = -1;
-  Micros m_now = -3000 * MS;  // the lobby: pings before the match starts
+  Micros m_now = -3000 * MS;
   std::mt19937 m_rng;
   std::mt19937 m_direct_rng{8765};
 };
-}  // namespace
+}
 
 TEST(OrcaSession, NoLatencyNeverRollsBack)
 {
@@ -1145,8 +1057,6 @@ TEST(OrcaSession, NoLatencyNeverRollsBack)
 
 TEST(OrcaSession, SavesOnlyFramesItMayRollBackTo)
 {
-  // Remote inputs arrive within the input delay, so no frame runs on a guess: only checksum frames
-  // (every 60) need a snapshot.
   Match match(Config{}, 1, 0);
   match.Play(600);
   EXPECT_TRUE(match.a->session.Error().empty()) << match.a->session.Error();
@@ -1185,11 +1095,6 @@ TEST(OrcaSession, LatencyBeyondTheWindowStalls)
   EXPECT_GT(match.CompareConfirmed(), 300);
 }
 
-// A lag switch: one player holds each of its inputs back until just before the other would stall
-// on it, while its packets give its true frame. The other machine ran max_rollback frames on
-// guesses every frame (its opponent reacting to its inputs ~7 frames sooner than it could). It now
-// finds that player late within a few seconds and runs only LATE_STALL_LIMIT frames on guesses for
-// it; an honest link, however slow or jittery, is never found late.
 TEST(OrcaSession, InputsHeldBackAreFoundLate)
 {
   constexpr int HELD = 5;
@@ -1209,8 +1114,6 @@ TEST(OrcaSession, InputsHeldBackAreFoundLate)
       packet->pads.resize(static_cast<size_t>(keep));
     }
   };
-  // How many frames the victim runs on guesses past the late player's inputs, at most, over
-  // `ticks`.
   const auto guessing = [&match](int ticks) {
     int most = 0;
     for (int i = 0; i < ticks; ++i)
@@ -1229,13 +1132,11 @@ TEST(OrcaSession, InputsHeldBackAreFoundLate)
   EXPECT_TRUE(match.a->session.LateSeat(1));
   EXPECT_FALSE(match.b->session.LateSeat(0));
   EXPECT_EQ(match.a->session.GetStats().late_seats, 1);
-  // Found late, it gets LATE_STALL_LIMIT (3) frames of guesses, where it had max_rollback.
   const int late = guessing(600);
   EXPECT_LE(late, 3) << "before it was found late: " << early;
   ExpectClean(match);
   EXPECT_GT(match.CompareConfirmed(), 1000);
 
-  // Honest links: slow, jittery, lossy direct beside the relay. Nobody is late.
   for (const auto& [latency, jitter, direct_loss] :
        {std::tuple{4, 3, -1}, std::tuple{12, 6, -1}, std::tuple{6, 4, 25}})
   {
@@ -1254,27 +1155,21 @@ TEST(OrcaSession, InputsHeldBackAreFoundLate)
   }
 }
 
-// A late port name asks for a re-run. RerunFrom refuses when no snapshot is in reach (frames that
-// ran confirmed have none) instead of failing the session later.
 TEST(OrcaSession, RerunOnlyWithASnapshotInReach)
 {
-  // No guesses, so only checksum frames (every 60) are saved; frame ~100 is 40 past the newest.
   {
     Match match(Config{}, 1, 0);
     match.Play(100);
     Session& session = match.a->session;
     ASSERT_GT(session.CurrentFrame() % 60, Config{}.max_rollback + MAX_SNAPSHOT_EVERY);
     EXPECT_FALSE(session.RerunFrom(session.CurrentFrame() - 2));
-    // Beyond the rollback window, never.
     EXPECT_FALSE(session.RerunFrom(session.CurrentFrame() - Config{}.max_rollback - 1));
-    // A frame not run yet needs nothing.
     EXPECT_TRUE(session.RerunFrom(session.CurrentFrame()));
     match.Play(200);
     EXPECT_TRUE(session.Error().empty()) << session.Error();
     EXPECT_EQ(session.GetStats().rollbacks, 0);
     EXPECT_GT(match.CompareConfirmed(), 250);
   }
-  // Inputs later than the delay: every frame is a guess and saved, so a re-run is in reach.
   {
     Match match(Config{}, 4, 0);
     match.Play(300);
@@ -1314,7 +1209,7 @@ TEST(OrcaPadCodec, NeutralIsZeroAndRoundTrips)
   status.triggerRight = 12;
   status.analogA = 99;
   const GCPadStatus back = DecodePad(EncodePad(status));
-  EXPECT_EQ(back.button, PAD_BUTTON_A | PAD_TRIGGER_Z);  // origin bits never travel
+  EXPECT_EQ(back.button, PAD_BUTTON_A | PAD_TRIGGER_Z);
   EXPECT_EQ(back.stickX, 0);
   EXPECT_EQ(back.stickY, 255);
   EXPECT_EQ(back.substickX, 37);
@@ -1371,8 +1266,6 @@ TEST(OrcaSession, RejectsHostilePackets)
   EXPECT_TRUE(run(fine).empty());
 }
 
-// Live check against the room service worker, only with ORCA_LIVE_TEST=1 (writes nothing: an
-// anonymous dev game whose results are never recorded).
 TEST(OrcaLive, WebSocketReachesARoom)
 {
   const char* live = std::getenv("ORCA_LIVE_TEST");
@@ -1425,8 +1318,6 @@ TEST(OrcaLive, WebSocketReachesARoom)
 
 TEST(OrcaSessionDelay, DeepRollbacksAloneRaiseNothing)
 {
-  // 6-8 frames of latency at delay 2: deep rollbacks the window (7) still covers. Rollbacks alone
-  // never raise the delay; only stalls do.
   Match match(Config{}, 6, 2);
   match.Play(1200);
   ExpectClean(match);
@@ -1462,8 +1353,6 @@ TEST(OrcaSessionDelay, StaysPutWhenQuietOrDisabled)
 
 TEST(OrcaSessionDelay, SteadyHighRoundTripRaises)
 {
-  // Rollback hides latency up to its window (7, less 2 for the boundary and jitter); only the
-  // rest goes into input delay. 50 ms to the relay: 3 frames one way, all hidden.
   Match near_match(Config{}, 3, 0);
   near_match.rtt_samples = true;
   near_match.Play(600);
@@ -1474,8 +1363,6 @@ TEST(OrcaSessionDelay, SteadyHighRoundTripRaises)
     EXPECT_EQ(p->session.GetStats().delay_raises, 0);
   }
 
-  // 150 ms each: 9 frames one way, 4 of delay and 5 rolled back. Each side raises once both
-  // medians (three round trips each) are known, and stays. At most one stall, at the start.
   Match far_match(Config{}, 9, 0);
   far_match.rtt_samples = true;
   far_match.Play(50);
@@ -1501,8 +1388,6 @@ TEST(OrcaSessionDelay, SteadyHighRoundTripRaises)
   }
   EXPECT_GT(far_match.CompareConfirmed(), 1200);
 
-  // One huge round trip moves nothing, nor do one side's alone (the other may be next to the
-  // relay). Once typical on both sides, the delay is capped at max_delay.
   Match huge(Config{}, 0, 0);
   huge.a->session.OnRoundTrip(1000);
   huge.Play(120);
@@ -1520,9 +1405,6 @@ TEST(OrcaSessionDelay, SteadyHighRoundTripRaises)
 
 TEST(OrcaSessionDelay, LinkRaisesAtOnceAndFallsAFrameAtATime)
 {
-  // 250 ms to the relay: both delays jump from 2 to max_delay in one step, filling the skipped
-  // frames. Then at 16 ms each side steps down one frame per STALL_HOLD_WINDOWS quiet seconds,
-  // dropping one sample per step. Every frame must carry the sample the model predicts.
   Match match(Config{}, 5, 1);
   match.rtt_samples = true;
   match.relay_rtt_ms = {250, 250};
@@ -1559,8 +1441,6 @@ TEST(OrcaSessionDelay, LinkRaisesAtOnceAndFallsAFrameAtATime)
 
 TEST(OrcaSessionDelay, StepsDownOnlyWithHeadroomAndUndoesAWrongOne)
 {
-  // Ten frames each way, no round trips measured: at delay 2 the window is a frame short, so
-  // both stall and raise to 3. There they run at the window's edge, so neither steps down.
   Match match(Config{}, 10, 0);
   match.Play(1800);
   for (const Player* p : {match.a.get(), match.b.get()})
@@ -1572,8 +1452,6 @@ TEST(OrcaSessionDelay, StepsDownOnlyWithHeadroomAndUndoesAWrongOne)
   }
   const int stalls = match.a->session.GetStats().stalls;
 
-  // Eight frames: one frame of room at delay 2. A step down needs two frames of room at the lower
-  // delay, so both stay at 3.
   match.net.latency = 8;
   match.Play(60 * 15);
   for (const Player* p : {match.a.get(), match.b.get()})
@@ -1582,7 +1460,6 @@ TEST(OrcaSessionDelay, StepsDownOnlyWithHeadroomAndUndoesAWrongOne)
     EXPECT_EQ(p->session.GetStats().delay_lowers, 0);
   }
 
-  // Seven frames: two frames of room at 2. After five quiet seconds both step down.
   match.net.latency = 7;
   for (int i = 0; i < 20 && (match.a->session.GetStats().delay_lowers == 0 ||
                              match.b->session.GetStats().delay_lowers == 0);
@@ -1597,7 +1474,6 @@ TEST(OrcaSessionDelay, StepsDownOnlyWithHeadroomAndUndoesAWrongOne)
   }
   EXPECT_EQ(match.a->session.GetStats().stalls, stalls);
 
-  // Ten again right after: stalls return and the step down is reverted (not counted as a raise).
   match.net.latency = 10;
   for (int i = 0; i < 9 && (match.a->session.GetStats().delay_reverts == 0 ||
                             match.b->session.GetStats().delay_reverts == 0);
@@ -1613,7 +1489,6 @@ TEST(OrcaSessionDelay, StepsDownOnlyWithHeadroomAndUndoesAWrongOne)
     EXPECT_EQ(stats.delay_lowers, 1);
     EXPECT_EQ(stats.delay_reverts, 1);
   }
-  // After a revert, the next step down needs ten quiet windows, not five.
   match.net.latency = 7;
   match.Play(60 * 8);
   for (const Player* p : {match.a.get(), match.b.get()})
@@ -1635,7 +1510,7 @@ TEST(OrcaSessionDelay, StepsDownOnlyWithHeadroomAndUndoesAWrongOne)
 TEST(OrcaSessionTimeSync, FastSideWaits)
 {
   Config config;
-  config.max_delay = config.input_delay;  // keep the delay out of it
+  config.max_delay = config.input_delay;
   const auto play = [&config](bool time_sync, int extra_every, bool tagged = false) {
     config.time_sync = time_sync;
     auto match = std::make_unique<Match>(config, 3, 1);
@@ -1651,7 +1526,6 @@ TEST(OrcaSessionTimeSync, FastSideWaits)
     EXPECT_GT(match->CompareConfirmed(), 2000);
     return match;
   };
-  // A's clock runs 2.5% fast (one extra frame every 40 ticks).
   const auto synced = play(true, 40);
   const auto unsynced = play(false, 40);
   const Stats& a = synced->a->session.GetStats();
@@ -1660,8 +1534,6 @@ TEST(OrcaSessionTimeSync, FastSideWaits)
   EXPECT_LE(a.waits, 2500 / 30);
   EXPECT_EQ(b.waits, 0);
   EXPECT_EQ(unsynced->a->session.GetStats().waits, 0);
-  // Without time sync the fast side runs into the rollback window and stalls. With it, nobody
-  // stalls, the lead stays under two frames, and re-simulation drops by at least a third.
   const Stats& ua = unsynced->a->session.GetStats();
   const Stats& ub = unsynced->b->session.GetStats();
   EXPECT_GT(ua.stalls, 30);
@@ -1671,13 +1543,10 @@ TEST(OrcaSessionTimeSync, FastSideWaits)
   EXPECT_LT((a.resimulated_frames + b.resimulated_frames) * 3,
             (ua.resimulated_frames + ub.resimulated_frames) * 2);
 
-  // Equal clocks: nobody waits.
   const auto even = play(true, 0);
   EXPECT_EQ(even->a->session.GetStats().waits, 0);
   EXPECT_EQ(even->b->session.GetStats().waits, 0);
 
-  // Each wait resets pacing and samples nothing, so the frame it held carries the fresh pad read
-  // after the wait. Checked on what B ran: a boundary at frame F lands at F + delay.
   const auto tagged = play(true, 40, true);
   const Player& ta = *tagged->a;
   const Player& tb = *tagged->b;
@@ -1700,7 +1569,6 @@ TEST(OrcaSessionTimeSync, FastSideWaits)
     ++waits_checked;
   }
   EXPECT_GT(waits_checked, 30);
-  // B never waits or stalls: its samples advance exactly one tick per frame.
   for (int f = delay + 1; f <= Settled(ta); ++f)
   {
     EXPECT_EQ(Player::TickOf(ta.game.m_ran_pads.at(f)[1]),
@@ -1709,12 +1577,10 @@ TEST(OrcaSessionTimeSync, FastSideWaits)
   }
 }
 
-// The same through Rollback::StepSession: a wait holds the boundary for a frame period inside the
-// call, and the held frame plays the pad read after the wait.
 TEST(OrcaSessionTimeSync, StepSessionReadsThePadAgainAfterAWait)
 {
   Config config;
-  config.max_delay = config.input_delay;  // keep the delay out of it
+  config.max_delay = config.input_delay;
   config.time_sync = true;
   Match match(config, 3, 1);
   for (Player* p : {match.a.get(), match.b.get()})
@@ -1724,10 +1590,9 @@ TEST(OrcaSessionTimeSync, StepSessionReadsThePadAgainAfterAWait)
   struct Held
   {
     int frame;
-    int tick_after;  // the tick whose pad the session read after the wait
+    int tick_after;
   };
   std::vector<Held> held;
-  // A's wait reads the next tick's pad, so A then skips that tick.
   bool skip_next = false;
   const auto step_a = [&](int tick) {
     if (std::exchange(skip_next, false))
@@ -1740,8 +1605,6 @@ TEST(OrcaSessionTimeSync, StepSessionReadsThePadAgainAfterAWait)
       int asked = 0;
       const Step step = Rollback::StepSession(
           a.session, a.game, a.completed, [&] { return a.LocalPad(tick + reads++); },
-          // Asked once per Wait and once per Stall poll. The network only moves between ticks,
-          // so a stall gives up here and retries next tick.
           [&] { return ++asked > a.session.GetStats().waits - waits_before; },
           std::chrono::microseconds{0});
       if (a.session.GetStats().waits > waits_before)
@@ -1775,7 +1638,6 @@ TEST(OrcaSessionTimeSync, StepSessionReadsThePadAgainAfterAWait)
     }
     step_a(t);
     b.Tick(t);
-    // A's clock runs 2.5% fast: one extra frame every 40 ticks.
     if (t % 40 == 39)
       step_a(t);
   }
@@ -1789,7 +1651,6 @@ TEST(OrcaSessionTimeSync, StepSessionReadsThePadAgainAfterAWait)
   {
     if (h.frame + delay > Settled(b))
       continue;
-    // B ran A's read from after the wait, not the older one; the tags tell them apart.
     const Pad ran = b.game.m_ran_pads.at(h.frame + delay)[0];
     EXPECT_EQ(Player::TickOf(ran), h.tick_after) << "wait at frame " << h.frame;
     EXPECT_EQ(ran, a.LocalPad(h.tick_after)) << "wait at frame " << h.frame;
@@ -1800,18 +1661,13 @@ TEST(OrcaSessionTimeSync, StepSessionReadsThePadAgainAfterAWait)
 
 TEST(OrcaSessionTimeSync, UnequalRelayRoundTrips)
 {
-  // A is 17 ms from the relay, B 227 ms. Time sync uses frame numbers, not round trips, so the
-  // asymmetry must not make A wait.
   Config config;
   Match match(config, 7, 0);
   match.rtt_samples = true;
   match.relay_rtt_ms = {17, 227};
-  // Too few round trips yet: the delay is input_delay's.
   match.Play(30);
   EXPECT_EQ(match.a->session.Delay(), 2);
   EXPECT_EQ(match.b->session.Delay(), 2);
-  // Both use the shared median, (17 + 227) / 2 = 122 ms: 8 frames one way, 5 rolled back, so
-  // both pick 3. B must not take its own 227 ms for the whole link.
   match.Play(150);
   for (const Player* p : {match.a.get(), match.b.get()})
   {
@@ -1833,7 +1689,6 @@ namespace
 void ExpectNoFrameSavedTwice(int snapshot_every)
 {
   SCOPED_TRACE(::testing::Message() << "snapshot every " << snapshot_every);
-  // Stalls and time-sync waits repeat the boundary of the same frame many times: one snapshot each.
   Config stalling;
   stalling.snapshot_every = snapshot_every;
   stalling.max_rollback = 4;
@@ -1860,7 +1715,7 @@ void ExpectNoFrameSavedTwice(int snapshot_every)
   EXPECT_GT(stalls.a->session.GetStats().stalls, 0);
   EXPECT_GT(waits.a->session.GetStats().waits, 0);
 }
-}  // namespace
+}
 
 TEST(OrcaSession, NeverSavesAFrameTwice)
 {
@@ -1870,8 +1725,6 @@ TEST(OrcaSession, NeverSavesAFrameTwice)
 
 TEST(OrcaSessionDelay, FixedDelaySamplesLandDelayFramesLater)
 {
-  // At a fixed delay d with no stall or wait, frames below d run neutral and tick t's sample runs
-  // at frame t + d on both machines (also for d = 0).
   for (const int delay : {2, 0})
   {
     Config config;
@@ -1902,8 +1755,6 @@ TEST(OrcaSessionDelay, FixedDelaySamplesLandDelayFramesLater)
 
 TEST(OrcaSessionDelay, RaiseDuringAStall)
 {
-  // A delay raised during a stall applies at the next sample; the frames in between repeat the
-  // sample taken when the stall began.
   Config config;
   config.max_rollback = 2;
   config.time_sync = false;
@@ -1926,7 +1777,6 @@ TEST(OrcaSessionDelay, RaiseDuringAStall)
   match.Play(300);
   ExpectClean(match);
   const auto ran = [&](int f) { return match.b->game.m_ran_pads.at(f)[0]; };
-  // Sampled at delay 2 when the stall began, then at delay 6 on the next boundary.
   EXPECT_EQ(ran(stall.frame + 2), a.LocalPad(stall.tick));
   for (int f = stall.frame + 3; f < stall.frame + 6; ++f)
     EXPECT_EQ(ran(f), a.LocalPad(stall.tick)) << "frame " << f;
@@ -1936,8 +1786,6 @@ TEST(OrcaSessionDelay, RaiseDuringAStall)
 
 TEST(OrcaSession, HostilePeerTelemetryIsBounded)
 {
-  // A peer with good inputs but the worst telemetry it may send: extreme re-simulation counts,
-  // leads, frames and round trips must stay bounded.
   struct Hostile final : Transport
   {
     void Send(const Packet&) override {}
@@ -1993,9 +1841,6 @@ TEST(OrcaSession, HostilePeerTelemetryIsBounded)
 
 TEST(OrcaSession, DepthOneRollbacksLoadTheCorrectedState)
 {
-  // Every remote input arrives a frame late and differs from the guess. Each depth-1 rollback must
-  // load the state saved after the previous frame's re-run, not the uncorrected one. Checked
-  // against a game run straight with the right inputs.
   const auto remote = [](int f) { return Pad{static_cast<u8>(f % 5), static_cast<u8>(f % 3)}; };
   struct Late final : Transport
   {
@@ -2053,8 +1898,6 @@ TEST(OrcaSession, DepthOneRollbacksLoadTheCorrectedState)
 
 namespace
 {
-// A burst of B's packets reaches A `late` frames late, so A stalls once, briefly. With `hitch`,
-// B's emulator froze instead and B reports it.
 void LateBurst(Match& match, bool hitch = false, int late = 10)
 {
   if (hitch)
@@ -2063,13 +1906,10 @@ void LateBurst(Match& match, bool hitch = false, int late = 10)
   match.Play(1);
   match.net.extra[0] = 0;
 }
-}  // namespace
+}
 
 TEST(OrcaSessionDelay, StallsARaiseWouldSpareRaiseThenDecay)
 {
-  // A's stalls on B's inputs are for B's delay to answer, weighed by how many a raise would have
-  // spared in the last 45 seconds. A 14-frame burst holds A six frames, beyond any raise within
-  // max_delay, so it never raises anything.
   {
     Match match(Config{}, 1, 0);
     match.Play(700);
@@ -2087,9 +1927,6 @@ TEST(OrcaSessionDelay, StallsARaiseWouldSpareRaiseThenDecay)
       EXPECT_EQ(p->session.GetStats().delay_raises, 0);
     }
   }
-  // A 10-frame burst holds A two frames, which two more frames of B's delay would spare: worth it
-  // after sixteen such seconds in 45 (eight per frame). The sixteenth takes B to 3, then 4; A's
-  // delay stays. Once quiet, B steps back down a frame a second.
   Match match(Config{}, 1, 0);
   match.Play(700);
   for (int i = 0; i < 15; ++i)
@@ -2126,7 +1963,6 @@ TEST(OrcaSessionDelay, StallsARaiseWouldSpareRaiseThenDecay)
 
 TEST(OrcaSessionDelay, OneHiccupBothWaysRaisesNothing)
 {
-  // The relay holds both directions at once: one event, not two stalls in a row.
   Match match(Config{}, 1, 0);
   match.Play(700);
   match.net.extra = {10, 10};
@@ -2143,7 +1979,6 @@ TEST(OrcaSessionDelay, OneHiccupBothWaysRaisesNothing)
 
 TEST(OrcaSessionDelay, StallsOnAPeerHitchRaiseNothing)
 {
-  // Stalls caused by a hitch B reports: no delay cures a frozen emulator, so neither side raises.
   Match match(Config{}, 1, 0);
   match.Play(700);
   for (int i = 0; i < 4; ++i)
@@ -2164,8 +1999,6 @@ TEST(OrcaSessionDelay, StallsOnAPeerHitchRaiseNothing)
 
 TEST(OrcaSessionDelay, ALoadHitchCountsApartAndItsStallsDont)
 {
-  // A frame only a game load made slow: counted apart from hitches, never reported to the other
-  // side, and a stall around it doesn't count, as around a hitch.
   Match match(Config{}, 1, 0);
   match.Play(700);
   match.a->session.OnLoadHitch();
@@ -2182,11 +2015,8 @@ TEST(OrcaSessionDelay, ALoadHitchCountsApartAndItsStallsDont)
 
 TEST(OrcaSessionDelay, NoStallCountsWhileSettling)
 {
-  // No stall counts in the first ten seconds after controllers plug in (boot, loading, a drop-in
-  // settling). After that, enough of them raise B's delay.
   Match match(Config{}, 1, 0);
   match.Play(60);
-  // Longer bursts: time sync recovers only a frame per 30, so A still lags from the last one.
   for (int i = 0; i < 5; ++i)
   {
     LateBurst(match, false, 14);
@@ -2214,8 +2044,6 @@ TEST(OrcaSessionDelay, NoStallCountsWhileSettling)
 
 TEST(OrcaSessionDelay, RoundTripsSetTheFloor)
 {
-  // Round trips of 150 ms (4 frames of delay) on a link that is really one frame: the round trips
-  // alone hold the delay there, and quiet play never lowers it below.
   Match match(Config{}, 1, 0);
   match.rtt_samples = true;
   match.relay_rtt_ms = {150, 150};
@@ -2230,9 +2058,6 @@ TEST(OrcaSessionDelay, RoundTripsSetTheFloor)
   EXPECT_GT(match.CompareConfirmed(), 3500);
 }
 
-// One side's Wi-Fi drops out about every 11 s (a Mac's radio going off channel for AWDL) while
-// the other hitches about as often. Rollback covers each spike, so neither delay leaves two.
-// Spikes past the rollback window stall the other side once each, still too rare to raise.
 TEST(OrcaSessionDelay, WifiSpikesKeepTheDelayAtTwo)
 {
   for (const int spike_ms : {90, 250})
@@ -2265,10 +2090,8 @@ TEST(OrcaSessionDelay, WifiSpikesKeepTheDelayAtTwo)
   }
 }
 
-// A delay the player chose never adapts. Back to adaptive, it starts over from the link's need.
 TEST(OrcaSessionDelay, FixedDelayNeverAdapts)
 {
-  // Fixed at 2 on a link a frame beyond the window: both sides stall all along and stay at 2.
   Config two;
   two.fixed_delay = 2;
   Match slow(two, 10, 0);
@@ -2287,8 +2110,6 @@ TEST(OrcaSessionDelay, FixedDelayNeverAdapts)
   }
   EXPECT_GT(slow.CompareConfirmed(), 1000);
 
-  // Fixed at 5 on a quiet link: it never comes down; back to adaptive, it drops at once. The
-  // other side fixed 1 before its first frame and stays there.
   Config five;
   five.fixed_delay = 5;
   Match quiet(five, 1, 0);
@@ -2311,7 +2132,6 @@ TEST(OrcaSessionDelay, FixedDelayNeverAdapts)
   }
   EXPECT_GT(quiet.CompareConfirmed(), 2300);
 
-  // Out of range: clamped to 1..max_delay.
   Match bounds(Config{}, 1, 0);
   bounds.a->session.SetFixedDelay(40);
   EXPECT_EQ(bounds.a->session.Delay(), Config{}.max_delay);
@@ -2319,8 +2139,6 @@ TEST(OrcaSessionDelay, FixedDelayNeverAdapts)
   EXPECT_EQ(bounds.a->session.Delay(), 1);
 }
 
-// A first median inflated by a keyframe transfer raises both sides to max_delay. Once round trips
-// are normal again, a delay the link set follows it back down a frame a second.
 TEST(OrcaSessionDelay, AnInflatedFirstMedianComesBackDown)
 {
   Match match(Config{}, 1, 0);
@@ -2342,8 +2160,6 @@ TEST(OrcaSessionDelay, AnInflatedFirstMedianComesBackDown)
   }
 }
 
-// With three players, another's stall counts toward our delay only when it was waiting on our
-// inputs (its lag on them reached the rollback window), not on the third player's.
 TEST(OrcaSessionDelay, StallsCountOnlyFromPlayersWaitingOnUs)
 {
   struct Scripted final : Transport
@@ -2392,7 +2208,6 @@ TEST(OrcaSessionDelay, StallsCountOnlyFromPlayersWaitingOnUs)
     }
   };
   play(700);
-  // Player 2 stalls while only two frames behind our inputs: it waited on player 3.
   for (int i = 0; i < 5; ++i)
   {
     ++net.stalls[1];
@@ -2400,8 +2215,6 @@ TEST(OrcaSessionDelay, StallsCountOnlyFromPlayersWaitingOnUs)
   }
   EXPECT_EQ(session.Delay(), 2);
   EXPECT_EQ(session.GetStats().delay_raises, 0);
-  // At the edge of its window on our inputs: ours to answer. With no stall lengths reported, each
-  // counts as one a frame would spare, so the eighth in 45 seconds raises.
   net.lag[1] = config.max_rollback + 1;
   for (int i = 0; i < 7; ++i)
   {
@@ -2415,8 +2228,6 @@ TEST(OrcaSessionDelay, StallsCountOnlyFromPlayersWaitingOnUs)
   EXPECT_EQ(session.GetStats().delay_raises, 1);
 }
 
-// A raise of k frames needs stalls it would have spared in 8k of the last 45 seconds. Stalls longer
-// than max_delay could cover never count; two-frame stalls raise after sixteen seconds of them.
 TEST(OrcaSessionDelay, StallsWeighByWhatARaiseWouldSpare)
 {
   struct Scripted final : Transport
@@ -2460,7 +2271,6 @@ TEST(OrcaSessionDelay, StallsWeighByWhatARaiseWouldSpare)
       completed = game.Run();
     }
   };
-  // One stall a second on our inputs, lasting `frames` frames (0: longer than SPARED_FRAMES).
   const auto stall = [&](int frames) {
     net.lag = config.max_rollback + 1;
     ++net.stalls;
@@ -2483,8 +2293,6 @@ TEST(OrcaSessionDelay, StallsWeighByWhatARaiseWouldSpare)
   EXPECT_TRUE(session.Error().empty()) << session.Error();
 }
 
-// One player changes its chosen delay several times mid-match: a longer delay fills the frames it
-// skips, a shorter one drops samples for taken frames, and both machines stay in sync.
 TEST(OrcaSessionDelay, ChosenDelayChangesMidMatchStayInSync)
 {
   Config config;
@@ -2504,7 +2312,6 @@ TEST(OrcaSessionDelay, ChosenDelayChangesMidMatchStayInSync)
   ExpectClean(match);
   EXPECT_EQ(match.a->session.Delay(), 2);
   EXPECT_EQ(match.b->session.Delay(), 4);
-  // 2 -> 1 and 6 -> 3 dropped samples, 1 -> 6 skipped frames, 3 -> 2 (adaptive) dropped one more.
   EXPECT_EQ(match.a->filled, 1);
   EXPECT_EQ(match.a->dropped_after_lower, 3);
   EXPECT_EQ(match.b->filled, 0);
@@ -2515,8 +2322,6 @@ TEST(OrcaSessionDelay, ChosenDelayChangesMidMatchStayInSync)
 
 TEST(OrcaSessionDelay, StallBeforeFirstInputRaisesNothing)
 {
-  // Both sides stall once waiting for the other's first packet. That is the trip, not a delay too
-  // short, so neither raises.
   Config config;
   config.input_delay = 6;
   config.max_delay = 7;
@@ -2534,8 +2339,6 @@ TEST(OrcaSessionDelay, StallBeforeFirstInputRaisesNothing)
 
 namespace
 {
-// A slow, jittery link ("T3"): A holds every message 60 ms each way plus 0-70 ms of jitter on the
-// way in, A's clock runs 1% fast, and inputs change about every 40 frames.
 RelayMatch::Side T3SideA()
 {
   RelayMatch::Side a;
@@ -2553,12 +2356,10 @@ RelayMatch::Side T3SideB()
   b.input_every = 40;
   return b;
 }
-}  // namespace
+}
 
 TEST(OrcaSessionRelay, SlowJitteryLinkStallsRarely)
 {
-  // A's stalls come from late bursts on its way in, so only B's delay can help: B raises to 3, A
-  // stays at 2, and B never steps back down into A's stalls.
   RelayMatch match(Config{}, T3SideA(), T3SideB());
   match.Play(1800);
   const int early_stalls = match.SessionOf(0).GetStats().stalls;
@@ -2567,11 +2368,9 @@ TEST(OrcaSessionRelay, SlowJitteryLinkStallsRarely)
   match.ExpectClean();
   const Stats& a = match.SessionOf(0).GetStats();
   const Stats& b = match.SessionOf(1).GetStats();
-  // Nearly all of A's stalls come in the first thirty seconds, before B's raise.
   EXPECT_LE(a.stalls, 30);
   EXPECT_LE(a.stalls - early_stalls, 6);
   EXPECT_LE(b.stalls, 5);
-  // B raised on A's stalls; A's delay stays where the round trips put it.
   EXPECT_GE(b.delay_raises, 1);
   EXPECT_GE(match.SessionOf(1).Delay(), 3);
   EXPECT_EQ(b.delay_reverts, 0);
@@ -2582,9 +2381,6 @@ TEST(OrcaSessionRelay, SlowJitteryLinkStallsRarely)
 
 TEST(OrcaSessionRelay, JitterBothWaysEitherSideFast)
 {
-  // A's jitter both ways, either clock fast: the fast side runs up to a frame ahead and stalls,
-  // and the other side raises once the stalls are sustained. Most come in the first twenty
-  // seconds; an occasional one after raises nothing.
   for (const bool a_fast : {true, false})
   {
     RelayMatch::Side a = T3SideA();
@@ -2605,7 +2401,6 @@ TEST(OrcaSessionRelay, JitterBothWaysEitherSideFast)
       EXPECT_LE(early[i], 60) << "a_fast " << a_fast << " side " << i;
       EXPECT_LE(stalls - early[i], 20) << "a_fast " << a_fast << " side " << i;
     }
-    // The slow side's delay rises for the fast side's stalls (both rise for the link's median).
     EXPECT_GE(match.SessionOf(a_fast ? 1 : 0).Delay(), 4);
     EXPECT_GT(match.CompareConfirmed(), 11000);
   }
@@ -2613,9 +2408,6 @@ TEST(OrcaSessionRelay, JitterBothWaysEitherSideFast)
 
 TEST(OrcaSessionRelay, LanWithHitchesTracksTheLink)
 {
-  // A fast link where both emulators hitch (B twice as often, as when compiling shaders). Stalls
-  // from reported hitches don't count, so the delay stays on the link. Unreported (a control), the
-  // stalls count but are too sparse to raise anything.
   RelayMatch::Side a, b;
   a.relay_ms = b.relay_ms = 14;
   a.speed = 1.01;
@@ -2646,7 +2438,6 @@ TEST(OrcaSessionRelay, LanWithHitchesTracksTheLink)
     EXPECT_LE(match.SessionOf(i).Delay(), 3) << "side " << i;
     EXPECT_EQ(stats.delay_raises, 0) << "side " << i;
     EXPECT_EQ(stats.counted_stalls, 0) << "side " << i;
-    // No stalls beyond the hitches.
     EXPECT_LE(stats.stalls, hitches + 1) << "side " << i;
   }
   EXPECT_GT(match.CompareConfirmed(), 11000);
@@ -2654,8 +2445,6 @@ TEST(OrcaSessionRelay, LanWithHitchesTracksTheLink)
 
 namespace
 {
-// A clean relay link between a Mac on Wi-Fi and a wired PC: short, slightly uneven round trips,
-// clocks a hair apart, inputs changing every few frames. No spike reaches past the window.
 RelayMatch::Side CleanMac()
 {
   RelayMatch::Side mac;
@@ -2675,7 +2464,6 @@ RelayMatch::Side CleanPc()
   return pc;
 }
 
-// The Mac's Wi-Fi on a bad day: its radio drops out both ways for 80-220 ms every 2-5 s.
 RelayMatch::Side SpikyMac()
 {
   RelayMatch::Side mac = CleanMac();
@@ -2684,7 +2472,6 @@ RelayMatch::Side SpikyMac()
   return mac;
 }
 
-// Every delay change both sides noted, for a failure's message.
 std::string Notes(const RelayMatch& match)
 {
   std::string out;
@@ -2695,11 +2482,8 @@ std::string Notes(const RelayMatch& match)
   }
   return out;
 }
-}  // namespace
+}
 
-// A player drops into the host's game on a clean link, early, at character select or mid-match.
-// The catch-up ends a dozen frames behind and the host stalls until time sync evens them out. That
-// is not the link, so neither delay moves; the settle period starts when the joiner plugs in.
 TEST(OrcaSessionRelay, DropInOnACleanLinkKeepsTwo)
 {
   for (const int join_s : {10, 30, 75})
@@ -2710,7 +2494,6 @@ TEST(OrcaSessionRelay, DropInOnACleanLinkKeepsTwo)
       SCOPED_TRACE(::testing::Message() << (mac_hosts ? "Mac hosts" : "PC hosts"));
       RelayMatch::DropIn drop_in;
       drop_in.join_s = join_s;
-      // A slow machine replays under 2x speed, so it plugs in further behind.
       drop_in.catch_up_frame_us = mac_hosts ? 3000 : 9000;
       RelayMatch match(Config{}, mac_hosts ? CleanMac() : CleanPc(),
                        mac_hosts ? CleanPc() : CleanMac(), drop_in);
@@ -2725,7 +2508,6 @@ TEST(OrcaSessionRelay, DropInOnACleanLinkKeepsTwo)
       match.Print(fmt::format("drop-in at {} s, {}", join_s, mac_hosts ? "Mac hosts" : "PC hosts")
                       .c_str());
       match.ExpectClean();
-      // The joiner stalls at the end of its catch-up, by design.
       EXPECT_GT(match.SessionOf(1).GetStats().stalls, 0);
       for (int i = 0; i < 2; ++i)
       {
@@ -2741,9 +2523,6 @@ TEST(OrcaSessionRelay, DropInOnACleanLinkKeepsTwo)
   }
 }
 
-// Wi-Fi dropouts of 80-220 ms every 2-5 s, mostly past the rollback window: each costs a stall.
-// A frame more of delay would hide few of them while costing every input a frame, so both delays
-// stay at 2, whichever side hosts.
 TEST(OrcaSessionRelay, SpikesEveryFewSecondsKeepTwo)
 {
   for (const bool mac_hosts : {true, false})
@@ -2770,8 +2549,6 @@ TEST(OrcaSessionRelay, SpikesEveryFewSecondsKeepTwo)
   }
 }
 
-// A fast clock keeps time sync waiting again and again. Those waits say nothing about the link,
-// so no delay moves.
 TEST(OrcaSessionRelay, SteadySmallWaitsRaiseNothing)
 {
   RelayMatch::Side a = CleanMac();
@@ -2791,9 +2568,6 @@ TEST(OrcaSessionRelay, SteadySmallWaitsRaiseNothing)
   EXPECT_GT(match.CompareConfirmed(), 11000);
 }
 
-// The same dropouts at random (Poisson, so they sometimes bunch up), every 3.5 s or 2.7 s on
-// average. A frame more of delay would spare only the shortest, never eight seconds' worth in 45,
-// so neither delay moves on any draw.
 TEST(OrcaSessionRelay, SpikesAtRandomKeepTwo)
 {
   for (const int mean_gap_ms : {3500, 2700})
@@ -2830,8 +2604,6 @@ TEST(OrcaSessionRelay, SpikesAtRandomKeepTwo)
   }
 }
 
-// A spike every 2 s on average: a chance bunch may justify a raise to 3, which comes back down
-// once quiet. At most once each way per side in five minutes, never above 3.
 TEST(OrcaSessionRelay, SpikesAtRandomEveryTwoSecondsRarelyMove)
 {
   for (const bool mac_hosts : {true, false})
@@ -2866,8 +2638,6 @@ TEST(OrcaSessionRelay, SpikesAtRandomEveryTwoSecondsRarelyMove)
 
 namespace
 {
-// A slow, bursty uplink (90 ms plus 0-120 ms of jitter, in order). The median round trip says
-// delay 2, but the jitter delivers the Mac's inputs late in clusters, stalling the PC briefly.
 RelayMatch::Side SlowUplinkMac()
 {
   RelayMatch::Side mac = CleanMac();
@@ -2875,12 +2645,8 @@ RelayMatch::Side SlowUplinkMac()
   mac.jitter_out_ms = 120;
   return mac;
 }
-}  // namespace
+}
 
-// Sustained lateness the median misses: a frame more of the Mac's delay would spare nearly every
-// PC stall, so the Mac rises to 3 and stays while the PC's delay never moves. With realistic
-// re-run costs (3 ms a frame), a stall is timed to when its input came, not to the end of the
-// rollback it set off, so the result is the same.
 TEST(OrcaSessionRelay, ClusteredLatenessRaisesTheLateSide)
 {
   for (const RelayMatch::Micros rerun_us : {0, 3000})
@@ -2907,15 +2673,12 @@ TEST(OrcaSessionRelay, ClusteredLatenessRaisesTheLateSide)
           << Notes(match);
       EXPECT_EQ(match.MaxDelayOf(1), 2) << Notes(match);
       EXPECT_LE(pc_stats.stalls, 30);
-      // Nearly all of the PC's counted stalls ended within a frame.
       EXPECT_GE(pc_stats.spared_stalls * 4, pc_stats.counted_stalls * 3);
       EXPECT_GT(match.CompareConfirmed(), 300 * 60);
     }
   }
 }
 
-// The same lateness for one minute: the Mac's delay rises, then returns to 2 within about ten
-// seconds of the uplink clearing, and stays.
 TEST(OrcaSessionRelay, SustainedLatenessRaisesThenComesBackDown)
 {
   for (u32 seed = 0; seed < 4; ++seed)
@@ -2947,8 +2710,6 @@ TEST(OrcaSessionRelay, SustainedLatenessRaisesThenComesBackDown)
   }
 }
 
-// Dropouts a frame would cure: 130-150 ms every 2.1 s, just past the rollback window. A frame or
-// two more of delay spares nearly all the stalls, so both delays rise and stay.
 TEST(OrcaSessionRelay, DropoutsAFrameWouldSpareRaiseAndStay)
 {
   for (u32 seed = 0; seed < 4; ++seed)
@@ -2972,8 +2733,6 @@ TEST(OrcaSessionRelay, DropoutsAFrameWouldSpareRaiseAndStay)
   }
 }
 
-// Long dropouts (150-300 ms) every second for a minute. A raise would spare few of them while
-// costing every input a frame, so the delay stays at 2 and the stalls are taken as they come.
 TEST(OrcaSessionRelay, LongDropoutsEverySecondRaiseNothing)
 {
   for (u32 seed = 0; seed < 4; ++seed)
@@ -2999,8 +2758,6 @@ TEST(OrcaSessionRelay, LongDropoutsEverySecondRaiseNothing)
   }
 }
 
-// Only the Mac's download stalls, so it stalls on the PC's inputs and the PC's delay rises. The PC
-// stalls too, only because the stalled Mac stopped sending: those count for nothing.
 TEST(OrcaSessionRelay, StallsSetOffByTheOtherSidesStallCountForNothing)
 {
   RelayMatch::Side mac = CleanMac();
@@ -3021,14 +2778,11 @@ TEST(OrcaSessionRelay, StallsSetOffByTheOtherSidesStallCountForNothing)
   EXPECT_GE(match.MaxDelayOf(1), 3) << Notes(match);
   EXPECT_EQ(match.MaxDelayOf(0), 2) << Notes(match);
   EXPECT_EQ(mac_stats.delay_raises, 0) << Notes(match);
-  // The Mac's delay may rise for its round trips, but never for the PC's stalls.
   for (const std::string& note : match.NotesOf(0))
     EXPECT_EQ(note.find("stalled"), std::string::npos) << note;
   EXPECT_GT(match.CompareConfirmed(), 80 * 60);
 }
 
-// Fuzz: random links, clock drift and wildly swinging round trips. Whatever the delays do, both
-// machines must run every confirmed frame with identical inputs and states.
 namespace
 {
 void FuzzDelaySwings(int snapshot_every)
@@ -3050,18 +2804,16 @@ void FuzzDelaySwings(int snapshot_every)
     match.b->tag_ticks = true;
     for (int chunk = 0; chunk < 60; ++chunk)
     {
-      // Round trips from LAN to intercontinental, at random moments.
       for (Player* p : {match.a.get(), match.b.get()})
       {
         if (pick(0, 3) == 0)
           p->session.OnRoundTrip(pick(5, 450));
-        // With automatic spacing, swing the save cost too so the spacing changes mid-match.
         if (snapshot_every == 0 && seed % 2 == 0 && pick(0, 3) == 0)
           p->game.save_ms = pick(0, 14);
       }
       match.Play(pick(5, 60));
     }
-    match.Play(400);  // settle
+    match.Play(400);
 
     SCOPED_TRACE(::testing::Message() << "seed " << seed << ", snapshot every " << snapshot_every);
     ExpectClean(match);
@@ -3087,22 +2839,19 @@ void FuzzDelaySwings(int snapshot_every)
     EXPECT_GT(match.CompareConfirmed(), 300);
   }
 }
-}  // namespace
+}
 
 TEST(OrcaSessionFuzz, BothSidesRunIdenticalInputsUnderDelaySwings)
 {
   FuzzDelaySwings(0);
 }
 
-// The same with sparse snapshots: rollbacks load a snapshot up to k - 1 frames before the first
-// wrong frame, from a ring as small as RingPort's.
 TEST(OrcaSessionFuzz, SparseSnapshotsKeepBothSidesIdentical)
 {
   for (int k = 2; k <= MAX_SNAPSHOT_EVERY; ++k)
     FuzzDelaySwings(k);
 }
 
-// Every frame runs on a guess: k times fewer snapshots, same confirmed states and checksums.
 TEST(OrcaSessionSparse, SavesDropByKUnderConstantPrediction)
 {
   for (const bool still : {true, false})
@@ -3127,7 +2876,6 @@ TEST(OrcaSessionSparse, SavesDropByKUnderConstantPrediction)
       EXPECT_LE(stats.deepest_rollback, config.max_rollback + k - 1);
       EXPECT_EQ(stats.rollbacks > 0, !still);
       per_frame[k] = static_cast<double>(stats.saves) / match.a->session.CurrentFrame();
-      // The same inputs make the same game whatever the snapshot spacing.
       const auto late = match.a->game.m_history.find(2800);
       ASSERT_NE(late, match.a->game.m_history.end());
       final_state[k] = late->second;
@@ -3139,21 +2887,14 @@ TEST(OrcaSessionSparse, SavesDropByKUnderConstantPrediction)
     }
     for (int k = 2; k <= MAX_SNAPSHOT_EVERY; ++k)
     {
-      // Constant input: exactly every k-th frame, and a checksum frame now and then. Rollbacks
-      // re-save on their re-runs, which k spreads out too.
       const double ratio = per_frame[1] / per_frame[k];
       EXPECT_GT(ratio, still ? 0.9 * k : 0.7 * k) << "k " << k;
     }
   }
 }
 
-// The first wrong frame falls between two snapshots: the rollback loads the newest snapshot before
-// it and re-runs the frames in between with the inputs they had, which come out the same. Checked
-// against a game run straight with the right inputs.
 TEST(OrcaSessionSparse, RollbackBetweenSnapshotsReRunsFromTheOlderOne)
 {
-  // The remote input changes every 17 frames and arrives 4 frames late (input delay 2): each
-  // change is a wrong guess at exactly that frame.
   constexpr int CHANGE_EVERY = 17;
   const auto remote = [](int f) { return Pad{static_cast<u8>((f / CHANGE_EVERY) % 4)}; };
   struct Lagging final : Transport
@@ -3170,8 +2911,6 @@ TEST(OrcaSessionSparse, RollbackBetweenSnapshotsReRunsFromTheOlderOne)
       packet.first_frame = next;
       for (; next <= session->CurrentFrame() - lag; ++next)
         packet.pads.push_back(pad(next));
-      // An honest peer's packet carries its inputs up to its own frame (and its delay): it was at
-      // that frame when it sent them, `lag` frames ago.
       packet.current_frame = std::max(0, session->CurrentFrame() - lag);
       return {packet};
     }
@@ -3181,7 +2920,6 @@ TEST(OrcaSessionSparse, RollbackBetweenSnapshotsReRunsFromTheOlderOne)
     Session* session = nullptr;
     int next = 0;
   };
-  // Records, at every load, the snapshots the game held just before it.
   struct Recording final : Game
   {
     bool Save(int frame) override { return game.Save(frame); }
@@ -3201,8 +2939,6 @@ TEST(OrcaSessionSparse, RollbackBetweenSnapshotsReRunsFromTheOlderOne)
     std::vector<std::set<int>> held_at_load;
   };
 
-  // 4 frames late; and max_rollback late, where rollbacks reach max_rollback + k - 1 frames back
-  // through a ring as small as RingPort's.
   for (const int LAG : {4, Config{}.max_rollback})
   for (int k = 2; k <= MAX_SNAPSHOT_EVERY; ++k)
   {
@@ -3242,19 +2978,16 @@ TEST(OrcaSessionSparse, RollbackBetweenSnapshotsReRunsFromTheOlderOne)
     int before_wrong = 0;
     for (size_t i = 0; i < loads.size(); ++i)
     {
-      // The i-th rollback is the (i + 1)-th change.
       const int wrong = static_cast<int>(i + 1) * CHANGE_EVERY;
       const int loaded = loads[i].first;
       const std::set<int>& held = game.held_at_load[i];
       EXPECT_LE(loaded, wrong);
       EXPECT_LE(wrong - loaded, k - 1) << "wrong frame " << wrong;
-      // The newest snapshot at or before the wrong frame, not just any.
       const auto newer = held.upper_bound(wrong);
       EXPECT_EQ(newer == held.begin() ? -1 : *std::prev(newer), loaded) << "wrong frame " << wrong;
       EXPECT_EQ(loads[i].second, state_at(straight, loaded)) << "load of frame " << loaded;
       before_wrong += loaded < wrong;
     }
-    // Most changes land between snapshots (k - 1 of every k frames are not saved).
     EXPECT_GT(before_wrong, static_cast<int>(loads.size()) / 3);
     EXPECT_EQ(stats.deepest_rollback, LAG + k - 1);
     EXPECT_EQ(stats.stalls, 0);
@@ -3274,7 +3007,6 @@ TEST(OrcaSessionSparse, RollbackBetweenSnapshotsReRunsFromTheOlderOne)
   }
 }
 
-// The spacing follows what a save costs on this machine.
 TEST(OrcaSessionSparse, SpacingFollowsTheMeasuredSaveTime)
 {
   for (const auto& [save_ms, k] : std::vector<std::pair<double, int>>{
@@ -3284,18 +3016,16 @@ TEST(OrcaSessionSparse, SpacingFollowsTheMeasuredSaveTime)
     Config config;
     Match match(config, 5, 0);
     match.a->game.save_ms = save_ms;
-    match.Play(130);  // two windows: the spacing is re-chosen once a window
+    match.Play(130);
     ExpectClean(match);
     EXPECT_EQ(match.a->session.GetStats().snapshot_every, k);
     EXPECT_EQ(match.b->session.GetStats().snapshot_every, 1);
-    // A fixed spacing (ORCA_TEST_SNAPSHOT_EVERY) wins over the measurement.
     config.snapshot_every = 2;
     Match fixed(config, 5, 0);
     fixed.a->game.save_ms = save_ms;
     fixed.Play(130);
     EXPECT_EQ(fixed.a->session.GetStats().snapshot_every, 2);
   }
-  // A save time that drifts across a step moves the spacing only once it is clear of it.
   Match match(Config{}, 5, 0);
   for (const auto& [save_ms, k] : std::vector<std::pair<double, int>>{
            {6.4, 3}, {6.1, 3}, {5.9, 3}, {5.7, 2}, {6.2, 2}, {6.3, 3}, {0.5, 1}})
@@ -3308,11 +3038,8 @@ TEST(OrcaSessionSparse, SpacingFollowsTheMeasuredSaveTime)
   ExpectClean(match);
 }
 
-// ---- Drop-in ----
-
 namespace
 {
-// map.at() without exceptions (they're off): a missing frame fails the test instead of aborting.
 template <typename T>
 T At(const std::map<int, T>& map, int frame)
 {
@@ -3325,8 +3052,6 @@ T At(const std::map<int, T>& map, int frame)
   return it->second;
 }
 
-// A drop-in player: its session over a FakeGame, stepping up to `frames` new frames per tick (a
-// joiner catching up runs many).
 struct DropInPlayer
 {
   DropInPlayer(const Config& config, FakeNet& net, int index, int start)
@@ -3380,7 +3105,6 @@ Config DropInConfig(int local_seat, int start_frame)
   return config;
 }
 
-// Plays the host's solo frames [from, from + frames) on `game`, appending them to `log`.
 std::vector<Pads> PlaySolo(FakeGame* game, int from, int frames, std::vector<Pads> log = {})
 {
   for (int f = from; f < from + frames; ++f)
@@ -3394,7 +3118,7 @@ std::vector<Pads> PlaySolo(FakeGame* game, int from, int frames, std::vector<Pad
   }
   return log;
 }
-}  // namespace
+}
 
 TEST(OrcaPadCodec, UnpluggedIsNotAButton)
 {
@@ -3435,10 +3159,8 @@ TEST(OrcaDropIn, PacketFieldsRoundTrip)
   EXPECT_EQ(got.history_first, 600);
   EXPECT_EQ(got.history, sent.history);
   EXPECT_TRUE(got.leaving);
-  // Runs of equal pads travel once.
   EXPECT_NE(EncodePacket(sent).find("[3,"), std::string::npos);
 
-  // Coalescing keeps history that continues.
   std::optional<Packet> pending;
   Packet first = sent;
   first.history = {a, a};
@@ -3451,9 +3173,6 @@ TEST(OrcaDropIn, PacketFieldsRoundTrip)
   EXPECT_EQ(pending->history.size(), 3u);
 }
 
-// The host plays solo; a friend loads the keyframe of frame 240, replays the host's frames since,
-// plugs in, both run identical frames with matching checksums, the friend leaves and the host plays
-// on alone; then a second friend joins from a later keyframe.
 TEST(OrcaDropIn, FriendJoinsPlaysLeavesAndAnotherJoins)
 {
   for (const auto& [latency, jitter] : std::vector<std::pair<int, int>>{{1, 0}, {4, 2}, {8, 4}})
@@ -3482,14 +3201,12 @@ TEST(OrcaDropIn, FriendJoinsPlaysLeavesAndAnotherJoins)
     for (; t < 1200; ++t)
     {
       net.now = t;
-      // Round trips to the relay every half second, as Match's rtt_samples.
       if (t % 30 == 0)
       {
         for (DropInPlayer* p : {host.get(), joiner.get()})
           p->session.OnRoundTrip((latency + jitter / 2) * 1000 / 60);
       }
       host->Tick(t, 1);
-      // Unthrottled while behind, as RingPort::SetCatchingUp makes it.
       const bool behind = joiner->session.CatchingUp() ||
                           joiner->session.AuthorityFrame() - joiner->session.CurrentFrame() > 12;
       joiner->Tick(t, behind ? 40 : 1);
@@ -3499,17 +3216,14 @@ TEST(OrcaDropIn, FriendJoinsPlaysLeavesAndAnotherJoins)
         plugged_at = host->session.Plan()[1].plug_from;
     }
     ASSERT_GE(plugged_at, 300);
-    // The host's own port stays plugged in throughout.
     for (int f = 300; f < host->session.CurrentFrame(); ++f)
       ASSERT_FALSE(IsUnplugged(At(host->game.m_ran_pads, f)[0])) << "frame " << f;
-    // Plugged in on both machines from exactly frame S, unplugged before.
     for (const FakeGame* game : {&host->game, &joiner->game})
     {
       EXPECT_TRUE(IsUnplugged(At(game->m_ran_pads, plugged_at - 1)[1]));
       EXPECT_FALSE(IsUnplugged(At(game->m_ran_pads, plugged_at)[1]));
       EXPECT_TRUE(IsUnplugged(At(game->m_ran_pads, plugged_at)[2]));
     }
-    // Every frame both confirmed: the same state and pads on both, from the keyframe on.
     const int confirmed =
         std::min({host->session.GetStats().confirmed_frame, host->session.CurrentFrame() - 1,
                   joiner->session.GetStats().confirmed_frame, joiner->session.CurrentFrame() - 1});
@@ -3521,8 +3235,6 @@ TEST(OrcaDropIn, FriendJoinsPlaysLeavesAndAnotherJoins)
     }
     EXPECT_GT(host->session.GetStats().checksums_matched, 10);
     EXPECT_GT(joiner->session.GetStats().checksums_matched, 10);
-    // The joiner stalls while catching up (it runs only confirmed frames), which is not the
-    // link, so neither delay moves.
     if (latency == 1)
     {
       EXPECT_GT(joiner->session.GetStats().stalls, 0);
@@ -3531,7 +3243,6 @@ TEST(OrcaDropIn, FriendJoinsPlaysLeavesAndAnotherJoins)
         EXPECT_EQ(p->session.GetStats().delay_raises, 0);
     }
 
-    // The friend leaves; its port unplugs at a frame both agree on and the host goes idle.
     joiner->session.RequestLeave();
     for (int end = t + 200; t < end && !(joiner->session.LeftDone() && host->session.Idle()); ++t)
     {
@@ -3550,7 +3261,6 @@ TEST(OrcaDropIn, FriendJoinsPlaysLeavesAndAnotherJoins)
     for (int f = keyframe; f < unplug; ++f)
       ASSERT_EQ(At(host->game.m_history, f), At(joiner->game.m_history, f)) << "frame " << f;
 
-    // Back to solo: the log holds every frame the host ran, as it ran them.
     int base = -1;
     std::vector<Pads> host_log = host->session.TakeLog(&base);
     const int next = host->session.CurrentFrame();
@@ -3560,10 +3270,8 @@ TEST(OrcaDropIn, FriendJoinsPlaysLeavesAndAnotherJoins)
       ASSERT_EQ(host_log[f], At(host->game.m_ran_pads, f)) << "frame " << f;
     const std::vector<Pad> pending = host->session.PendingLocal();
     host_log = PlaySolo(&host->game, next, 400, host_log);
-    // (A real host plays the pending inputs first; this one's solo pads are its own.)
     (void)pending;
 
-    // A second friend joins from a keyframe of the solo frames after.
     const int keyframe2 = next + 300;
     const int start2 = next + 400;
     FakeNet net2;
@@ -3604,8 +3312,6 @@ TEST(OrcaDropIn, FriendJoinsPlaysLeavesAndAnotherJoins)
   }
 }
 
-// A friend whose connection drops: the host unplugs it after its last input and plays on, rolling
-// back the frames that guessed otherwise.
 TEST(OrcaDropIn, DroppedFriendUnplugsAfterItsLastInput)
 {
   FakeNet net;
@@ -3627,7 +3333,6 @@ TEST(OrcaDropIn, DroppedFriendUnplugsAfterItsLastInput)
     joiner->Tick(t, joiner->session.CatchingUp() ? 40 : 1);
   }
   ASSERT_FALSE(joiner->session.CatchingUp());
-  // Gone: nothing more from it.
   host->session.DropSeat(1);
   for (int end = t + 60; t < end; ++t)
   {
@@ -3641,13 +3346,6 @@ TEST(OrcaDropIn, DroppedFriendUnplugsAfterItsLastInput)
   EXPECT_TRUE(IsUnplugged(At(host->game.m_ran_pads, host->session.CurrentFrame() - 1)[1]));
 }
 
-// A friend whose room connection drops comes back to the same seat of the same room (bug reports
-// 6afb0948, 22ba6446, 96e56887: Orca 0.3.30 and 0.3.34, a ranked set's joiner each time). The
-// host's packets reach the friend's new connection before the host takes it in again, and their
-// roster still names the first stay for that seat: as it was while the host waited on the friend
-// (a drop the room hears only when the friend's next connection replaces the dead one), or with
-// the seat unplugged after the drop. Neither is about this stay: the friend plugs in again as any
-// newcomer does, and both run the same frames.
 TEST(OrcaDropIn, FriendBackInTheSameSeatAfterADrop)
 {
   for (const bool heard_late : {false, true})
@@ -3677,7 +3375,6 @@ TEST(OrcaDropIn, FriendBackInTheSameSeatAfterADrop)
     const int first_plug = host->session.Plan()[1].plug_from;
     ASSERT_NE(first_plug, NEVER);
 
-    // The connection drops: what was on its way to the friend is lost.
     joiner.reset();
     const auto quiet = [&](int ticks) {
       for (int end = t + ticks; t < end; ++t)
@@ -3687,7 +3384,6 @@ TEST(OrcaDropIn, FriendBackInTheSameSeatAfterADrop)
         net.queues[1].clear();
       }
     };
-    // The host's packets reach the friend's new connection.
     const auto heard = [&](int ticks) {
       for (int end = t + ticks; t < end; ++t)
       {
@@ -3697,8 +3393,6 @@ TEST(OrcaDropIn, FriendBackInTheSameSeatAfterADrop)
     };
     if (heard_late)
     {
-      // The host waits on the friend (its last inputs), then the new connection replaces the dead
-      // one and the host hears the drop a few frames later.
       quiet(60);
       heard(6);
       ASSERT_NE(host->session.Plan()[1].live_from, NEVER);
@@ -3715,8 +3409,6 @@ TEST(OrcaDropIn, FriendBackInTheSameSeatAfterADrop)
     ASSERT_TRUE(host->session.Idle());
     ASSERT_EQ(host->session.Plan()[1].plug_from, first_plug);
     ASSERT_FALSE(net.queues[1].empty());
-    // The host takes the friend in again from a keyframe of a final frame; the friend's session
-    // starts once its rebuild is done.
     const int keyframe = host->session.CurrentFrame() - 1;
     const int next = host->session.CurrentFrame();
     host->session.AddPeer(1, next, keyframe);
@@ -3751,8 +3443,6 @@ TEST(OrcaDropIn, FriendBackInTheSameSeatAfterADrop)
   }
 }
 
-// Session::RequireValues: a newcomer plugs in only once every player, itself included, has
-// acknowledged the port values it plugs in with.
 TEST(OrcaDropIn, PlugInWaitsForEveryPlayerToHoldThePortValues)
 {
   struct Inject final : Transport
@@ -3772,14 +3462,12 @@ TEST(OrcaDropIn, PlugInWaitsForEveryPlayerToHoldThePortValues)
   game.m_ran_pads = solo.m_ran_pads;
   Session host(DropInConfig(0, 300), game, net);
   host.SetLog(0, log);
-  // Two friends replay from the keyframe of frame 240; seat 3's values came later (version 5).
   host.AddPeer(1, 300, 240);
   host.AddPeer(2, 300, 240);
   host.RequireValues(1, 4);
   host.RequireValues(2, 5);
   int completed = 299;
   std::array<int, MAX_SEATS> sequence{};
-  // Both friends caught up (history acknowledged, at the host's frame), holding these versions.
   const auto boundary = [&](int ack1, int ack2) {
     for (const auto& [seat, ack] : {std::pair(1, ack1), std::pair(2, ack2)})
     {
@@ -3795,28 +3483,23 @@ TEST(OrcaDropIn, PlugInWaitsForEveryPlayerToHoldThePortValues)
     EXPECT_EQ(step.kind, StepKind::Run) << host.Error();
     completed = game.Run();
   };
-  // Seat 2 has nobody's acknowledgement of version 5 yet; seat 1 has everyone's version 4.
   for (int i = 0; i < 3; ++i)
     boundary(4, 4);
   EXPECT_NE(host.Plan()[1].plug_from, NEVER) << host.Describe();
   EXPECT_EQ(host.Plan()[2].plug_from, NEVER) << host.Describe();
-  // The newcomer holds them, the friend already in doesn't: still not.
   for (int i = 0; i < 3; ++i)
     boundary(4, 5);
   EXPECT_EQ(host.Plan()[2].plug_from, NEVER) << host.Describe();
-  // An acknowledgement never goes back: a stale packet saying 4 changes nothing once 5 is in.
   boundary(5, 4);
   const int plugged = host.Plan()[2].plug_from;
   EXPECT_NE(plugged, NEVER) << host.Describe();
   EXPECT_GT(plugged, host.CurrentFrame());
-  // The roster the host sends carries it from then on.
   ASSERT_FALSE(net.sent.empty());
   ASSERT_TRUE(net.sent.back().roster);
   EXPECT_EQ((*net.sent.back().roster)[2].plug_from, plugged);
   EXPECT_TRUE(host.Error().empty()) << host.Error();
 }
 
-// A player's packets acknowledge the newest values version it holds, and only ever more.
 TEST(OrcaDropIn, PlayersAcknowledgeTheValuesTheyHold)
 {
   FakeNet net;
@@ -3830,7 +3513,6 @@ TEST(OrcaDropIn, PlayersAcknowledgeTheValuesTheyHold)
   const std::vector<Packet> got = host_end.Receive();
   ASSERT_FALSE(got.empty());
   EXPECT_EQ(got.back().values_ack, 3);
-  // It survives the wire.
   Packet decoded;
   ASSERT_TRUE(DecodePacket(EncodePacket(got.back()), &decoded));
   EXPECT_EQ(decoded.values_ack, 3);
@@ -3839,8 +3521,6 @@ TEST(OrcaDropIn, PlayersAcknowledgeTheValuesTheyHold)
   EXPECT_EQ(none.values_ack, -1);
 }
 
-// The session may run on the CPU thread in the guest's non-IEEE float mode (flush-to-zero); the
-// roster must still hold exactly what was set.
 TEST(OrcaDropIn, PlanSurvivesTheGuestFloatMode)
 {
   Common::FPU::SetSIMDMode(Common::FPU::ROUND_NEAR, true);
@@ -3854,15 +3534,10 @@ TEST(OrcaDropIn, PlanSurvivesTheGuestFloatMode)
   EXPECT_EQ(plan[2], SeatPlan{});
 }
 
-// ---- Rosters and history outside the drop-in rules ----
-
 namespace
 {
-// A pad no player in these tests holds otherwise.
 constexpr Pad SCRIPTED_PAD{0x03, 0x00, 0xEE, 0x00, 0x7F, 0x00, 0x00, 0x00};
 
-// A drop-in up to the joiner playing live, after which the test writes the host's (seat 0) packets
-// itself.
 struct ScriptedHost
 {
   ScriptedHost()
@@ -3880,7 +3555,6 @@ struct ScriptedHost
     joiner->seat = 1;
     joiner->game.m_state = At(solo.m_history, KEYFRAME);
   }
-  // Both play until the joiner has played `live` frames of its own.
   void PlayUntilLive(int live)
   {
     for (; t < 3000; ++t)
@@ -3901,7 +3575,6 @@ struct ScriptedHost
     ASSERT_FALSE(joiner->session.CatchingUp());
     roster = host->session.Plan();
     from_frame = joiner->session.CurrentFrame();
-    // From here on the host's own session is silent; nothing it sent is still on the way.
     net.queues[1].clear();
   }
   Packet Scripted(std::optional<std::array<SeatPlan, MAX_SEATS>> with_roster) const
@@ -3914,7 +3587,6 @@ struct ScriptedHost
     p.roster = with_roster;
     return p;
   }
-  // History for the joiner from its log's end on, with the scripted pad in the joiner's seat.
   Packet ScriptedHistory(std::optional<std::array<SeatPlan, MAX_SEATS>> with_roster,
                        int first = -1) const
   {
@@ -3931,7 +3603,6 @@ struct ScriptedHost
     }
     return p;
   }
-  // Delivers `packet` to the joiner and lets it step once.
   void Send(Packet packet)
   {
     packet.sequence = ++sequence;
@@ -3941,7 +3612,6 @@ struct ScriptedHost
     net.queues[0].clear();
     ++t;
   }
-  // Frames from from_frame on that the joiner ran with the scripted pad in its own seat.
   int ScriptedFrames() const
   {
     int n = 0;
@@ -3963,10 +3633,8 @@ struct ScriptedHost
   int sequence = 1 << 20;
   int from_frame = 0;
 };
-}  // namespace
+}
 
-// History is the host's game before the joiner plays in it, so it ends before the joiner's live
-// frame; history past it ends the session.
 TEST(OrcaDropIn, HistoryPastTheJoinersLiveFrameEndsTheSession)
 {
   ScriptedHost h;
@@ -3977,12 +3645,9 @@ TEST(OrcaDropIn, HistoryPastTheJoinersLiveFrameEndsTheSession)
     h.Send(h.ScriptedHistory(h.roster));
   EXPECT_NE(h.joiner->session.Error().find("past this player's live frame"), std::string::npos)
       << h.joiner->session.Error();
-  // The first such packet ends it: no frame ran (or ran again) with the scripted pad.
   EXPECT_EQ(h.ScriptedFrames(), 0);
 }
 
-// The host plugs this player's controller in once and names its live frame once; a roster that
-// changes either ends the session.
 TEST(OrcaDropIn, RosterThatTakesBackTheJoinersSeatEndsTheSession)
 {
   {
@@ -4023,8 +3688,6 @@ TEST(OrcaDropIn, RosterThatTakesBackTheJoinersSeatEndsTheSession)
         << h.joiner->session.Error();
   }
   {
-    // A reset, history ahead, a plug-in again just past the joiner's frame: it ends at the first
-    // step.
     SCOPED_TRACE("reset, history, plug again");
     ScriptedHost h;
     h.PlayUntilLive(60);
@@ -4043,8 +3706,6 @@ TEST(OrcaDropIn, RosterThatTakesBackTheJoinersSeatEndsTheSession)
     EXPECT_EQ(h.ScriptedFrames(), 0);
   }
   {
-    // Dropping the joiner (its live frame back to NEVER, the plug-in kept) is what a host does when
-    // it loses a friend: not an error.
     SCOPED_TRACE("dropped");
     ScriptedHost h;
     h.PlayUntilLive(60);
@@ -4058,8 +3719,6 @@ TEST(OrcaDropIn, RosterThatTakesBackTheJoinersSeatEndsTheSession)
   }
 }
 
-// A host roster or history that takes back the joiner's seat is the host's doing: the joiner's game
-// goes on (ReportSessionEnd says it can), it is never this machine's own failure.
 TEST(OrcaDropIn, HostRosterThatEndsTheSessionIsThePeersFault)
 {
   const auto ended_by = [](const char* what, const std::function<void(ScriptedHost&)>& send) {
@@ -4104,8 +3763,6 @@ TEST(OrcaDropIn, HostRosterThatEndsTheSessionIsThePeersFault)
   });
 }
 
-// The joiner is plugged in only once it holds the history up to its live frame: a plug-in roster
-// before that ends the session, whatever follows it.
 TEST(OrcaDropIn, PlugInBeforeTheJoinerHoldsItsHistoryEndsTheSession)
 {
   ScriptedHost h;
@@ -4113,7 +3770,6 @@ TEST(OrcaDropIn, PlugInBeforeTheJoinerHoldsItsHistoryEndsTheSession)
   std::array<SeatPlan, MAX_SEATS> roster{};
   roster[0] = {0, NEVER, 0};
   roster[1] = {NEVER, NEVER, 1 << 29};
-  // A little of the host's game as history, the joiner's seat unplugged.
   Packet first = h.ScriptedHistory(roster);
   first.history.resize(20);
   for (Pads& pads : first.history)
@@ -4128,7 +3784,6 @@ TEST(OrcaDropIn, PlugInBeforeTheJoinerHoldsItsHistoryEndsTheSession)
   h.Send(h.Scripted(plugged));
   EXPECT_NE(h.joiner->session.Error().find("plug-in"), std::string::npos)
       << h.joiner->session.Error();
-  // Rosters and history after it change nothing.
   auto unplugged = plugged;
   unplugged[1].unplug_from = h.joiner->session.LogEnd();
   for (int i = 0; i < 4; ++i)
@@ -4140,8 +3795,6 @@ TEST(OrcaDropIn, PlugInBeforeTheJoinerHoldsItsHistoryEndsTheSession)
   EXPECT_EQ(h.ScriptedFrames(), 0);
 }
 
-// The host only ever brings this player's unplug frame earlier (it leaves, or the host drops it); a
-// roster that moves it later, or back to never, ends the session.
 TEST(OrcaDropIn, JoinersUnplugOnlyComesEarlier)
 {
   for (const bool back_to_never : {true, false})
@@ -4166,8 +3819,6 @@ TEST(OrcaDropIn, JoinersUnplugOnlyComesEarlier)
         << h.joiner->session.Error();
   }
   {
-    // Plugged in and unplugged at the same frame, then history from the live frame on: refused like
-    // any other history past the live frame.
     SCOPED_TRACE("plugged and unplugged at once");
     ScriptedHost h;
     h.from_frame = ScriptedHost::KEYFRAME;
@@ -4190,9 +3841,6 @@ TEST(OrcaDropIn, JoinersUnplugOnlyComesEarlier)
   }
 }
 
-// A host whose plug-in roster is the first one the joiner hears (a live frame at the keyframe, so no
-// history; the host's earlier packets lost): the joiner holds everything before its live frame, takes
-// the plug-in and plays.
 TEST(OrcaDropIn, PlugInAsTheFirstRosterTheJoinerHears)
 {
   FakeNet net;
@@ -4214,7 +3862,6 @@ TEST(OrcaDropIn, PlugInAsTheFirstRosterTheJoinerHears)
   {
     net.now = t;
     host.Tick(t, 1);
-    // Everything the host sends before the plug-in is lost on the way.
     if (host.session.Plan()[1].plug_from == NEVER)
       net.queues[1].clear();
     const bool behind = joiner.session.CatchingUp() ||
@@ -4235,8 +3882,6 @@ TEST(OrcaDropIn, PlugInAsTheFirstRosterTheJoinerHears)
   EXPECT_GT(joiner.session.CurrentFrame(), joiner.session.Plan()[1].plug_from + 120);
 }
 
-// While catching up, the joiner keeps at most HISTORY_AHEAD (4096) frames of history past the frame
-// it is at, whatever live frame the roster names.
 TEST(OrcaDropIn, HistoryAheadOfTheJoinerIsBounded)
 {
   FakeNet net;
@@ -4277,10 +3922,6 @@ TEST(OrcaDropIn, HistoryAheadOfTheJoinerIsBounded)
   EXPECT_GT(joiner.session.LogEnd(), KEYFRAME + 4096 - MAX_HISTORY_IN_PACKET);
 }
 
-// ---- Direct links (RelayRoom's DirectLink beside the relay) ----
-
-// Packets arrive twice and out of order (direct copy and coalesced relay copy). Any copy adds
-// inputs, acks and uncompared checksums, but only the newest moves the roster or the frame.
 TEST(OrcaSessionDirect, StaleCopiesNeverPutTheRosterOrTheClockBack)
 {
   struct Scripted final : Transport
@@ -4290,7 +3931,6 @@ TEST(OrcaSessionDirect, StaleCopiesNeverPutTheRosterOrTheClockBack)
     bool Connected() const override { return true; }
     std::vector<Packet> queue;
   };
-  // Host (seat 0) and this player (seat 1), both plugged in from frame 0.
   Config config;
   config.seats = 2;
   config.local_seat = 1;
@@ -4316,7 +3956,6 @@ TEST(OrcaSessionDirect, StaleCopiesNeverPutTheRosterOrTheClockBack)
     }
   };
   const auto host_pad = [](int f) { return Pad{static_cast<u8>(f % 4), 0, static_cast<u8>(f), 0, 7, 0, 0, 0}; };
-  // The host's roster as of its newest packet.
   std::array<SeatPlan, MAX_SEATS> roster = plan;
   const auto host_packet = [&](int sequence, int first, int count, int current) {
     Packet p;
@@ -4331,7 +3970,6 @@ TEST(OrcaSessionDirect, StaleCopiesNeverPutTheRosterOrTheClockBack)
     return p;
   };
 
-  // The newer packet unplugs this player at 400; the older one, arriving after, must not undo it.
   Packet older = host_packet(1, 0, 6, 4);
   roster[1].unplug_from = 400;
   Packet newer = host_packet(2, 0, 12, 10);
@@ -4340,23 +3978,20 @@ TEST(OrcaSessionDirect, StaleCopiesNeverPutTheRosterOrTheClockBack)
   ASSERT_TRUE(session.Error().empty()) << session.Error();
   EXPECT_EQ(session.Plan()[1].unplug_from, 400);
   EXPECT_EQ(session.AuthorityFrame(), 10);
-  // The same packet twice changes nothing.
   net.queue = {newer, newer};
   run_to(2);
   ASSERT_TRUE(session.Error().empty()) << session.Error();
   EXPECT_EQ(session.Plan()[1].unplug_from, 400);
 
-  // Lost packets: each repeats every unacknowledged input, so the next arrival fills the gap.
-  net.queue = {host_packet(4, 8, 16, 14)};  // 3 lost
+  net.queue = {host_packet(4, 8, 16, 14)};
   run_to(10);
   ASSERT_TRUE(session.Error().empty()) << session.Error();
   EXPECT_EQ(session.GetStats().confirmed_frame, 23);
-  net.queue = {host_packet(10, 16, 40, 30)};  // 5 to 9 lost
+  net.queue = {host_packet(10, 16, 40, 30)};
   run_to(40);
   ASSERT_TRUE(session.Error().empty()) << session.Error();
   EXPECT_EQ(session.GetStats().confirmed_frame, 55);
   EXPECT_EQ(session.AuthorityFrame(), 30);
-  // An older copy with an older frame and every older input: nothing moves back.
   Packet stale = host_packet(5, 0, 30, 12);
   stale.roster = plan;
   net.queue = {stale};
@@ -4364,14 +3999,12 @@ TEST(OrcaSessionDirect, StaleCopiesNeverPutTheRosterOrTheClockBack)
   EXPECT_EQ(session.AuthorityFrame(), 30);
   EXPECT_EQ(session.Plan()[1].unplug_from, 400);
 
-  // Up to frame 130 with every input in, so frames 60 and 120 have local checksums.
   net.queue = {host_packet(11, 56, 64, 100), host_packet(12, 100, 60, 150)};
   run_to(140);
   ASSERT_TRUE(session.Error().empty()) << session.Error();
   ASSERT_TRUE(game.SnapshotChecksum(60).has_value());
   ASSERT_TRUE(game.SnapshotChecksum(120).has_value());
   const int matched = session.GetStats().checksums_matched;
-  // The checksum of frame 60 over both paths: compared once.
   Packet with_checksum = host_packet(13, 150, 4, 152);
   with_checksum.checksum_frame = 60;
   with_checksum.checksum = *game.SnapshotChecksum(60);
@@ -4379,20 +4012,15 @@ TEST(OrcaSessionDirect, StaleCopiesNeverPutTheRosterOrTheClockBack)
   run_to(142);
   ASSERT_TRUE(session.Error().empty()) << session.Error();
   EXPECT_EQ(session.GetStats().checksums_matched, matched + 1);
-  // The relay coalesced packet 14's checksum into packet 15, whose direct copy came first without
-  // it: the relay copy is not newer, but its checksum is new and must be compared.
   Packet direct_copy = host_packet(15, 150, 8, 156);
   Packet relay_copy = direct_copy;
   relay_copy.checksum_frame = 120;
-  relay_copy.checksum = *game.SnapshotChecksum(120) ^ 1;  // a desync, to show it was compared
+  relay_copy.checksum = *game.SnapshotChecksum(120) ^ 1;
   net.queue = {direct_copy, relay_copy};
   run_to(144);
   EXPECT_NE(session.Error().find("Desync at frame 120"), std::string::npos) << session.Error();
 }
 
-// A drop-in over a lossy, unordered direct link beside the relay (only the relay carries the
-// history): the joiner catches up, plugs in at the same frame on both machines, stays identical
-// with each checksum compared once, and leaves cleanly.
 TEST(OrcaSessionDirect, FriendJoinsOverADirectLink)
 {
   FakeNet net;
@@ -4443,7 +4071,6 @@ TEST(OrcaSessionDirect, FriendJoinsOverADirectLink)
     ASSERT_EQ(At(host->game.m_history, f), At(joiner->game.m_history, f)) << "frame " << f;
     ASSERT_EQ(At(host->game.m_ran_pads, f), At(joiner->game.m_ran_pads, f)) << "frame " << f;
   }
-  // One comparison per checksum frame, though most come twice.
   for (const DropInPlayer* p : {host.get(), joiner.get()})
   {
     EXPECT_GT(p->session.GetStats().checksums_matched, 10);
@@ -4463,8 +4090,6 @@ TEST(OrcaSessionDirect, FriendJoinsOverADirectLink)
   EXPECT_EQ(joiner->session.Plan()[1].unplug_from, host->session.Plan()[1].unplug_from);
 }
 
-// A fast, slightly lossy direct link beside a 48 ms relay path: both sides stay identical, each
-// checksum is compared once, time sync stays balanced, and most rollbacks go away.
 TEST(OrcaSessionDirect, DirectLinkBesideTheRelay)
 {
   const auto side = [](int relay_ms, bool direct) {
@@ -4549,7 +4174,6 @@ TEST(OrcaSessionDirect, RoomBlipWithLiveInputsKeepsEveryFrameHash)
               pair.second->session.GetStats().checksums_matched);
   }
 }
-
 
 namespace
 {
@@ -4754,7 +4378,6 @@ TEST(OrcaDoubles, ThreeRebuildsPlugTogetherAfterTheSlowest)
   friends.Play(400);
   for (int seat = 1; seat < MAX_SEATS; ++seat)
     EXPECT_EQ(friends.players[0]->session->Plan()[seat].plug_from, NEVER);
-  // History service reached all three seats even though the third cannot acknowledge yet.
   for (int seat = 1; seat < MAX_SEATS; ++seat)
     EXPECT_GT(friends.mesh.history_sends[seat], 0);
   friends.disabled[3] = false;
@@ -4819,7 +4442,7 @@ TEST(OrcaDoubles, RebuildingRetainedPeerDoesNotThrottleSeatedPeers)
   friends.mesh.pending[3].clear();
   friends.players[0]->session->AddPeer(3, live, keyframe);
   friends.players[0]->session->RequireValues(3, 4);
-  friends.Play(400);  // Much more than the 224-frame send horizon of the rebuilding peer.
+  friends.Play(400);
   for (int seat = 0; seat < 3; ++seat)
     EXPECT_GT(friends.players[seat]->session->CurrentFrame(), live + 350);
   friends.disabled[3] = false;
@@ -4850,7 +4473,6 @@ TEST(OrcaDoubles, WorstOfSixPairsStaysWithinRollbackLimit)
   friends.Play(1800);
   friends.Compare();
 }
-
 
 TEST(OrcaDoubles, StartWaitsForTheWholeBatchAndTheGateTravelsWithTheRoster)
 {
@@ -4891,8 +4513,6 @@ TEST(OrcaDoubles, AThirdPeersChecksumIsComparedEvenWhenOthersReportTheSameFrame)
   Packet correct = wrong;
   correct.seat = 1;
   correct.checksum = hash;
-  // Retained-seat handshakes reset per-peer checksum counters. Compare both reports,
-  // including the first one when the second one's value agrees with this machine.
   friends.players[0]->session->AddPeer(3, wrong.current_frame, wrong.current_frame);
   friends.players[0]->session->AddPeer(1, wrong.current_frame, wrong.current_frame);
   friends.mesh.pending[0].clear();
@@ -4901,7 +4521,6 @@ TEST(OrcaDoubles, AThirdPeersChecksumIsComparedEvenWhenOthersReportTheSameFrame)
   friends.players[0]->Tick(friends.mesh.tick);
   EXPECT_NE(friends.players[0]->session->Error().find("Desync"), std::string::npos);
 }
-
 
 TEST(OrcaDoubles, ActivePredictionsUseAFinalCheckpointForResyncCapture)
 {
@@ -4912,8 +4531,6 @@ TEST(OrcaDoubles, ActivePredictionsUseAFinalCheckpointForResyncCapture)
   ASSERT_NE(friends.players[0]->session->Plan()[3].plug_from, NEVER);
   friends.mesh.latency = {0, 1, 2, 12};
   auto& host = *friends.players[0];
-  // Inspect an actual predicted boundary. Once peers have caught up, their lead can
-  // cover a shorter link delay and an arbitrary later boundary may be settled again.
   for (int tick = 0; tick < 60 && host.session->Settled(); ++tick)
     friends.Play(1);
   ASSERT_FALSE(host.session->Settled()) << host.session->Describe();
@@ -4966,7 +4583,6 @@ TEST(OrcaDoubles, UnevenRetainedRecoveryKeepsEverySurvivorHash)
   const int live = host.session->CurrentFrame();
   const int keyframe = live - 30;
   friends.disabled[3] = true;
-  // The new roster can coalesce with the unplug roster before any friend sees it.
   host.session->AddPeer(3, live, keyframe);
   friends.Play(200);
   friends.players[3] = std::make_unique<MeshPlayer>(friends.mesh, 3, keyframe, true);
@@ -5183,7 +4799,7 @@ TEST(OrcaLegacy044, SessionPacketStreamGolden)
   }
   RecordProperty("wire_hash", std::to_string(hash));
   RecordProperty("wire_count", std::to_string(ordinary.mesh.wire.size()));
-  EXPECT_EQ(hash, 9745056752490245998ULL);  // 3bfe032623, 400 ticks over an uneven link.
+  EXPECT_EQ(hash, 9745056752490245998ULL);
 }
 
 TEST(OrcaDoubles, RetainedRebuildFinishesItsBufferedInputsBeforeTheNewStay)
@@ -5235,7 +4851,7 @@ TEST(OrcaDoubles, StartGateComparesLatePadsAndRetiredCopiesAfterMasking)
 {
   FakeNet net;
   net.latency = 1;
-  net.extra = {0, 2};  // One frame outbound, three inbound.
+  net.extra = {0, 2};
   FakeNet::End transport(net, 1);
   FakeGame game;
   auto config = DropInConfig(1, 0);
@@ -5250,7 +4866,6 @@ TEST(OrcaDoubles, StartGateComparesLatePadsAndRetiredCopiesAfterMasking)
   host.start_gate = {0, NEVER};
   host.pads = {Pad{PAD_WIRE_START_HIGH}};
   host.departed[1] = {0, 12, 0, std::vector<Pad>(12, Pad{PAD_WIRE_START_HIGH})};
-  // The initial roster is held before running; subsequent inputs use the uneven link.
   net.queues[1].push_back({0, host});
   int completed = -1;
   for (int tick = 0; tick < 3; ++tick)
@@ -5270,7 +4885,6 @@ TEST(OrcaDoubles, StartGateComparesLatePadsAndRetiredCopiesAfterMasking)
   EXPECT_EQ(session.GetStats().rollbacks, 0);
   EXPECT_TRUE(session.Error().empty());
 }
-
 
 TEST(OrcaDoubles, TwoRetainedRebuildsPreserveBufferedPortHistory)
 {
@@ -5319,7 +4933,6 @@ TEST(OrcaDoubles, UnevenRequestedLeaveForwardsTheCompletedPrefix)
   friends.Compare();
 }
 
-
 TEST(OrcaDoubles, RebuildingSeatAcknowledgesItsCompletedPrefixAcrossChunks)
 {
   for (const int room_friends : {1, 3})
@@ -5328,7 +4941,7 @@ TEST(OrcaDoubles, RebuildingSeatAcknowledgesItsCompletedPrefixAcrossChunks)
     FourFriends friends(true, room_friends);
     friends.mesh.latency = {0, 1, 2, 0};
     const int recovering = room_friends;
-    friends.mesh.pair_latency[recovering][0] = 2;  // Different inbound and outbound delays.
+    friends.mesh.pair_latency[recovering][0] = 2;
     for (auto& player : friends.players)
       if (player)
         player->session->SetFixedDelay(6);
@@ -5381,7 +4994,6 @@ TEST(OrcaDoubles, HostBoundaryKeepsPlayingAfterStaggeredFriendBlackouts)
         [] { return std::vector<int>{}; });
     ASSERT_TRUE(host.session);
     ASSERT_TRUE(host.session->Error().empty()) << host.session->Error();
-    // A rollback can rerun the last completed frame; an ended boundary does neither.
     ASSERT_TRUE(running != host.completed || host.session->Resimulating());
     for (int seat = 0; seat < MAX_SEATS; ++seat)
       host.ran_plugged[running][seat] = host.session->Plugged(seat, running);
@@ -5403,8 +5015,6 @@ TEST(OrcaDoubles, HostBoundaryKeepsPlayingAfterStaggeredFriendBlackouts)
 TEST(OrcaDoubles, HostBoundaryRoomDepartureDoesNotSpendTheNextFriendsRetry)
 {
   FourFriends friends;
-  // The departing seat's controller already reads unplugged: removing it needs no rollback,
-  // so the same Boundary must then handle the other friend's expired input hold.
   friends.players[2]->unplugged_pad = true;
   friends.Play(400);
   friends.mesh.blackout[3] = true;
@@ -5423,7 +5033,6 @@ TEST(OrcaDoubles, HostBoundaryRoomDepartureDoesNotSpendTheNextFriendsRetry)
         });
     ASSERT_TRUE(host.session);
     ASSERT_TRUE(host.session->Error().empty()) << host.session->Error();
-    // A rollback can rerun the last completed frame; an ended boundary does neither.
     ASSERT_TRUE(running != host.completed || host.session->Resimulating());
     for (int seat = 0; seat < MAX_SEATS; ++seat)
       host.ran_plugged[running][seat] = host.session->Plugged(seat, running);
@@ -5515,7 +5124,6 @@ TEST(OrcaDoubles, TwentyLostHostPacketsAcrossBatchesKeepCharacterSelectStartEqua
   ASSERT_TRUE(friends.mesh.last_sent[0].start_gate);
   const auto open = *friends.mesh.last_sent[0].start_gate;
   ASSERT_EQ(open.second, NEVER);
-  // Seat 1 heard the open gate. It misses the cancelled batch's end and the next batch boundary.
   friends.mesh.drop_packets[0][1] = 20;
   host.session->DropSeat(2);
   friends.disabled[2] = true;
@@ -5531,7 +5139,7 @@ TEST(OrcaDoubles, TwentyLostHostPacketsAcrossBatchesKeepCharacterSelectStartEqua
   EXPECT_EQ(friends.mesh.drop_packets[0][1], 0);
   const int start = host.session->CurrentFrame();
   for (const int seat : {0, 1, 3})
-    friends.players[seat]->held_start = true;  // The next character-select Start.
+    friends.players[seat]->held_start = true;
   friends.Play(180);
   friends.Compare(first);
   for (const int seat : {0, 1, 3})
@@ -5594,7 +5202,7 @@ TEST(OrcaDoubles, NewAuthorityGateRetainsThePeersUnconfirmedPreviousGate)
 {
   FakeNet net;
   net.latency = 1;
-  net.extra = {0, 2};  // One frame outbound, three inbound.
+  net.extra = {0, 2};
   FakeNet::End transport(net, 1);
   FakeGame game;
   auto config = DropInConfig(1, 0);
@@ -5609,7 +5217,6 @@ TEST(OrcaDoubles, NewAuthorityGateRetainsThePeersUnconfirmedPreviousGate)
   host.start_gate = {0, 12};
   host.pads = {Pad{PAD_WIRE_START_HIGH}};
   host.departed[1] = {0, 12, 0, std::vector<Pad>(12, Pad{PAD_WIRE_START_HIGH})};
-  // The initial roster is held before running; subsequent inputs use the uneven link.
   net.queues[1].push_back({0, host});
   int completed = -1;
   for (int tick = 0; tick < 3; ++tick)
@@ -5692,7 +5299,6 @@ TEST(OrcaCoSeats, CoSeatsOffIsIdentical)
           frame_hash = Mix(frame_hash, byte);
     }
   }
-  // Captured on 80448a9e1f before changing Session: every encoded byte and every run pad.
   EXPECT_EQ(wire_hash, 0x4fbbf8356c8b5cdeull);
   EXPECT_EQ(frame_hash, 0x493a6b3462a47136ull);
   ordinary.Compare();
@@ -5767,7 +5373,6 @@ struct CoMeshPlayer : MeshPlayer
   }
   std::vector<int> co_seats;
   std::array<bool, MAX_SEATS> neutral_seats{};
-  // Targets of actual samples only: skipped frames must retain the preceding sample.
   std::array<std::map<int, int>, MAX_SEATS> sample_wall{};
 };
 
@@ -5856,7 +5461,6 @@ struct CoSeatMesh
             EXPECT_EQ(player->session->Plan()[seat].plug_from,
                       player->session->Plan()[group.front()].plug_from);
           }
-    // Every wire packet belongs to a machine, and its sibling ranges stay aligned.
     for (const std::string& wire : mesh.wire)
     {
       Packet packet;
@@ -5893,7 +5497,7 @@ Pad ExpectedCoSample(const CoMeshPlayer& owner, int seat, int frame)
 const std::vector<std::vector<std::vector<int>>> CO_TOPOLOGIES{
     {{0, 1}, {2}}, {{0, 1}, {2, 3}}, {{0, 1}, {2}, {3}}, {{0}, {1}, {2, 3}},
     {{0, 3}, {1, 2}}};
-}  // namespace
+}
 
 TEST(OrcaCoSeats, FixedGroupsAtEveryLatencyAndWorstPairs)
 {
@@ -6076,8 +5680,6 @@ TEST(OrcaCoSeats, DelayChangesKeepEachSeatsHeldInputAndRange)
 TEST(OrcaCoSeats, InputAcknowledgementUsesTheSlowestLocalSeat)
 {
   CoSeatMesh friends({{0, 1}, {2}});
-  // Keep one local seat's acknowledgement behind the lead throughout admission and play.
-  // Its inputs still arrive, so repeating that older prefix must not change any run pad.
   for (int tick = 0; tick < 400; ++tick)
   {
     const int through = std::max(299, friends.players[0]->session->CurrentFrame() - 30);
@@ -6206,7 +5808,6 @@ std::array<u64, 2> SingleSeatGolden(int scenario)
       compare_from = live - 30;
       host.session->DropSeat(3);
       host.session->AddPeer(3, live, compare_from);
-      // A replacement connection has no packets left over from its previous session.
       for (auto& queue : friends.mesh.pending)
         std::erase_if(queue, [](const auto& pending) { return pending.packet.seat == 3; });
       friends.players[3] = std::make_unique<MeshPlayer>(friends.mesh, 3, compare_from, true);
@@ -6244,12 +5845,10 @@ std::array<u64, 2> SingleSeatGolden(int scenario)
     }
   return hashes;
 }
-}  // namespace
+}
 
 TEST(OrcaCoSeats, WiderSingleSeatGoldens)
 {
-  // Captured in a detached 80448a9e1f worktree before changing Session:
-  // six pairs, leave/rebuild, then time sync with RTT and actual pacing waits.
   const std::array<std::array<u64, 2>, 3> expected{{
       {0xb1ce5b70c91e2f59ull, 0x4fbd61ac9c2f09a5ull},
       {0xad6cfe7cd352759aull, 0x7bbf7c03ae2261b0ull},
@@ -6273,7 +5872,6 @@ TEST(OrcaCoSeats, DeparturesReleaseGroupOwnershipAndPresence)
     EXPECT_EQ(host.session->LeadOf(3), 3);
     if (whole_group)
       friends.players[2].reset();
-    // The remaining machine must accept the roster after a co-seat or its group departs.
     friends.Play(40);
     EXPECT_TRUE(host.session->Error().empty()) << host.session->Error();
     ASSERT_TRUE(friends.players[1]->session->Error().empty())
@@ -6405,7 +6003,7 @@ int RebuildCoMachine(CoSeatMesh& friends, int lead, const std::vector<int>& sibl
   friends.disabled[lead] = false;
   return keyframe;
 }
-}  // namespace
+}
 
 TEST(OrcaCoSeats, PartialLeaveIsNeutralThenHostScheduledForEveryMachine)
 {
@@ -6421,7 +6019,7 @@ TEST(OrcaCoSeats, PartialLeaveIsNeutralThenHostScheduledForEveryMachine)
     auto& host = *friends.players[0];
     const int neutral_from = owner.session->CurrentFrame() + owner.session->Delay();
     owner.neutral_seats[removed] = true;
-    friends.Play(2);  // The room removal reaches the host after the local request.
+    friends.Play(2);
     const int scheduled_at = host.session->CurrentFrame();
     host.session->UnplugSeat(removed);
     const int unplug = host.session->Plan()[removed].unplug_from;
@@ -6617,7 +6215,7 @@ void PlayCoTimed(CoSeatMesh& friends, int ticks)
     friends.Play(1);
   }
 }
-}  // namespace
+}
 
 TEST(OrcaCoSeats, GroupMachineIsSlowestInThePairLatencyMatrix)
 {
@@ -6846,7 +6444,6 @@ std::array<u64, 2> SingleSeatLeaveGolden(bool before_plug)
 
 TEST(OrcaCoSeats, SingleSeatLeaveGoldens)
 {
-  // Captured by applying only tests to detached 80448a9e1f on 2026-10-23.
   const std::array<std::array<u64, 2>, 2> expected{{
       {0xea1b21ae0bbf358dull, 0x8234d50a77aa9ddeull},
       {0xdb737feccfdf981cull, 0x21b0105ae1dd8b8eull}}};
@@ -6905,7 +6502,6 @@ TEST(OrcaCoSeats, PendingCoSeatUnplugCanBeReplacedThroughEveryAdmissionPath)
         method == 2 ? std::vector<int>{3} : std::vector<int>{}, std::vector<int>{0}, first);
     friends.players[2]->game.m_state = At(host.game.m_history, first);
     friends.mesh.pending[2].clear();
-    // The room filters old co packets once the replacement occupies this slot.
     for (auto& queue : friends.mesh.pending)
       std::erase_if(queue, [](const auto& pending) { return !pending.packet.co.empty(); });
     for (int tick = 0; tick < 900; ++tick)
@@ -7115,7 +6711,6 @@ TEST(OrcaCoSeats, SingleSeatJoinerPlaysQueuedPadsAfterMatchOver)
           });
       ASSERT_GE(log.size(), pending.size() + 1);
       const size_t first = log.size() - pending.size() - 1;
-      // The pre-co-seats queue was independent of the port: consume every delayed sample first.
       for (size_t i = 0; i < pending.size(); ++i)
       {
         EXPECT_EQ(log[first + i][0], pending[i]) << seat << ":" << delay << ":" << i;
@@ -7139,7 +6734,6 @@ TEST(OrcaCoSeats, SessionLeadDeterminesLocalInputEvenBeforeMatchSeatAgrees)
     config.seats = 4;
     config.local_seat = seat;
     auto session = std::make_unique<Session>(config, game, transport);
-    // The input callback uses LocalSeat() to select ordinal zero and the lead-only filter.
     EXPECT_EQ(Rollback::OnlineMatch::PumpLeadSeatForTest(std::move(session), 0), seat);
   }
   EXPECT_EQ(Rollback::OnlineMatch::PumpLeadSeatForTest(nullptr, 2), 2);
@@ -7175,7 +6769,6 @@ TEST(OrcaCoSeats, RetakenSlotRunsPastUnplugWithoutDroppingItsFormerMachine)
   host.UnplugSeat(2);
   const int unplug = host.Plan()[2].unplug_from;
   const auto lead_plan = host.Plan()[1];
-  // The room has given 2 to K; admission is held on the menus. Preserve J's scheduled tail.
   host.PrepareAdmission(2);
   ASSERT_EQ(host.Plan()[2].live_from, NEVER);
   ASSERT_EQ(host.Plan()[2].unplug_from, unplug);

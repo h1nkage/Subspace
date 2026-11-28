@@ -60,6 +60,12 @@ private:
     this->killTimer(*m_timer_id);
     m_timer_id.reset();
 
+    if (m_title.isEmpty() && m_description.isEmpty())
+    {
+      Derived::timerEvent(event);
+      return;
+    }
+
     BalloonTip::ShowBalloon(m_title, m_description,
                             this->parentWidget()->mapToGlobal(GetToolTipPosition()), this);
 

@@ -54,7 +54,7 @@ s64 Round(s64 ms)
 {
   return (ms + 500) / 1000;
 }
-}  // namespace
+}
 
 int Edges::Feed(const GCPadStatus& pad)
 {
@@ -98,7 +98,6 @@ std::string_view ModeName(Mode mode)
 
 Mode DecideMode(std::string_view room_queue, bool friend_plugged, bool training)
 {
-  // A matchmade room is that queue's from its welcome to its end (the set over screen too).
   if (room_queue == "ranked")
     return Mode::Ranked;
   if (room_queue == "casual")
@@ -116,7 +115,6 @@ std::string FormatLine(const Line& line)
 
 bool IsEmpty(const Line& line)
 {
-  // active_ms is never more than interval_ms, so it rounds to 0 too.
   return Round(line.interval_ms) == 0 && line.inputs == 0;
 }
 
@@ -161,8 +159,6 @@ Line Clock::Take(s64 now_ms)
   line.interval_ms = m_last - m_start;
   line.inputs = m_inputs;
   line.pads = static_cast<u32>(m_pads.size());
-  // The mode with the most active time, else the most time, else the current one; on a tie the
-  // later mode in Mode's order (the more specific).
   s64 active = 0;
   for (s64 ms : m_active_ms)
     active += ms;
@@ -188,7 +184,6 @@ Line Clock::Take(s64 now_ms)
 
 void SnapshotPads(const UX::Snapshot& snapshot, double age_ms, std::vector<Pad>* out)
 {
-  // Same freshness rules as the local pad (UX::ChooseLocalPad).
   if (!(age_ms <= UX::STALE_MS) || snapshot.suspended)
     return;
   if (snapshot.owned)
@@ -203,9 +198,6 @@ void SnapshotPads(const UX::Snapshot& snapshot, double age_ms, std::vector<Pad>*
       }
     }
   }
-  // The app's keyboard pad is one of these. The app renumbers it as keys go down and up
-  // (desktop virtual-pad.ts), so at those moments an index can compare one controller with
-  // another: extra edges, only ever at a real key's press or release.
   for (const UX::StandardPad& pad : snapshot.pads)
     out->push_back({PAD_GAMEPAD | (static_cast<u32>(pad.index) & 0xFF), UX::MapStandardPad(pad)});
 }
@@ -254,20 +246,16 @@ void Reader::Boundary(bool first_run, bool gate, const std::vector<Pad>& direct,
   m_noted.clear();
 }
 
-// ---- The running game ----
-
 namespace
 {
 std::mutex s_lock;
 std::condition_variable s_wake;
 std::optional<Clock> s_clock;
 bool s_finished = false;
-// HoldUntilReady: the clock waits for the app's "ready" (s_ready).
 bool s_hold = false;
 bool s_ready = false;
 std::thread s_printer;
 
-// CPU thread only.
 Reader s_reader;
 std::vector<Pad> s_direct;
 std::vector<std::pair<u32, int>> s_edges;
@@ -279,7 +267,6 @@ s64 NowMs()
       .count();
 }
 
-// One line every INTERVAL_MS, on its own thread so stalls, loads and pauses don't delay it.
 void PrintLines()
 {
   std::unique_lock lk(s_lock);
@@ -299,7 +286,6 @@ void PrintLines()
   }
 }
 
-// Stops the printer without a last line, at exit if Finish never ran.
 void StopPrinter()
 {
   {
@@ -321,12 +307,10 @@ Mode CurrentMode()
   const bool training = UX::InTraining();
   if (!Online::Enabled())
     return training ? Mode::Training : Mode::Solo;
-  // A room that ended (a network error, the backoff before it reopens) is no queue any more, as
-  // for the rules (OnlineMatch's WantedRulesMode). A set that is over hasn't ended: still ranked.
   return DecideMode(Online::RoomEnded() ? std::string() : Online::RoomQueue(),
                     Events::GetLinkStats().online, training);
 }
-}  // namespace
+}
 
 void HoldUntilReady()
 {
@@ -349,7 +333,6 @@ void OnBoundary(bool first_run)
 {
   s_direct.clear();
   s_edges.clear();
-  // Follow UX::LocalPad: the app's stream needs focus except in virtual-pad-only agent copies.
   const bool gate = first_run && ControlReference::GetInputGate();
   if (first_run && (gate || InputCommon::VirtualPadOnly()))
   {
@@ -357,8 +340,6 @@ void OnBoundary(bool first_run)
     if (const std::shared_ptr<const UX::Snapshot> snapshot = UX::LatestSnapshot(&age_ms))
       SnapshotPads(*snapshot, age_ms, &s_direct);
   }
-  // Outside an online match the test harness's script plays every port, all of them local; an
-  // online match notes its local seat's script itself (NoteLocalPad).
   if (first_run && Rollback::Harness::Active() && !Online::Enabled())
   {
     for (int port = 0; port < 4; ++port)
@@ -377,7 +358,6 @@ void OnBoundary(bool first_run)
   const s64 now = NowMs();
   if (!s_clock)
   {
-    // Edges until then only set each controller's baseline.
     if (s_hold && !s_ready)
       return;
     s_clock.emplace(now, mode);
@@ -400,10 +380,9 @@ void Finish()
       last = s_clock->Take(NowMs());
   }
   s_wake.notify_all();
-  // A line the printer is writing goes first.
   if (s_printer.joinable())
     s_printer.join();
   if (last && !IsEmpty(*last))
     Status::Line(FormatLine(*last));
 }
-}  // namespace Orca::Activity
+}

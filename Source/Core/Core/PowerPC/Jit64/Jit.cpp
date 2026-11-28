@@ -808,7 +808,6 @@ void Jit64::Jit(u32 em_address, bool clear_cache_and_retry_on_failure)
     }
     ClearCache();
   }
-  // Orca: not from a hook (JitBase::CompileFromHook).
   if (!m_compiling_from_hook)
     FreeRanges();
 
@@ -863,8 +862,6 @@ void Jit64::Jit(u32 em_address, bool clear_cache_and_retry_on_failure)
     const bool compiled = DoJit(em_address, b, nextPC);
     if (!compiled && m_compiling_from_hook)
     {
-      // Orca: never clear the cache under the hook's caller (JitBase::CompileFromHook). Drop the
-      // unfinished block and what its partial code registered; that code is in free space.
       blocks.DiscardUnfinalizedBlock(*b);
       const auto in_partial_code = [&](const u8* p) {
         return (p >= near_start && p < GetCodeEnd()) ||

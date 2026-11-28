@@ -126,8 +126,6 @@ bool DXContext::Create(u32 adapter_index, bool enable_debug_layer)
     return false;
   }
 
-  // Orca: a failed call asks the device whether it was removed, as D3D11 does (D3DBase.cpp); a
-  // lost device stops the run (D3DCommon/DeviceLost.h).
   D3DCommon::SetDeviceRemovedQuery("D3D12", [] {
     return g_dx_context && g_dx_context->m_device ? g_dx_context->m_device->GetDeviceRemovedReason() :
                                                     HRESULT(S_OK);

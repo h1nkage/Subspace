@@ -27,7 +27,6 @@
 
 namespace
 {
-// ---- UndoLog over a fake memory, writes reported explicitly ----
 
 constexpr std::size_t PAGE = 64;
 
@@ -35,14 +34,12 @@ struct FakeMemory
 {
   explicit FakeMemory(std::size_t pages) : bytes(pages * PAGE), log(PAGE, pages) {}
 
-  // What a fault handler does before the write lands.
   void Write(std::size_t page, std::size_t offset, u8 value)
   {
     log.Record(page, &bytes[page * PAGE]);
     bytes[page * PAGE + offset] = value;
   }
 
-  // What a load does: pre-images back, then the log rewinds.
   void Restore(u64 id)
   {
     log.ForEachPreImage(id, [this](std::size_t page, const u8* data) {
@@ -72,16 +69,14 @@ TEST(OrcaUndoLog, RestoresEverySnapshotNewestFirst)
   {
     const u64 id = memory.log.Open();
     expected[id] = memory.bytes;
-    // Overlapping writes: page 1 in every interval, others in some.
     memory.Write(1, static_cast<std::size_t>(s), static_cast<u8>(10 + s));
     memory.Write(static_cast<std::size_t>(2 + s), 0, static_cast<u8>(20 + s));
-    memory.Write(1, 7, static_cast<u8>(30 + s));  // second write: no new record
+    memory.Write(1, 7, static_cast<u8>(30 + s));
   }
-  EXPECT_EQ(memory.log.PagesHeld(), 8u);  // page 1 four times, pages 2-5 once
+  EXPECT_EQ(memory.log.PagesHeld(), 8u);
   for (const auto& [id, bytes] : expected)
     EXPECT_EQ(memory.Rebuilt(id), bytes) << "snapshot " << id;
 
-  // Load the second snapshot: the two newer ones are dropped, its own log is empty again.
   const u64 second = std::next(expected.begin())->first;
   memory.Restore(second);
   EXPECT_EQ(memory.bytes, expected[second]);
@@ -90,7 +85,6 @@ TEST(OrcaUndoLog, RestoresEverySnapshotNewestFirst)
   EXPECT_FALSE(memory.log.LoggedInNewest(1));
   EXPECT_EQ(memory.Rebuilt(expected.begin()->first), expected.begin()->second);
 
-  // Writes after the load are recorded against it again.
   memory.Write(1, 0, 99);
   EXPECT_TRUE(memory.log.LoggedInNewest(1));
   memory.Restore(second);
@@ -105,8 +99,8 @@ TEST(OrcaUndoLog, DropMergesIntoTheOlderSnapshot)
   memory.Write(0, 0, 1);
   const u64 b = memory.log.Open();
   const std::vector<u8> at_b = memory.bytes;
-  memory.Write(0, 1, 2);  // also in a's log: b's pre-image is dropped by the merge
-  memory.Write(3, 0, 3);  // only in b's log: moves to a's
+  memory.Write(0, 1, 2);
+  memory.Write(3, 0, 3);
   const u64 c = memory.log.Open();
   const std::vector<u8> at_c = memory.bytes;
   memory.Write(3, 1, 4);
@@ -117,13 +111,11 @@ TEST(OrcaUndoLog, DropMergesIntoTheOlderSnapshot)
   EXPECT_EQ(memory.Rebuilt(a), at_a);
   EXPECT_EQ(memory.Rebuilt(c), at_c);
 
-  // Dropping the newest: its pages now count as recorded in the one before.
   memory.log.Drop(c);
   EXPECT_EQ(memory.log.Newest(), a);
   EXPECT_TRUE(memory.log.LoggedInNewest(5));
   EXPECT_EQ(memory.Rebuilt(a), at_a);
 
-  // Dropping the oldest throws its log away.
   const u64 d = memory.log.Open();
   const std::vector<u8> at_d = memory.bytes;
   memory.Write(4, 0, 6);
@@ -134,14 +126,13 @@ TEST(OrcaUndoLog, DropMergesIntoTheOlderSnapshot)
   EXPECT_EQ(memory.bytes, at_d);
 }
 
-// A ring's life, at random: saves, overwriting the oldest, re-saves, loads, against full copies.
 TEST(OrcaUndoLog, RandomRingMatchesFullCopies)
 {
   constexpr std::size_t PAGES = 32;
   constexpr std::size_t RING = 5;
   FakeMemory memory(PAGES);
   std::mt19937 rng(1234);
-  std::vector<std::pair<u64, std::vector<u8>>> ring;  // oldest first
+  std::vector<std::pair<u64, std::vector<u8>>> ring;
   for (int step = 0; step < 4000; ++step)
   {
     const int writes = static_cast<int>(rng() % 12);
@@ -161,7 +152,6 @@ TEST(OrcaUndoLog, RandomRingMatchesFullCopies)
     }
     else if (action < 7)
     {
-      // Re-save the newest frame: drop it and save again.
       memory.log.Drop(ring.back().first);
       ring.pop_back();
       ring.emplace_back(memory.log.Open(), memory.bytes);
@@ -179,10 +169,6 @@ TEST(OrcaUndoLog, RandomRingMatchesFullCopies)
   }
 }
 
-// ---- The tracker over real shared memory and real write faults ----
-
-// Two areas (like MEM1 and MEM2), each mapped twice like Dolphin's RAM view and a fastmem view,
-// plus the tracker's private aliases.
 class CowMemory
 {
 public:
@@ -223,7 +209,6 @@ public:
     return Rollback::Cow::Arm(this, areas, views);
   }
 
-  // A write through view `v` (0 or 1), as a plain store or a memcpy that may cross pages.
   void Write(std::mt19937& rng)
   {
     const int a = static_cast<int>(rng() % 2);
@@ -305,7 +290,6 @@ TEST(OrcaCow, WriteFaultsRestoreAndChecksum)
         ASSERT_EQ(Rollback::Cow::Checksum(ring[i].first), hashes[i]) << "step " << step;
     }
 
-    // A write from another thread faults on that thread (macOS: the signal fallback).
     const u64 before = Rollback::Cow::Snapshot();
     const std::vector<u8> at_before = memory.Copy();
     std::thread writer([&memory] { std::memset(memory.View(1, 0), 0x5a, 3 * 4096); });
@@ -314,7 +298,6 @@ TEST(OrcaCow, WriteFaultsRestoreAndChecksum)
     ASSERT_TRUE(Rollback::Cow::Restore(before, [](u32, u32) {}));
     EXPECT_EQ(memory.Copy(), at_before);
 
-    // Snapshots with nothing written let every page go cold (read-only) again.
     u64 cold = 0;
     for (int i = 0; i < 260; ++i)
       cold = Rollback::Cow::Snapshot();
@@ -322,7 +305,6 @@ TEST(OrcaCow, WriteFaultsRestoreAndChecksum)
     u8* const target = memory.View(0, 0) + 10;
     const std::size_t length = 2 * Rollback::Cow::PageSize();
 #ifndef _WIN32
-    // A system call writing a protected page fails instead of faulting...
     std::vector<u8> source(4096, 7);
     FILE* const file = std::tmpfile();
     ASSERT_NE(file, nullptr);
@@ -330,7 +312,6 @@ TEST(OrcaCow, WriteFaultsRestoreAndChecksum)
     ASSERT_EQ(pwrite(fd, source.data(), source.size(), 0), 4096);
     EXPECT_EQ(pread(fd, target, 4096, 0), -1);
     EXPECT_EQ(errno, EFAULT);
-    // ...unless prepared first.
     Rollback::Cow::PrepareHostWrite(target, length);
     EXPECT_EQ(pread(fd, target, 4096, 0), 4096);
     std::fclose(file);
@@ -339,7 +320,6 @@ TEST(OrcaCow, WriteFaultsRestoreAndChecksum)
     Rollback::Cow::PrepareHostWrite(target, length);
 #endif
     std::memset(target, 1, length);
-    // A store straddling a writable page and a protected one.
     const std::size_t page = Rollback::Cow::PageSize();
     memory.View(1, 1)[page - 1] = 3;
     const u8 wide[32] = {9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
@@ -352,11 +332,10 @@ TEST(OrcaCow, WriteFaultsRestoreAndChecksum)
     EXPECT_EQ(memory.Copy(), at_before);
 
     Rollback::Cow::Disarm(&memory);
-    // Writable everywhere again: no fault handler involved.
     memory.View(0, 0)[0] = 1;
     memory.View(1, 1)[0] = 2;
     EXPECT_FALSE(Rollback::Cow::Has(before));
   }
   EMM::UninstallExceptionHandler();
 }
-}  // namespace
+}

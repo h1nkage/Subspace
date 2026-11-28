@@ -63,18 +63,13 @@ namespace
 {
 std::atomic<bool> s_in_snapshot{false};
 std::atomic<bool> s_resimulating{false};
-// Whether the frame now running is rendered, for the overlay's frame meter. CPU thread only.
 bool s_frame_shown = true;
-// Emulated ticks and host time when the frame now running began (after any load at its boundary),
-// ticks 0 if unknown; how long the game held the shown frame that just ended (Events::GameHeldMs),
-// and the fraction of a frame held over to the next hold. CPU thread only.
 u64 s_frame_start_ticks = 0;
 std::chrono::steady_clock::time_point s_frame_start_wall{};
 double s_frame_held_ms = 0;
 int s_frame_held_frames = 0;
 double s_frame_held_carry = 0;
 
-// The emulated length of the frame that just ended, past one video frame, if it was shown.
 void TimeEndedFrame(Core::System& system)
 {
   s_frame_held_ms = 0;
@@ -96,12 +91,8 @@ void TimeEndedFrame(Core::System& system)
 constexpr std::size_t RESTORE_PAGE = 4096;
 constexpr u32 MEM1_VIRTUAL = 0x80000000u;
 constexpr u32 MEM2_VIRTUAL = 0x90000000u;
-// Effective to physical for MEM1/MEM2 and their uncached mirrors (0x8/0xC -> 0x0, 0x9/0xD -> 0x1).
 constexpr u32 PHYSICAL_MASK = 0x1FFFFFFFu;
 
-// Copies saved RAM back one page at a time, skipping pages that already match. Only changed pages
-// have their JIT blocks invalidated; clearing the whole JIT (as a normal state load does) would
-// recompile the hot code after every rollback. Changed pages are collected by physical address.
 void RestoreRam(Core::System& system, u8* live, const std::vector<u8>& saved, u32 virtual_base,
                 std::unordered_set<u32>* changed_pages)
 {
@@ -119,13 +110,8 @@ void RestoreRam(Core::System& system, u8* live, const std::vector<u8>& saved, u3
   }
 }
 
-// The JIT also remembers per-instruction facts (GPU FIFO writes, paired quantization, no
-// speculative constants). A restored page may hold different instructions, so forget its entries.
-// Done here in bulk because the JIT's own per-word invalidation is too slow for thousands of pages.
 void ForgetLearnedJitAddresses(Core::System& system, const std::unordered_set<u32>& changed_pages)
 {
-  // JitInterface only holds a JitBase (null for the interpreter). static_cast because MSVC builds
-  // have RTTI off.
   auto* jit = static_cast<JitBase*>(system.GetJitInterface().GetCore());
   if (!jit || changed_pages.empty())
     return;
@@ -137,13 +123,12 @@ void ForgetLearnedJitAddresses(Core::System& system, const std::unordered_set<u3
   std::erase_if(jit->js.noSpeculativeConstantsAddresses, in_changed_page);
 }
 
-// The NAND file system, which is always the host backend. Its journal undoes NAND writes.
 IOS::HLE::FS::HostFileSystem* HostNand(Core::System& system)
 {
   IOS::HLE::EmulationKernel* ios = system.GetIOS();
   return ios ? static_cast<IOS::HLE::FS::HostFileSystem*>(ios->GetFS().get()) : nullptr;
 }
-}  // namespace
+}
 
 u64 RamChecksum(std::span<const u8> mem1, std::span<const u8> mem2)
 {
@@ -174,8 +159,6 @@ void SetResimulating(bool resimulating)
 SnapshotScope::SnapshotScope()
 {
   s_in_snapshot.store(true, std::memory_order_relaxed);
-  // In a session, host GPU state (EFB, texture cache, bounding box) never reaches emulated RAM, so
-  // snapshots skip it: no GPU readback on save, no texture-cache reload on load.
   VideoCommon_SetRollbackSnapshot(true);
 }
 
@@ -205,8 +188,6 @@ void SnapshotRing::Forget(Slot* slot)
 bool SnapshotRing::UseCow(Core::System& system, bool* armed_now)
 {
   *armed_now = false;
-  // If tracking stopped under us (emulation stopped, or an unsupported RAM mapping), the
-  // copy-on-write snapshots are gone.
   if (m_cow.value_or(false) && !Cow::IsArmedFor(this))
   {
     for (Slot& slot : m_slots)
@@ -269,7 +250,6 @@ void SnapshotRing::Reset(Core::System& system)
 
 bool SnapshotRing::Save(Core::System& system, s64 frame)
 {
-  // Re-saving a frame after a rewind reuses its slot; otherwise take the next one.
   Slot* slot = Find(frame);
   if (!slot)
   {
@@ -285,7 +265,6 @@ bool SnapshotRing::Save(Core::System& system, s64 frame)
   };
   const auto buffers_before = buffers();
 
-  // Non-RAM state first, so anything DoState writes into RAM is in the RAM snapshot.
   const auto t0 = std::chrono::steady_clock::now();
   {
     SnapshotScope scope;
@@ -297,8 +276,6 @@ bool SnapshotRing::Save(Core::System& system, s64 frame)
   };
 
   auto& memory = system.GetMemory();
-  // Copy-on-write: write-protect RAM again and open this snapshot's undo log. A 0 id means
-  // tracking stopped, so fall back to a full copy.
   if (cow)
     slot->cow_id = Cow::Snapshot();
   if (slot->cow_id != 0)
@@ -320,7 +297,6 @@ bool SnapshotRing::Save(Core::System& system, s64 frame)
   slot->l1_cache.assign(memory.GetL1Cache(), memory.GetL1Cache() + memory.GetL1CacheSize());
   slot->frame = frame;
 
-  // NAND changes older than the oldest snapshot can never be undone, so trim them.
   if (IOS::HLE::FS::HostFileSystem* nand = HostNand(system))
   {
     slot->nand_journal_mark = nand->LastJournalMark();
@@ -332,7 +308,6 @@ bool SnapshotRing::Save(Core::System& system, s64 frame)
     }
     nand->JournalTrim(oldest);
   }
-  // Arming write-protects all of RAM once; that one-off cost counts as an allocation.
   return armed_now || buffers() != buffers_before;
 }
 
@@ -350,15 +325,11 @@ bool SnapshotRing::LoadSlot(Core::System& system, s64 frame, bool redisplay)
     return false;
   }
 
-  // Restore RAM before device state: some devices (emulated Bluetooth) re-parse pending IOS
-  // requests from RAM while loading, and live RAM may already hold a newer reply. The device-state
-  // load writes no RAM in a session, since EFB copies stay on the GPU.
   const auto start = std::chrono::steady_clock::now();
   auto& memory = system.GetMemory();
   std::unordered_set<u32> changed_pages;
   if (slot->cow_id != 0)
   {
-    // The undo logs of this snapshot and every newer one list exactly the pages written since.
     std::vector<u32> changed_blocks;
     if (!Cow::Restore(slot->cow_id, [&changed_blocks](u32 physical, u32 length) {
           for (u32 offset = 0; offset < length; offset += static_cast<u32>(RESTORE_PAGE))
@@ -368,7 +339,6 @@ bool SnapshotRing::LoadSlot(Core::System& system, s64 frame, bool redisplay)
       ERROR_LOG_FMT(CORE, "Rollback: the copy-on-write snapshot for frame {} is gone", frame);
       return false;
     }
-    // MEM1 is at 0x80000000 and MEM2 at 0x90000000: both are physical | 0x80000000.
     auto& jit = system.GetJitInterface();
     for (const u32 physical : changed_blocks)
     {
@@ -398,14 +368,12 @@ bool SnapshotRing::LoadSlot(Core::System& system, s64 frame, bool redisplay)
     ERROR_LOG_FMT(CORE, "Rollback: snapshot for frame {} did not load", frame);
     return false;
   }
-  // The NAND journal must have undone every change since this snapshot.
   if (IOS::HLE::FS::HostFileSystem* nand = HostNand(system); nand && nand->TakeJournalError())
   {
     ERROR_LOG_FMT(CORE, "Rollback: the NAND could not be restored to frame {}", frame);
     return false;
   }
 
-  // Later frames are about to be re-run and re-saved, so drop their snapshots.
   for (Slot& other : m_slots)
   {
     if (other.frame > frame || (other.cow_id != 0 && !Cow::Has(other.cow_id)))
@@ -463,7 +431,6 @@ bool SnapshotRing::LoadMachineImage(Core::System& system, MachineImage image, s6
     slot = &m_slots[m_next];
     m_next = (m_next + 1) % m_slots.size();
   }
-  // Store as a full-copy slot (cow_id 0), so LoadSlot restores mem1/mem2 directly.
   Forget(slot);
   slot->state.reset(image.state.size());
   std::memcpy(slot->state.data(), image.state.data(), image.state.size());
@@ -473,7 +440,6 @@ bool SnapshotRing::LoadMachineImage(Core::System& system, MachineImage image, s6
   slot->l1_cache = std::move(image.l1_cache);
   slot->frame = frame;
   slot->nand_journal_mark = 0;
-  // A joining machine has nothing on screen yet, so show the keyframe's frame.
   return LoadSlot(system, frame, true);
 }
 
@@ -482,7 +448,6 @@ std::optional<u64> SnapshotRing::RamChecksum(s64 frame) const
   const Slot* slot = Find(frame);
   if (!slot || slot->state_size == 0)
     return std::nullopt;
-  // Copy-on-write snapshots keep no full copy: rebuild RAM from live RAM plus the undo logs.
   if (slot->cow_id != 0)
     return Cow::Checksum(slot->cow_id);
   return Rollback::RamChecksum(slot->mem1, slot->mem2);
@@ -507,8 +472,6 @@ std::optional<GCPadStatus> RawInputOverride(int port)
     return session_port->Pad(port);
   if (auto pad = Harness::InputOverride(port))
     return pad;
-  // In a session, local controllers never reach the game, even during boot before the session
-  // supplies pads: the game would latch a host pad's status (its origin, say) and desync later.
   if (Orca::SessionActive())
     return Orca::Net::DecodePad(Orca::Net::Pad{});
   return std::nullopt;
@@ -516,7 +479,6 @@ std::optional<GCPadStatus> RawInputOverride(int port)
 
 namespace
 {
-// The host's floating-point control register: FPCR on ARM64, MXCSR on x86-64, 0 elsewhere.
 u64 HostFloatControl()
 {
 #if defined(_M_X86_64) || defined(__x86_64__)
@@ -532,10 +494,6 @@ u64 HostFloatControl()
 #endif
 }
 
-// The CPU thread runs in the guest's floating-point mode (rounding, flush-to-zero, and FPCR.AH on
-// ARM64), which also affects compiled C++. Under FPCR.AH, FNEG leaves a NaN's sign alone, and clang
-// builds some integer constants with MOVI + FNEG, so they come out wrong. The hook therefore runs
-// in the host's default mode and restores the guest's from FPSCR on exit (a load may change it).
 class HostFloatScope
 {
 public:
@@ -560,7 +518,7 @@ public:
 private:
   PowerPC::PowerPCState& m_ppc_state;
 };
-}  // namespace
+}
 
 u64 HostFloatControlForTests()
 {
@@ -580,8 +538,6 @@ int LastFrameHeldFrames()
 void OnFrameBoundary(const Core::CPUThreadGuard& guard)
 {
   HostFloatScope host_float(guard.GetSystem().GetPPCState());
-  // A launcher profile's hook is installed before its loader puts the game in RAM; until then,
-  // whatever runs at that address is not the game's frame loop.
   if (const Orca::Profile* profile = Orca::ActiveProfile();
       profile && !Orca::FrameHookLive(guard, *profile))
   {
@@ -591,9 +547,6 @@ void OnFrameBoundary(const Core::CPUThreadGuard& guard)
     return;
   }
   Orca::Status::GameStarted();
-  // A loader's codes rewrite game code without invalidating the JIT, so clear it once at the
-  // profile's jit_clear_frame. Count only first runs (a joiner's catch-up counts; a rollback's
-  // re-run does not) so every machine clears at the same frame.
   const RingPort* const port = RingPort::Active();
   if (!(port ? port->Resimulating() : IsResimulating()) && Orca::JitClearDue())
   {
@@ -602,12 +555,8 @@ void OnFrameBoundary(const Core::CPUThreadGuard& guard)
     guard.GetSystem().GetJitInterface().ClearSafe();
     NOTICE_LOG_FMT(ROLLBACK, "JIT cleared once: the loader's codes have landed");
   }
-  // Report the frame that just ended to the overlay's frame meter. Host time only.
   TimeEndedFrame(guard.GetSystem());
   Orca::Events::NotifyBoundary(s_frame_shown, s_frame_held_ms, s_frame_held_frames);
-  // Inside a JIT block pc and npc are stale, and a snapshot would record and later resume at a
-  // wrong address. Pin both to the hook address so every snapshot resumes here; the rest of the
-  // block runs normally and updates them on exit.
   if (const Orca::Profile* profile = Orca::ActiveProfile(); profile && profile->frame_hook)
   {
     auto& ppc_state = guard.GetSystem().GetPPCState();
@@ -615,7 +564,6 @@ void OnFrameBoundary(const Core::CPUThreadGuard& guard)
     ppc_state.npc = *profile->frame_hook;
   }
 
-  // An online match runs its session here.
   if (Orca::Online::Enabled())
   {
     const auto local_pad = [](int local_seat) {
@@ -631,14 +579,8 @@ void OnFrameBoundary(const Core::CPUThreadGuard& guard)
             Orca::UX::FilterCoSeatPad(pad, co_combos[std::min(ordinal, Orca::UX::MAX_LOCAL - 1)],
                                     first, live);
       };
-      // The local pad comes from a test script, the app's input stream, or the host's first
-      // controller, and the app shortcut (Up + Start) is filtered out before it is sent.
-      // `first_run` uses the session's flag, which counts a joiner's catch-up as a first run; the
-      // app stream times its input only on frames that are neither re-runs nor catch-up.
       const RingPort* const ring = RingPort::Active();
       const bool first_run = ring ? !ring->Resimulating() : !IsResimulating();
-      // The activity lines (Orca/Activity.h) also see a script's or Dolphin's own pad; the
-      // app's controllers they read from its stream themselves.
       if (const auto scripted = Harness::InputOverride(local_seat))
       {
         if (!IsResimulating())
@@ -652,7 +594,6 @@ void OnFrameBoundary(const Core::CPUThreadGuard& guard)
             *from_app, first_run, live || InputCommon::VirtualPadOnly()));
       if (!lead)
         return Orca::Net::EncodePad(Orca::UX::NeutralPad());
-      // The player's own GameCube adapter reads with or without focus, as it does offline.
       if (const auto adapter = Orca::UX::OwnAdapterPad())
       {
         if (!IsResimulating())
@@ -666,17 +607,11 @@ void OnFrameBoundary(const Core::CPUThreadGuard& guard)
         Orca::Activity::NoteLocalPad(Orca::Activity::PAD_DOLPHIN, pad);
       return Orca::Net::EncodePad(filter(pad, first_run, live));
     };
-    // While the session holds this frame on a friend's input, the same pad read again, only so a
-    // talk press ends when Start is let go (UX/OrbCombo.h LocalPadWaiting). Host only: nothing
-    // read here is recorded, sent, timed or noted, and it runs only while a talk press is down.
     const auto local_pad_waiting = [](int local_seat) {
       if (!Orca::UX::OverlayKey::Pad().IsDown())
         return;
-      // A test script's pad changes only with frames.
       if (Harness::InputOverride(local_seat))
         return;
-      // No focus check: the input gate is this thread's and moves only at the SI poll, so it is
-      // the last frame's here. Focus lost mid-stall is handled when frames resume.
       if (const auto from_app = Orca::Events::LocalPad(false))
       {
         Orca::UX::LocalPadWaiting(from_app->button);
@@ -702,39 +637,27 @@ void OnFrameBoundary(const Core::CPUThreadGuard& guard)
 
   Harness::OnFrameBoundary(guard);
 
-  // Compute the input gate's masks for the next frame from current RAM, after any snapshot load,
-  // on every pass. Must precede the relatch below. See ORCA.md, "Input gate".
   InputGate::OnBoundary(guard);
 
-  // The SI's last poll ran just before this hook, so relatch now or the game reads the previous
-  // frame's pads (a full frame of added latency). Done on every pass, after any snapshot save or
-  // load, so every machine relatches the same pads. See ORCA.md, "Input latency".
   if (Orca::SessionActive())
     guard.GetSystem().GetSerialInterface().RelatchInputs();
 
-  // Presentation diagnostics include menus, loads and transitions without match warm-up.
   if (Orca::SessionActive() && Orca::Perf::Measuring() && !IsResimulating())
     Orca::Perf::NotePaceScene(guard);
 
-  // JIT warm-up: precompile blocks earlier matches needed and record this match's for next time.
-  // Only on first runs, and not while catching up, whose frames run back to back.
   if (Orca::SessionActive() && Orca::JitWarm::ScenesReadable() && !IsResimulating() &&
       !(RingPort::Active() && RingPort::Active()->CatchingUp()))
   {
     Orca::JitWarm::OnBoundary(guard);
-    // This machine's speed counts frames only once a match is under way (Orca/Perf.h).
     if (Orca::Perf::Measuring())
       Orca::Perf::NoteScene(Orca::JitWarm::SceneIsMatch(guard));
   }
 
-  // Skip host rendering for re-run frames. The emulated GPU still runs, so RAM and timing match.
   VideoCommon_SetSkipRender(IsResimulating() || Orca::TestSkipRender());
   s_frame_shown = !IsResimulating();
-  // The app's activity lines read this machine's controllers before a frame that runs for the
-  // first time in real time. Host-only: nothing it does reaches emulation.
   if (Orca::SessionActive())
     Orca::Activity::OnBoundary(!IsResimulating());
   s_frame_start_ticks = guard.GetSystem().GetCoreTiming().GetTicks();
   s_frame_start_wall = std::chrono::steady_clock::now();
 }
-}  // namespace Rollback
+}

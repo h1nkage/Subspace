@@ -18,13 +18,12 @@ std::atomic<const char*> s_backend{"D3D"};
 std::atomic<LossDiagnostics> s_diagnostics{nullptr};
 std::atomic<bool> s_diagnostics_reported{false};
 
-// A failed call's own word that the device is gone.
 bool LostResult(HRESULT hr)
 {
   return hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET ||
          hr == DXGI_ERROR_DEVICE_HUNG || hr == DXGI_ERROR_DRIVER_INTERNAL_ERROR;
 }
-}  // namespace
+}
 
 void SetDeviceRemovedQuery(const char* backend, RemovedReasonQuery query, LossDiagnostics diagnostics)
 {
@@ -48,7 +47,6 @@ bool CheckDeviceLost(HRESULT hr, std::string_view what)
   const RemovedReasonQuery query = s_query.load();
   HRESULT reason = query ? query() : S_OK;
   const HRESULT removed_reason = reason;
-  // A call that says the device is gone is believed even if the device doesn't say why.
   if (reason == S_OK && LostResult(hr))
     reason = hr;
   if (reason == S_OK)
@@ -66,4 +64,4 @@ bool IsDeviceLost()
 {
   return Orca::GpuLost::Lost();
 }
-}  // namespace D3DCommon
+}

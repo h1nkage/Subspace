@@ -20,7 +20,7 @@ public:
   explicit Updater(QWidget* parent, std::string update_track, std::string hash_override);
 
   void run() override;
-  void OnUpdateAvailable(const NewVersionInformation& info) override;
+  void OnUpdateAvailable(const NewVersionInformation& info, CheckType check_type) override;
   void CheckForUpdate();
 
 private:

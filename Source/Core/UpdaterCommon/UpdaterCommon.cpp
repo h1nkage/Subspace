@@ -39,14 +39,10 @@
 
 // Refer to docs/autoupdate_overview.md for a detailed overview of the autoupdate process
 
-// Public key used to verify update manifests.
+// Public key used to verify update manifests. #####Edited 11/28/26; changed public key from Dolphin's to Subspace's
 const std::array<u8, 32> UPDATE_PUB_KEY = {
-    0x2a, 0xb3, 0xd1, 0xdc, 0x6e, 0xf5, 0x07, 0xf6, 0xa0, 0x6c, 0x7c, 0x54, 0xdf, 0x54, 0xf4, 0x42,
-    0x80, 0xa6, 0x28, 0x8b, 0x6d, 0x70, 0x14, 0xb5, 0x4c, 0x34, 0x95, 0x20, 0x4d, 0xd4, 0xd3, 0x5d};
-// The private key for UPDATE_PUB_KEY_TEST is in Tools/test-updater.py
-const std::array<u8, 32> UPDATE_PUB_KEY_TEST = {
-    0x0c, 0x5f, 0xdc, 0xd1, 0x15, 0x71, 0xfb, 0x86, 0x4f, 0x9e, 0x6d, 0xe6, 0x65, 0x39, 0x43, 0xe1,
-    0x9e, 0xe0, 0x9b, 0x28, 0xc9, 0x1a, 0x60, 0xb7, 0x67, 0x1c, 0xf3, 0xf6, 0xca, 0x1b, 0xdd, 0x1a};
+    0x8b, 0x64, 0x8c, 0xdd, 0x9b, 0x0a, 0x94, 0x87, 0xed, 0xa0, 0xae, 0x81, 0xd2, 0x8b, 0x63, 0xf8,
+    0xb4, 0x78, 0xd9, 0x53, 0x40, 0x19, 0x35, 0x17, 0xcd, 0x8e, 0x4c, 0xc1, 0x86, 0xfe, 0x50, 0xdc};
 
 // Where to log updater output.
 static File::IOFile log_file;
@@ -172,7 +168,7 @@ static bool VerifySignature(const std::string& data, const std::string& b64_sign
     return false;
   }
 
-  const auto& pub_key = UI::IsTestMode() ? UPDATE_PUB_KEY_TEST : UPDATE_PUB_KEY;
+  const auto& pub_key = UPDATE_PUB_KEY;
   return ed25519_verify(signature, reinterpret_cast<const u8*>(data.data()), data.size(),
                         pub_key.data());
 }
@@ -373,6 +369,18 @@ static bool DeleteObsoleteFiles(std::span<const TodoList::DeleteOp> to_delete,
   return true;
 }
 
+#ifdef _WIN32
+static bool FileInUse(const std::string& path)
+{
+  const HANDLE handle = CreateFileW(UTF8ToWString(path).c_str(), GENERIC_WRITE, 0, nullptr,
+                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (handle == INVALID_HANDLE_VALUE)
+    return GetLastError() == ERROR_SHARING_VIOLATION;
+  CloseHandle(handle);
+  return false;
+}
+#endif
+
 static bool UpdateFiles(std::span<const TodoList::UpdateOp> to_update,
                         const std::string& install_base_path, const std::string& temp_path)
 {
@@ -420,7 +428,7 @@ static bool UpdateFiles(std::span<const TodoList::UpdateOp> to_update,
       // after entire update has completed, and have it delete our relocated executable. For now we
       // just let the relocated file hang around.
       // It is enough to match based on filename, don't need File/VolumeId etc.
-      const bool is_self = op.filename == self_filename;
+      const bool is_self = op.filename == self_filename || FileInUse(path);
 #else
       // On other platforms, the renaming is handled by Dolphin before running the Updater.
       const bool is_self = false;
@@ -622,7 +630,7 @@ static std::optional<Options> ParseCommandLine(std::vector<std::string>& args)
   using optparse::OptionParser;
 
   OptionParser parser =
-      OptionParser().prog("Dolphin Updater").description("Dolphin Updater binary");
+      OptionParser().prog("Subspace Updater").description("Subspace Updater binary");
 
   parser.add_option("--this-manifest-url")
       .dest("this-manifest-url")
@@ -638,7 +646,7 @@ static std::optional<Options> ParseCommandLine(std::vector<std::string>& args)
       .metavar("URL");
   parser.add_option("--install-base-path")
       .dest("install-base-path")
-      .help("Base path of the Dolphin install to be updated.")
+      .help("Base path of the Subspace install to be updated.")
       .metavar("PATH");
   parser.add_option("--binary-to-restart")
       .dest("binary-to-restart")
@@ -684,6 +692,38 @@ static std::optional<Options> ParseCommandLine(std::vector<std::string>& args)
     opts.log_file = options["log-file"];
 
   return opts;
+}
+
+static bool WaitForProgramsToClose(std::span<const TodoList::UpdateOp> to_update,
+                                   const std::string& install_base_path)
+{
+#ifdef _WIN32
+  constexpr int WAIT_SECONDS = 60;
+  const std::string self =
+      std::filesystem::path(Common::GetModuleName(nullptr).value_or(L"")).filename().string();
+  for (int waited = 0;; ++waited)
+  {
+    const auto busy = std::ranges::find_if(to_update, [&](const TodoList::UpdateOp& op) {
+      if (!op.filename.ends_with(".exe") || op.filename == self)
+        return false;
+      const std::string path = install_base_path + DIR_SEP + op.filename;
+      return File::Exists(path) && FileInUse(path);
+    });
+    if (busy == to_update.end())
+      return true;
+    if (waited == 0)
+      LogToFile("Waiting for %s to close...\n", busy->filename.c_str());
+    if (waited >= WAIT_SECONDS)
+    {
+      LogToFile("%s is still running.\n", busy->filename.c_str());
+      return false;
+    }
+    UI::SetDescription("Waiting for Subspace and its NetPlay window to close...");
+    UI::Sleep(1);
+  }
+#else
+  return true;
+#endif
 }
 
 bool RunUpdater(std::vector<std::string> args)
@@ -757,6 +797,13 @@ bool RunUpdater(std::vector<std::string> args)
 
   TodoList todo = ComputeActionsToDo(this_manifest, next_manifest);
   todo.Log();
+
+  if (!WaitForProgramsToClose(todo.to_update, opts.install_base_path))
+  {
+    FatalError("Subspace is still running. Close Subspace and its NetPlay game window, then try "
+               "the update again.");
+    return false;
+  }
 
   std::string temp_dir = File::CreateTempDir();
   if (temp_dir.empty())

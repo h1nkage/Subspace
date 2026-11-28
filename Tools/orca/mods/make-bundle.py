@@ -16,7 +16,7 @@ the official sd.raw is used as it is (both checked by their full SHA-256; --any-
 card), pinned by size and chunked SHA-256 (sdhash.py); on macOS big files are APFS clones.
 --pplus-run takes a folder with the launcher and sd.raw side by side (the desktop app's run folder).
 
-Reads Data/Sys/Orca/<profile>.ini, .patches, .jitwarm and Textures/RSBE01/ from this checkout (or
+Reads Data/Sys/Subspace/<profile>.ini, .patches, .jitwarm and Textures/RSBE01/ from this checkout (or
 --sys), and for Project+ the official release's files: Launcher/Project+ Netplay Launcher.dol and the
 files inside Wii/sd.raw (unpacked by fatread.py, standard library only; --7z <7-Zip> to
 unpack with 7-Zip instead), plus its license.txt. Writes the bundle to
@@ -128,7 +128,7 @@ def write_tree(folder):
 
 
 def read_profile(path):
-    """Data/Sys/Orca/<profile>.ini: {"Profile": [(key, value)], "Forced": [(key, value)]}."""
+    """Data/Sys/Subspace/<profile>.ini: {"Profile": [(key, value)], "Forced": [(key, value)]}."""
     sections = {"Profile": [], "Forced": []}
     section = None
     with open(path, encoding="utf-8") as profile_file:
@@ -192,7 +192,7 @@ def main():
         sys.exit(f"{out} exists; give a new folder")
     if os.path.commonpath([out, REPO]) == REPO and args.profile in PPLUS_PROFILES:
         sys.exit("Project+'s files are not ours to commit: write its bundle outside the repository")
-    orca = os.path.join(args.sys, "Orca")
+    orca = os.path.join(args.sys, "Subspace")
     ini = read_profile(os.path.join(orca, args.profile + ".ini"))
     p = dict()
     kept = []
@@ -327,7 +327,7 @@ def make_flat(args):
         sys.exit(f"{out} exists; give a new folder")
     if os.path.commonpath([out, REPO]) == REPO and args.profile in PPLUS_PROFILES:
         sys.exit("Project+'s files are not ours to commit: write its bundle outside the repository")
-    orca = os.path.join(args.sys, "Orca")
+    orca = os.path.join(args.sys, "Subspace")
     ini = read_profile(os.path.join(orca, args.profile + ".ini"))
     p, kept = {}, []
     for key, value in ini["Profile"]:

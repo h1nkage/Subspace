@@ -90,7 +90,6 @@ picojson::value ReadJson(const std::string& path)
   return v;
 }
 
-// Project+'s mod.json as Tools/orca/mods/make-bundle.py writes it.
 constexpr char PPLUS_MOD[] = R"({
   "format": 1,
   "engine": {"api": 1, "minOrca": "0.3.35"},
@@ -121,7 +120,6 @@ constexpr char BRAWL_MOD[] = R"({
   "offers": ["results", "locks", "queue2"]
 })";
 
-// BRAWL_MOD with `key` replaced by (or, when absent, given) `json`.
 std::string BrawlWith(const std::string& key, const std::string& json)
 {
   picojson::value v;
@@ -148,7 +146,6 @@ bool Refused(const std::string& json)
   return refused && !error.empty();
 }
 
-// A bundle folder with these files and its tree.json.
 struct Bundle
 {
   std::string dir;
@@ -187,9 +184,8 @@ Bundle MakeBundle(const std::string& mod_json)
   b.Add("mod.json", mod_json);
   return b;
 }
-}  // namespace
+}
 
-// The shared vector (Tools/orca/mods/tree-hash-vector.json; the app and the site check the same).
 TEST(OrcaMod, TreeHashVector)
 {
   const picojson::value vector = ReadJson(RepoPath("Tools/orca/mods/tree-hash-vector.json"));
@@ -207,7 +203,6 @@ TEST(OrcaMod, TreeHashVector)
         << c.get("name").get<std::string>();
     EXPECT_EQ(Orca::Mod::Sha256Hex(c.get("hashedText").get<std::string>()),
               c.get("treeHash").get<std::string>());
-    // As a tree.json, it parses and its hash checks.
     picojson::object tree;
     tree["tree"] = c.get("treeHash");
     tree["files"] = c.get("files");
@@ -216,7 +211,6 @@ TEST(OrcaMod, TreeHashVector)
     ASSERT_TRUE(parsed) << error;
     EXPECT_EQ(parsed->files, files);
   }
-  // The desktop app's vector (desktop, orca-mods-p1).
   EXPECT_EQ(Orca::Mod::TreeHash(std::vector<Orca::Mod::TreeFile>{
                 {"mod.json", "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", 2},
                 {"orca/jitwarm", "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
@@ -270,16 +264,16 @@ TEST(OrcaMod, TreeRefusals)
     std::string why;
     return !Orca::Mod::ParseTree(json, &why) && !why.empty();
   };
-  EXPECT_TRUE(refused(tree_json({{"b", h, 1}, {"a", h, 2}})));            // out of order
-  EXPECT_TRUE(refused(tree_json({{"a", h, 1}, {"a", h, 2}})));            // twice
-  EXPECT_TRUE(refused(tree_json({{"A", h, 1}, {"a", h, 2}})));            // case
-  EXPECT_TRUE(refused(tree_json({{"a", h, 1}, {"a/b", h, 2}})));          // file and folder
-  EXPECT_TRUE(refused(tree_json({{"A", h, 1}, {"a/b", h, 2}})));          // ... ignoring case
-  EXPECT_TRUE(refused(tree_json({{"tree.json", h, 1}})));                  // itself
-  EXPECT_TRUE(refused(tree_json({{"../a", h, 1}})));                       // a bad path
-  EXPECT_TRUE(refused(tree_json({{"a", std::string(64, 'A'), 1}})));      // hash case
-  EXPECT_TRUE(refused(tree_json({{"a", h, 1}}, std::string(64, '0'))));    // wrong tree hash
-  EXPECT_TRUE(refused(tree_json({{"a", h, 0x100000000}})));                // over FAT's limit
+  EXPECT_TRUE(refused(tree_json({{"b", h, 1}, {"a", h, 2}})));
+  EXPECT_TRUE(refused(tree_json({{"a", h, 1}, {"a", h, 2}})));
+  EXPECT_TRUE(refused(tree_json({{"A", h, 1}, {"a", h, 2}})));
+  EXPECT_TRUE(refused(tree_json({{"a", h, 1}, {"a/b", h, 2}})));
+  EXPECT_TRUE(refused(tree_json({{"A", h, 1}, {"a/b", h, 2}})));
+  EXPECT_TRUE(refused(tree_json({{"tree.json", h, 1}})));
+  EXPECT_TRUE(refused(tree_json({{"../a", h, 1}})));
+  EXPECT_TRUE(refused(tree_json({{"a", std::string(64, 'A'), 1}})));
+  EXPECT_TRUE(refused(tree_json({{"a", h, 1}}, std::string(64, '0'))));
+  EXPECT_TRUE(refused(tree_json({{"a", h, 0x100000000}})));
   EXPECT_TRUE(refused(R"({"tree": ")" + Orca::Mod::TreeHash({}) + R"(", "files": [], "x": 1})"));
   EXPECT_TRUE(refused(R"({"tree": ")" + Orca::Mod::TreeHash({}) +
                       R"(", "files": [{"path": "a", "sha256": ")" + h + R"(", "bytes": 1.5}]})"));
@@ -303,7 +297,6 @@ TEST(OrcaMod, ThreeDigitPatchComparesNumerically)
 
 TEST(OrcaMod, MinOrcaAboveThisBuildRefuses)
 {
-  // Number by number, not as text.
   using Orca::Mod::VersionAtLeast;
   EXPECT_TRUE(VersionAtLeast("0.3.47", "0.3.47"));
   EXPECT_TRUE(VersionAtLeast("0.3.47", "0.3.9"));
@@ -316,7 +309,6 @@ TEST(OrcaMod, MinOrcaAboveThisBuildRefuses)
   EXPECT_FALSE(VersionAtLeast("0.3.47", "0.4.0"));
   EXPECT_FALSE(VersionAtLeast("0.3.47", "1.0.0"));
   EXPECT_FALSE(VersionAtLeast("0.3.47", "0.3.100000000000000000"));
-  // This build's version is X.Y.Z, and a pack may need exactly it.
   const std::string running(Orca::Mod::EngineVersion());
   ASSERT_EQ(std::count(running.begin(), running.end(), '.'), 2) << running;
   std::string error;
@@ -326,8 +318,6 @@ TEST(OrcaMod, MinOrcaAboveThisBuildRefuses)
   EXPECT_TRUE(Orca::Mod::ParseManifest(BrawlWith("engine", R"({"api": 1, "minOrca": "0.0.1"})"),
                                        &error))
       << error;
-  // One patch newer: refused with the player's message, and before anything else this build can't
-  // read in it (a key from a later release, a builtin it doesn't know).
   const size_t dot = running.rfind('.');
   const std::string next =
       running.substr(0, dot + 1) + std::to_string(std::stoull(running.substr(dot + 1)) + 1);
@@ -350,7 +340,6 @@ TEST(OrcaMod, MinOrcaAboveThisBuildRefuses)
       BrawlWith("engine", R"({"api": 1, "minOrca": "999999999999.0.0"})"), &error));
   EXPECT_EQ(error, "This pack needs Subspace 999999999999.0.0 or newer. Update the desktop app "
                    "and try again.");
-  // A malformed one is still a form error, not an update.
   EXPECT_FALSE(
       Orca::Mod::ParseManifest(BrawlWith("engine", R"({"api": 1, "minOrca": "9.9"})"), &error));
   EXPECT_NE(error.find("engine.minOrca must be a version"), std::string::npos) << error;
@@ -398,7 +387,6 @@ TEST(OrcaMod, RefusesAnythingElse)
   EXPECT_TRUE(Refused(""));
   EXPECT_TRUE(Refused("[]"));
   EXPECT_TRUE(Refused(BrawlWith("unknown", "1")));
-  // Format 2 is a flat bundle's (Bundle.h, BundleTest.cpp): a tree bundle's "sd" is refused there.
   EXPECT_TRUE(Refused(BrawlWith("format", "3")));
   EXPECT_TRUE(Refused(BrawlWith("format", "0")));
   EXPECT_TRUE(Refused(BrawlWith("format", "\"1\"")));
@@ -422,16 +410,16 @@ TEST(OrcaMod, RefusesAnythingElse)
   EXPECT_TRUE(Refused(BrawlWith("launcher", R"("dir/launcher.dol")")));
   EXPECT_TRUE(Refused(BrawlWith("launcher", R"("launcher.exe")")));
   EXPECT_TRUE(Refused(BrawlWith("launcher", R"("../launcher.dol")")));
-  EXPECT_TRUE(Refused(BrawlWith("sd", R"({"bytes": 2147516416})")));  // over 2 GiB: SDHC
-  EXPECT_TRUE(Refused(BrawlWith("sd", R"({"bytes": 100000000})")));   // not whole clusters
-  EXPECT_TRUE(Refused(BrawlWith("sd", R"({"bytes": 32768})")));       // too small for FAT32
+  EXPECT_TRUE(Refused(BrawlWith("sd", R"({"bytes": 2147516416})")));
+  EXPECT_TRUE(Refused(BrawlWith("sd", R"({"bytes": 100000000})")));
+  EXPECT_TRUE(Refused(BrawlWith("sd", R"({"bytes": 32768})")));
   EXPECT_TRUE(Refused(BrawlWith("sd", R"({"bytes": 2097152000, "sync": true})")));
   EXPECT_FALSE(Refused(BrawlWith("sd", R"({"bytes": 2147483648})")));
   EXPECT_FALSE(Refused(BrawlWith("sd", R"({"bytes": 2097152000, "clusterBytes": 2048, "fats": 2})")));
   EXPECT_TRUE(Refused(BrawlWith("sd", R"({"bytes": 2097152000, "clusterBytes": 3000})")));
   EXPECT_TRUE(Refused(BrawlWith("sd", R"({"bytes": 2097152000, "clusterBytes": 65536})")));
   EXPECT_TRUE(Refused(BrawlWith("sd", R"({"bytes": 2097152000, "fats": 3})")));
-  EXPECT_TRUE(Refused(BrawlWith("sd", R"({"bytes": 67108864, "clusterBytes": 2048})")));  // FAT16-sized
+  EXPECT_TRUE(Refused(BrawlWith("sd", R"({"bytes": 67108864, "clusterBytes": 2048})")));
   EXPECT_FALSE(Refused(BrawlWith("sd", R"({"bytes": 167772160, "clusterBytes": 2048})")));
   EXPECT_TRUE(Refused(BrawlWith("frameHook", R"({"address": "0x80017506", "word": "0x1"})")));
   EXPECT_TRUE(Refused(BrawlWith("frameHook", R"({"address": "0x90000000", "word": "0x1"})")));
@@ -453,12 +441,10 @@ TEST(OrcaMod, RefusesAnythingElse)
   EXPECT_TRUE(Refused(BrawlWith("keepGameCode", R"([["0x00023B88", "0x1", "0x2"]])")));
   EXPECT_TRUE(Refused(
       BrawlWith("keepGameCode", R"([["0x80023B88", "0x1", "0x2"], ["0x80023B88", "0x3", "0x4"]])")));
-  // saveTitle: only the disc's own.
   EXPECT_FALSE(Refused(BrawlWith("saveTitle", R"("0x0001000052534245")")));
   EXPECT_TRUE(Refused(BrawlWith("saveTitle", R"("0x0001000052534345")")));
   EXPECT_TRUE(Refused(BrawlWith("saveTitle", R"("0x0000000100000002")")));
   EXPECT_TRUE(Refused(BrawlWith("saveTitle", R"("0x52534245")")));
-  // forced: the allowlist only, never what determinism or safety depend on.
   EXPECT_FALSE(Refused(BrawlWith("forced", R"({"Dolphin.Core.CustomRTCValue": 0})")));
   for (const char* key :
        {"Dolphin.Core.CPUThread", "Dolphin.Core.SyncOnSkipIdle", "Dolphin.Core.CustomRTCEnable",
@@ -472,16 +458,14 @@ TEST(OrcaMod, RefusesAnythingElse)
   EXPECT_TRUE(Refused(BrawlWith("forced", R"({"Dolphin.Core.CustomRTCValue": "1735689600"})")));
   EXPECT_TRUE(Refused(BrawlWith("forced", R"({"Dolphin.Core.CustomRTCValue": 4294967296})")));
   EXPECT_TRUE(Refused(BrawlWith("builtin", R"("brawl")")));
-  EXPECT_TRUE(Refused(BrawlWith("disc", R"({"id": "RSBE01", "revision": 1})")));  // builtin's disc
+  EXPECT_TRUE(Refused(BrawlWith("disc", R"({"id": "RSBE01", "revision": 1})")));
   EXPECT_TRUE(Refused(BrawlWith("rulesets", R"(["Pplus"])")));
   EXPECT_TRUE(Refused(BrawlWith("rulesets", R"(["a", "a"])")));
   EXPECT_TRUE(Refused(BrawlWith("offers", R"(["ranked"])")));
   EXPECT_TRUE(Refused(BrawlWith("offers", R"(["results", "results"])")));
-  // A mod with no builtin offers nothing (BRAWL_MOD offers three caps).
   EXPECT_TRUE(Refused(BrawlWithout("builtin")));
 }
 
-// The engine's lists equal the schema's (the site validates with the schema).
 TEST(OrcaMod, SchemaMatchesTheEngine)
 {
   const picojson::value schema = ReadJson(RepoPath("Tools/orca/mods/mod.schema.json"));
@@ -506,17 +490,14 @@ TEST(OrcaMod, SchemaMatchesTheEngine)
             (std::vector<std::string>{std::string(Orca::Mod::BuiltinName(Builtin::BrawlRev2)),
                                       std::string(Orca::Mod::BuiltinName(Builtin::BrawlRev2PPlus)),
                                       std::string(Orca::Mod::BuiltinName(Builtin::BrawlRev2Results))}));
-  // Every forced key of the schema's own list is on the allowlist, and nothing else is.
   std::vector<std::string> forced_keys;
   for (const auto& [key, value] : schema.get("properties").get("forced").get("properties").get<picojson::object>())
     forced_keys.push_back(key);
   EXPECT_EQ(forced_keys, std::vector<std::string>(allow.begin(), allow.end()));
-  // The schema's examples of limits agree with the parser's.
   EXPECT_EQ(schema.get("properties").get("sd").get("properties").get("bytes").get("maximum").get<double>(),
             static_cast<double>(Orca::Mod::SD_MAX_BYTES));
 }
 
-// The allowlist starts from what the shipped profiles force; the SD card is "sd" in a mod.
 TEST(OrcaMod, AllowlistCoversTheShippedProfiles)
 {
   const std::string sys = RepoPath("Data/Sys/");
@@ -548,7 +529,7 @@ TEST(OrcaMod, LoadsABundle)
   std::string error;
   const auto profile = Orca::LoadModProfile(b.dir, &error);
   ASSERT_TRUE(profile) << error;
-  EXPECT_EQ(profile->game_id, "PPLUS32");  // the legacy profile its builtin replaces (room mode)
+  EXPECT_EQ(profile->game_id, "PPLUS32");
   EXPECT_EQ(profile->title, "Project+");
   EXPECT_EQ(profile->revision, 2);
   EXPECT_TRUE(profile->IsLauncher());
@@ -558,7 +539,6 @@ TEST(OrcaMod, LoadsABundle)
   EXPECT_EQ(profile->jit_clear_frame, 2u);
   EXPECT_EQ(profile->kept_code.size(), 2u);
   EXPECT_EQ(profile->save_title, 0x0001000052534245u);
-  // The card's switch from "sd", then mod.json's forced keys, in the legacy profile's order.
   ASSERT_EQ(profile->forced.size(), 2u);
   EXPECT_EQ(profile->forced[0].first.key, "WiiSDCard");
   EXPECT_EQ(profile->forced[0].second, "True");
@@ -568,7 +548,6 @@ TEST(OrcaMod, LoadsABundle)
   EXPECT_EQ(profile->mod->tree.hash, Orca::Mod::TreeHash(b.files));
   EXPECT_EQ(profile->mod->tree.Under("sd/").size(), 1u);
 
-  // The same with a vanilla Brawl bundle: no launcher, no card.
   Bundle v = MakeBundle(BRAWL_MOD);
   v.WriteTree();
   const auto brawl = Orca::LoadModProfile(v.dir, &error);
@@ -580,7 +559,7 @@ TEST(OrcaMod, LoadsABundle)
   File::DeleteDirRecursively(v.dir);
 }
 
-#ifndef _WIN32  // A symbolic link needs an elevated or developer-mode Windows.
+#ifndef _WIN32
 TEST(OrcaMod, LocalTreeRefusesLinkedFiles)
 {
   for (const char* name : {"tree.json", "mod.json", "launcher.dol", "sd/codes.txt",
@@ -613,7 +592,6 @@ TEST(OrcaMod, LocalTreeRefusesLinkedFiles)
     EXPECT_NE(Orca::Mod::ResolvedError().find(std::string(name) + " is a link"),
               std::string::npos);
     EXPECT_EQ(Orca::Mod::ResolvedError().find(outside), std::string::npos);
-    // App-delivered trees retain their existing handling of links.
     Orca::Mod::SetLocalPack({});
     EXPECT_TRUE(Orca::LoadModProfile(b.dir, &error)) << error;
   }
@@ -630,7 +608,6 @@ TEST(OrcaMod, LocalTreeRefusesLinkedDirectoryEscape)
   b.Add("mod.json", BRAWL_MOD);
   b.Add("sd/codes.txt", "codes");
   b.WriteTree();
-  // The sibling shares the pack's name prefix, but is outside its canonical folder.
   ASSERT_TRUE(File::Rename(b.dir + "sd", root + "pack-other"));
   std::error_code ec;
   std::filesystem::create_directory_symlink(root + "pack-other", b.dir + "sd", ec);
@@ -704,7 +681,6 @@ TEST(OrcaMod, RefusesABundleThatDiffersFromItsTree)
 {
   std::string error;
   {
-    // A file whose size isn't tree.json's.
     Bundle b = MakeBundle(BRAWL_MOD);
     b.Add("orca/patches/a.patches", "# x\n");
     b.WriteTree();
@@ -714,7 +690,6 @@ TEST(OrcaMod, RefusesABundleThatDiffersFromItsTree)
     File::DeleteDirRecursively(b.dir);
   }
   {
-    // The same size, other bytes: refused for what reaches the game (mod.json, patches, launcher).
     Bundle b = MakeBundle(BRAWL_MOD);
     b.Add("orca/patches/a.patches", "# x\n");
     b.WriteTree();
@@ -724,7 +699,6 @@ TEST(OrcaMod, RefusesABundleThatDiffersFromItsTree)
     File::DeleteDirRecursively(b.dir);
   }
   {
-    // A listed file that isn't there.
     Bundle b = MakeBundle(BRAWL_MOD);
     b.Add("orca/textures/tex1_1x1_0.png", "png");
     b.WriteTree();
@@ -733,14 +707,12 @@ TEST(OrcaMod, RefusesABundleThatDiffersFromItsTree)
     File::DeleteDirRecursively(b.dir);
   }
   {
-    // A launcher mod.json names that isn't in the tree.
     Bundle b = MakeBundle(BrawlWith("launcher", R"("launcher.dol")"));
     b.WriteTree();
     EXPECT_FALSE(Orca::LoadModProfile(b.dir, &error));
     File::DeleteDirRecursively(b.dir);
   }
   {
-    // Patches that don't parse.
     Bundle b = MakeBundle(BRAWL_MOD);
     b.Add("orca/patches/a.patches", "not a patch\n");
     b.WriteTree();
@@ -749,7 +721,6 @@ TEST(OrcaMod, RefusesABundleThatDiffersFromItsTree)
     File::DeleteDirRecursively(b.dir);
   }
   {
-    // A launcher whose extension isn't lower case is hash-checked too.
     Bundle b = MakeBundle(BrawlWith("launcher", R"("BOOT.DOL")"));
     b.Add("BOOT.DOL", std::string(64, '\x01'));
     b.WriteTree();
@@ -760,7 +731,6 @@ TEST(OrcaMod, RefusesABundleThatDiffersFromItsTree)
     File::DeleteDirRecursively(b.dir);
   }
   {
-    // mod.json edited after tree.json was written, at the same size.
     Bundle b = MakeBundle(BRAWL_MOD);
     b.WriteTree();
     std::string edited = BRAWL_MOD;
@@ -771,7 +741,6 @@ TEST(OrcaMod, RefusesABundleThatDiffersFromItsTree)
     File::DeleteDirRecursively(b.dir);
   }
   {
-    // A file the session reads whole, over its limit, is refused before it is read.
     Bundle b = MakeBundle(BRAWL_MOD);
     b.Add("orca/patches/big.patches", std::string(Orca::Mod::MAX_PATCHES_BYTES + 1, '\n'));
     b.WriteTree();
@@ -780,7 +749,6 @@ TEST(OrcaMod, RefusesABundleThatDiffersFromItsTree)
     File::DeleteDirRecursively(b.dir);
   }
   {
-    // No tree.json, or a malformed mod.json.
     Bundle b = MakeBundle("{}");
     EXPECT_FALSE(Orca::LoadModProfile(b.dir, &error));
     b.WriteTree();
@@ -789,20 +757,16 @@ TEST(OrcaMod, RefusesABundleThatDiffersFromItsTree)
   }
 }
 
-// mod.json and tree.json are size-limited and nesting-limited before picojson sees them (it recurses
-// once per level: 20 KB of brackets would overflow Windows' 1 MiB main-thread stack).
 TEST(OrcaMod, RefusesOversizedOrDeepJson)
 {
   std::string error;
   const auto deep = [](int levels) {
     return R"({"format":)" + std::string(levels, '[') + std::string(levels, ']') + "}";
   };
-  // 40 KB (under mod.json's limit) and 100 KB: either crashes picojson on Windows' main thread.
   EXPECT_FALSE(Orca::Mod::ParseManifest(deep(20000), &error));
   EXPECT_NE(error.find("nested"), std::string::npos) << error;
   EXPECT_FALSE(Orca::Mod::ParseTree(deep(50000), &error));
   EXPECT_NE(error.find("nested"), std::string::npos) << error;
-  // Seventeen levels are refused, sixteen parse (and then fail on content, not depth).
   const auto nest = [](int levels) {
     return R"({"format":)" + std::string(levels - 1, '[') + std::string(levels - 1, ']') + "}";
   };
@@ -810,10 +774,8 @@ TEST(OrcaMod, RefusesOversizedOrDeepJson)
   EXPECT_NE(error.find("nested"), std::string::npos) << error;
   EXPECT_FALSE(Orca::Mod::ParseManifest(nest(16), &error));
   EXPECT_EQ(error.find("nested"), std::string::npos) << error;
-  // Brackets inside strings don't count.
   EXPECT_TRUE(Orca::Mod::ParseManifest(BrawlWith("title", R"("[[[[[[[[[[[[[[[[[[[[\"[[[[")"), &error))
       << error;
-  // Over 64 KiB: refused, even as trailing whitespace.
   EXPECT_FALSE(Orca::Mod::ParseManifest(BRAWL_MOD + std::string(Orca::Mod::MAX_MOD_JSON_BYTES, ' '),
                                         &error));
   EXPECT_NE(error.find("over"), std::string::npos) << error;
@@ -833,7 +795,6 @@ TEST(OrcaMod, RefusesHugeJsonNumbersAndTrailingValues)
   EXPECT_NE(error.find("after the JSON value"), std::string::npos);
 }
 
-// The card is built from the listed files only, and the same files and size give the same bytes.
 TEST(OrcaMod, SdImageIsDeterministic)
 {
   const std::string dir = File::CreateTempDir() + "/";
@@ -854,14 +815,12 @@ TEST(OrcaMod, SdImageIsDeterministic)
   const std::string one = Orca::HashFile(dir + "one.raw");
   EXPECT_FALSE(one.empty());
   EXPECT_EQ(one, Orca::HashFile(dir + "two.raw"));
-  // Pinned, so the PC's run proves it builds the Mac's bytes (and every later builder the same).
   EXPECT_EQ(one, "0da52d2d776c7a5b5caeeeb2cd106ed1");
   std::string bytes;
   ASSERT_TRUE(File::ReadFileToString(dir + "one.raw", bytes));
   EXPECT_NE(bytes.find("alpha"), std::string::npos);
   EXPECT_EQ(bytes.find("not listed"), std::string::npos);
-  // A pinned geometry: 2 KiB clusters and two FATs in the boot sector, the same bytes twice.
-  constexpr u64 GEOMETRY_BYTES = 160 << 20;  // FAT32 at 2 KiB clusters needs over 65,525 of them
+  constexpr u64 GEOMETRY_BYTES = 160 << 20;
   ASSERT_TRUE(Orca::Mod::BuildSdImage(files, GEOMETRY_BYTES, dir + "g1.raw", &error, 2048, 2))
       << error;
   ASSERT_TRUE(Orca::Mod::BuildSdImage(reversed, GEOMETRY_BYTES, dir + "g2.raw", &error, 2048, 2))
@@ -872,10 +831,9 @@ TEST(OrcaMod, SdImageIsDeterministic)
   {
     std::string boot;
     ASSERT_TRUE(File::ReadFileToString(dir + "g1.raw", boot));
-    EXPECT_EQ(static_cast<u8>(boot[13]), 4);   // sectors per cluster
-    EXPECT_EQ(static_cast<u8>(boot[16]), 2);   // FATs
+    EXPECT_EQ(static_cast<u8>(boot[13]), 4);
+    EXPECT_EQ(static_cast<u8>(boot[16]), 2);
   }
-  // Each folder's files, then its folders, by upper-cased name: z.txt before Project+ at the root.
   {
     std::string image;
     ASSERT_TRUE(File::ReadFileToString(dir + "g1.raw", image));
@@ -886,17 +844,13 @@ TEST(OrcaMod, SdImageIsDeterministic)
   }
   EXPECT_FALSE(Orca::Mod::BuildSdImage(files, GEOMETRY_BYTES, dir + "g3.raw", &error, 3000, 1));
   EXPECT_FALSE(Orca::Mod::BuildSdImage(files, BYTES, dir + "g4.raw", &error, 2048, 2));
-  // A source whose size changed is refused.
   const std::vector<Orca::Mod::SdSource> wrong{{"a.txt", dir + "a.txt", 6}};
   EXPECT_FALSE(Orca::Mod::BuildSdImage(wrong, BYTES, dir + "three.raw", &error));
-  // Too small a card for the files.
   const std::vector<Orca::Mod::SdSource> big{{"b.bin", dir + "b.bin", 100000}};
   EXPECT_FALSE(Orca::Mod::BuildSdImage(big, 32768, dir + "four.raw", &error));
   File::DeleteDirRecursively(dir);
 }
 
-// The cache: built once, then reused while it hashes as recorded; a damaged one is rebuilt; at
-// most the newest two images stay.
 TEST(OrcaMod, SdImageCache)
 {
   Bundle b = MakeBundle(BrawlWith("sd", R"({"bytes": 67108864})"));
@@ -925,7 +879,6 @@ TEST(OrcaMod, SdImageCache)
   ASSERT_TRUE(rebuilt) << error;
   EXPECT_TRUE(rebuilt->built);
   EXPECT_EQ(rebuilt->hash, first->hash);
-  // Two other cards: the oldest of three goes.
   for (const char* size : {"67141632", "67174400"})
   {
     Bundle other = MakeBundle(BrawlWith("sd", fmt::format(R"({{"bytes": {}}})", size)));
@@ -940,23 +893,18 @@ TEST(OrcaMod, SdImageCache)
     images += e.path().extension() == ".raw";
   EXPECT_EQ(images, 2);
   EXPECT_FALSE(File::Exists(first->path));
-  // No cache folder: refused.
   EXPECT_FALSE(Orca::Mod::PrepareSdImage(*profile->mod, "", &error));
   File::DeleteDirRecursively(b.dir);
   File::DeleteDirRecursively(cache);
 }
 
-// A guard word is code the game never rewrites, so Orca's own game patches must never write one
-// (0.3.33's RSBE01.patches moved Brawl's v-sync call, which the vanilla guard used to read). The
-// vanilla guard is a word Project+'s codes rewrite (PPLUS32.ini KeepGameCode), so brawl-rev2 never
-// holds on Project+.
 TEST(OrcaMod, GuardsAreNotOrcasOwnPatches)
 {
   std::set<u32> patched;
   for (const char* name : {"RSBE01.patches", "PPLUS32.patches"})
   {
     std::string text, error;
-    ASSERT_TRUE(File::ReadFileToString(RepoPath(std::string("Data/Sys/Orca/") + name), text)) << name;
+    ASSERT_TRUE(File::ReadFileToString(RepoPath(std::string("Data/Sys/Subspace/") + name), text)) << name;
     const auto patches = Orca::UX::ParseGamePatches(text, &error);
     ASSERT_TRUE(patches) << name << ": " << error;
     for (const auto& p : *patches)
@@ -1004,7 +952,7 @@ std::string FlatPPlusGuards(const std::string& guards)
 }
 constexpr char PPLUS_EX_GUARDS[] =
     R"({"rssExdata":"0x80551DD4","pageIndex":"0x80552B70","currentPage":"0x80552F90"})";
-}  // namespace
+}
 
 TEST(OrcaMod, PPlusGuardAddressesAreValidated)
 {
@@ -1065,7 +1013,6 @@ TEST(OrcaMod, PPlusGuardsReadTheDeclaredPairs)
   const auto guards = Orca::Mod::BuiltinGuards(Builtin::BrawlRev2PPlus);
   for (size_t i = 0; i < 8; ++i)
     memory[guards[i].address] = guards[i].word;
-  // Explicit fixture: no words at the P+ 3.2 codeset addresses.
   memory.insert({{0x80551DD4, 0x3CA08042}, {0x80551DD8, 0x60A5C4E8},
                  {0x80552B70, 0x3C608042}, {0x80552B74, 0x6063C821},
                  {0x80552F90, 0x3E008049}, {0x80552F94, 0x62106000}});
@@ -1098,8 +1045,6 @@ TEST(OrcaMod, SchemaKnowsPPlusGuards)
     required.push_back(key.get<std::string>());
   }
   EXPECT_EQ(required, (std::vector<std::string>{"rssExdata", "pageIndex", "currentPage"}));
-  // The address pattern accepts exactly what the engine accepts for one pair, the other two kept
-  // where they don't overlap it.
   const std::regex pattern(
       schema.get("$defs").get("pplusGuardWord").get("pattern").get<std::string>(),
       std::regex::ECMAScript);
@@ -1142,9 +1087,6 @@ TEST(OrcaMod, Guards)
                                      [](u32) -> std::optional<u32> { return 0; }));
 }
 
-// The whole legacy caps line, word for word, for each ruleset profile (Brawl rev 2 and Project+'s
-// launcher): the mod-mode branch in OfferedCaps must never reorder or drop a legacy word, and the
-// engine caps stay last.
 TEST(OrcaMod, LegacyCapsLinesArePinned)
 {
   const std::string line = "join leave stats pause delay perf direct host chat orb gfx music "
@@ -1165,8 +1107,6 @@ TEST(OrcaMod, LegacyCapsLinesArePinned)
   Orca::SetActiveProfile(std::nullopt);
 }
 
-// Mod mode's gates: a builtin's modules stay off until its guards were checked against memory
-// (RefreshGuards, at the frame hook), and a mod's caps are what it offers.
 TEST(OrcaMod, ModeGates)
 {
   Bundle b = MakeBundle(BRAWL_MOD);
@@ -1180,13 +1120,7 @@ TEST(OrcaMod, ModeGates)
   EXPECT_FALSE(Orca::Mod::BuiltinOn(Builtin::BrawlRev2));
   EXPECT_EQ(Orca::UX::Rules::ProfileRuleset(), Orca::UX::Rules::Ruleset::None);
   EXPECT_FALSE(Orca::UX::ResultsVerified());
-  // A fresh start's origin at the built main menu (0.3.34) is decided as the match is set up, before
-  // any guard is read: by the declared builtin, so a mod boots to the same origin as legacy.
   EXPECT_TRUE(Orca::UX::FreshMove::Supported());
-  // A builtin's caps are never offered before its guards hold (they are checked at the frame hook).
-  // The music switch is host-only and follows the disc as in legacy (Music::Supported), guards or
-  // not; the pick caps go with "locks". The engine caps "talk", "rumble" and "record" are offered in
-  // every mode, last, guards or not.
   const std::string tail = fmt::format(" {} {} {} {}", Orca::Status::TALK_CAP,
                                        Orca::Status::RUMBLE_CAP, Orca::Status::RECORD_CAP,
                                        Orca::Status::HOSTUI_CAP);
@@ -1196,17 +1130,13 @@ TEST(OrcaMod, ModeGates)
                           " results locks queue2 " + Orca::Status::PICK_CAPS + tail;
   EXPECT_EQ(Orca::Status::OfferedCaps(), base);
   EXPECT_FALSE(Orca::Mod::GuardsDecided());
-  // Not holding yet in the first frames (a loader's codes still landing): undecided, nothing offered.
   Orca::Mod::NoteGuards(false, 1);
   EXPECT_FALSE(Orca::Mod::GuardsDecided());
   EXPECT_EQ(Orca::Status::OfferedCaps(), base);
-  // Held: decided, offered, the modules on.
   Orca::Mod::NoteGuards(true, 2);
   EXPECT_TRUE(Orca::Mod::GuardsDecided());
   EXPECT_TRUE(Orca::Mod::BuiltinOn(Builtin::BrawlRev2));
   EXPECT_EQ(Orca::Status::OfferedCaps(), all);
-  // Broken after holding (the mod rewrote what the modules rely on): the caps are withdrawn for the
-  // boot; the modules follow memory alone, so they run again wherever the words hold again.
   Orca::Mod::NoteGuards(false, 500);
   EXPECT_TRUE(Orca::Mod::GuardsFailed());
   EXPECT_FALSE(Orca::Mod::BuiltinOn(Builtin::BrawlRev2));
@@ -1215,7 +1145,6 @@ TEST(OrcaMod, ModeGates)
   EXPECT_TRUE(Orca::Mod::BuiltinOn(Builtin::BrawlRev2));
   EXPECT_TRUE(Orca::Mod::GuardsFailed());
   EXPECT_EQ(Orca::Status::OfferedCaps(), base);
-  // A new boot: never holding by firstKeyframeFrame is a failure (decided, nothing offered).
   Orca::SetActiveProfile(profile);
   EXPECT_FALSE(Orca::Mod::GuardsDecided());
   Orca::Mod::NoteGuards(false, 299);
@@ -1239,13 +1168,11 @@ TEST(OrcaMod, ModeGates)
   Orca::SetActiveProfile(none);
   EXPECT_EQ(Orca::Mod::DeclaredBuiltin(), Builtin::None);
   EXPECT_FALSE(Orca::UX::FreshMove::Supported());
-  // No builtin: no builtin caps; the music switch still follows the disc (RSBE01).
   EXPECT_EQ(Orca::Status::OfferedCaps(), base);
-  EXPECT_TRUE(Orca::Mod::GuardsDecided());  // nothing to wait for
+  EXPECT_TRUE(Orca::Mod::GuardsDecided());
   EXPECT_EQ(Orca::Mod::FirstKeyframeFrame(), 600u);
   EXPECT_EQ(Orca::UX::FriendsMove::FirstFriendFrame(), 600);
 
-  // Legacy: exactly today's.
   const auto legacy = Orca::LoadProfileFrom(RepoPath("Data/Sys/"), "RSBE01", 2, &error);
   ASSERT_TRUE(legacy) << error;
   Orca::SetActiveProfile(legacy);
@@ -1261,12 +1188,8 @@ TEST(OrcaMod, ModeGates)
   File::DeleteDirRecursively(n.dir);
 }
 
-// S3: which game a session runs is the builtin module's answer (Module::Describe, Active,
-// ProfileRuleset over BrawlGame::Identify), for every kind of profile, legacy and mod mode, and the
-// predicates the game files and the engine asked before S3 (each compared ids itself) agree.
 TEST(OrcaMod, GameIdentityIsTheModules)
 {
-  // No active profile afterwards, whatever fails.
   struct ProfileDone
   {
     ~ProfileDone() { Orca::SetActiveProfile(std::nullopt); }
@@ -1343,7 +1266,6 @@ TEST(OrcaMod, GameIdentityIsTheModules)
     expect("", Ruleset::None, false, true);
   }
 
-  // Mod mode: the builtin mod.json declares, on while its guard words hold.
   std::string error;
   Bundle b = MakeBundle(BRAWL_MOD);
   b.WriteTree();
@@ -1390,9 +1312,6 @@ TEST(OrcaMod, GameIdentityIsTheModules)
   File::DeleteDirRecursively(n.dir);
 }
 
-// S3: the harness reads scene names where the module says it can (Rollback/Harness.cpp's
-// scene-relative inputs): Dolphin running Brawl rev 2, a mod with a builtin, or a launcher profile
-// booting Brawl rev 2, whatever its build or mode; else not at all.
 TEST(OrcaMod, SceneNamesAreTheModules)
 {
   struct ProfileDone
@@ -1400,18 +1319,15 @@ TEST(OrcaMod, SceneNamesAreTheModules)
     ~ProfileDone() { Orca::SetActiveProfile(std::nullopt); }
   } profile_done;
   Orca::UX::BrawlModule& module = Orca::UX::Builtin();
-  // `readable`: with no game running in Dolphin (the harness passes SConfig's ID and revision).
   const auto readable = [&module] { return module.ScenesReadable("", 0); };
   Orca::SetActiveProfile(std::nullopt);
   EXPECT_FALSE(readable());
-  // Dolphin running Brawl rev 2 is enough, with no profile at all; another revision is not.
   EXPECT_TRUE(module.ScenesReadable("RSBE01", 2));
   EXPECT_FALSE(module.ScenesReadable("RSBE01", 1));
   EXPECT_FALSE(module.ScenesReadable("RMCE01", 2));
   Orca::Profile disc;
   disc.game_id = "RSBE01";
   disc.revision = 2;
-  // A disc profile reads them through Dolphin's running game only.
   Orca::SetActiveProfile(disc);
   EXPECT_FALSE(readable());
   Orca::Profile launcher;
@@ -1431,7 +1347,7 @@ TEST(OrcaMod, SceneNamesAreTheModules)
   auto brawl = Orca::LoadModProfile(b.dir, &error);
   ASSERT_TRUE(brawl) << error;
   Orca::SetActiveProfile(brawl);
-  EXPECT_TRUE(readable());  // declared, guards or not
+  EXPECT_TRUE(readable());
   picojson::value plain;
   picojson::parse(plain, PPLUS_MOD);
   plain.get<picojson::object>().erase("builtin");
@@ -1442,7 +1358,6 @@ TEST(OrcaMod, SceneNamesAreTheModules)
   n.WriteTree();
   auto none = Orca::LoadModProfile(n.dir, &error);
   ASSERT_TRUE(none) << error;
-  // No builtin, but a launcher booting Brawl rev 2.
   Orca::SetActiveProfile(none);
   EXPECT_TRUE(readable());
   Orca::SetActiveProfile(std::nullopt);
@@ -1450,10 +1365,6 @@ TEST(OrcaMod, SceneNamesAreTheModules)
   File::DeleteDirRecursively(n.dir);
 }
 
-// Whether the modules run is a pure function of memory, first runs and re-runs: a joiner whose own
-// frames already held replays frame 1 from the starting snapshot (Project+'s codes not landed yet)
-// with the modules off, exactly as the host ran it, and a rollback re-run after a failure runs the
-// modules wherever the first run did. Only the caps keep history.
 TEST(OrcaMod, GuardsFollowMemoryOnReRuns)
 {
   Bundle b = MakeBundle(PPLUS_MOD);
@@ -1464,14 +1375,12 @@ TEST(OrcaMod, GuardsFollowMemoryOnReRuns)
   ASSERT_TRUE(profile) << error;
   Orca::SetActiveProfile(profile);
   const Builtin pplus = Builtin::BrawlRev2PPlus;
-  // The joiner's own boot: frame 1 before the codes land, then held.
   Orca::Mod::NoteGuards(false, 1);
   EXPECT_FALSE(Orca::Mod::BuiltinOn(pplus));
   Orca::Mod::NoteGuards(true, 2);
   EXPECT_TRUE(Orca::Mod::BuiltinOn(pplus));
   EXPECT_TRUE(Orca::Mod::Offers("results"));
   Orca::Mod::NoteGuards(true, 450);
-  // It joins: the starting snapshot's frame 1 again, then frame 2.
   Orca::Mod::NoteGuards(false, 1);
   EXPECT_FALSE(Orca::Mod::BuiltinOn(pplus));
   EXPECT_EQ(Orca::UX::Rules::ProfileRuleset(), Orca::UX::Rules::Ruleset::None);
@@ -1480,13 +1389,11 @@ TEST(OrcaMod, GuardsFollowMemoryOnReRuns)
   Orca::Mod::NoteGuards(true, 2);
   EXPECT_TRUE(Orca::Mod::BuiltinOn(pplus));
   EXPECT_EQ(Orca::UX::Rules::ProfileRuleset(), Orca::UX::Rules::Ruleset::PPlus);
-  // The input gate's calls carry no frame: off while not holding, never a failure.
   Orca::Mod::NoteGuards(false, std::nullopt);
   EXPECT_FALSE(Orca::Mod::BuiltinOn(pplus));
   EXPECT_FALSE(Orca::Mod::GuardsFailed());
   Orca::Mod::NoteGuards(true, std::nullopt);
   EXPECT_TRUE(Orca::Mod::BuiltinOn(pplus));
-  // A real failure (at or after firstKeyframeFrame), then a rollback re-runs a frame that held.
   Orca::Mod::NoteGuards(false, 600);
   EXPECT_TRUE(Orca::Mod::GuardsFailed());
   EXPECT_FALSE(Orca::Mod::BuiltinOn(pplus));
@@ -1498,8 +1405,6 @@ TEST(OrcaMod, GuardsFollowMemoryOnReRuns)
   File::DeleteDirRecursively(b.dir);
 }
 
-// With ORCA_TEST_DISC_REV1 (Brawl (USA) (Rev 1)): a mod's launcher boots it as Rev 2, as a legacy
-// launcher profile does (AliasRevision); with ORCA_TEST_DISC (Rev 2) too, that one as it is.
 TEST(OrcaMod, LauncherBootReadsRev1AsRev2)
 {
   const char* rev1 = std::getenv("ORCA_TEST_DISC_REV1");
@@ -1522,8 +1427,6 @@ TEST(OrcaMod, LauncherBootReadsRev1AsRev2)
     EXPECT_TRUE(Orca::PrepareModBoot(&*profile, &launcher, rev2, "", 0, &error, &wrong_disc))
         << error;
   }
-  // A mod that needs Rev 1 itself still sees Rev 2 for that dump: one alias, the same as legacy's.
-  // (A builtin runs on revision 2 only, so this one has none.)
   json.get<picojson::object>()["disc"].get<picojson::object>()["revision"] = picojson::value(1.0);
   for (const char* key : {"builtin", "offers", "rulesets"})
     json.get<picojson::object>().erase(key);
@@ -1540,8 +1443,6 @@ TEST(OrcaMod, LauncherBootReadsRev1AsRev2)
   File::DeleteDirRecursively(one.dir);
 }
 
-// A mod's launcher boot says why its disc didn't open, as a legacy launcher profile does
-// (Profile.cpp DiscOpenProblem): no path, or a file that isn't a disc image. Never the path.
 TEST(OrcaMod, LauncherBootSaysWhyTheDiscDidNotOpen)
 {
   picojson::value json;
@@ -1571,13 +1472,10 @@ TEST(OrcaMod, LauncherBootSaysWhyTheDiscDidNotOpen)
   File::DeleteDirRecursively(elsewhere);
 }
 
-// S3 (WP19 a): the key's UX version is the engine's, then the running game's own revision when it
-// has one. Brawl rev 2 and Project+ revision 1 distinguish the multi-friend token return.
 TEST(OrcaMod, UxKeyPartIsPerGame)
 {
   EXPECT_EQ(Orca::Online::UxKeyPart(29, 0), "|ux=29");
   EXPECT_EQ(Orca::Online::UxKeyPart(29, 3), "|ux=29.3");
-  // A launcher profile's key reads the running game's ID (SConfig), as in a session.
   SConfig::Init();
   struct ConfigDone
   {
@@ -1585,7 +1483,6 @@ TEST(OrcaMod, UxKeyPartIsPerGame)
   } config_done;
   const std::string ux = fmt::format("|ux={}.2", Orca::UX::kCompatVersion);
   const int before = Orca::Events::UXCompatVersion();
-  // The module, the UX version and the profile as they were, whatever fails.
   struct SessionDone
   {
     int ux;
@@ -1608,7 +1505,6 @@ TEST(OrcaMod, UxKeyPartIsPerGame)
     EXPECT_EQ(Orca::UX::Builtin().Describe().compat, int{2});
     EXPECT_TRUE(Orca::Online::CompatibilityKeyParts().ends_with(ux));
   }
-  // Mod mode's key ends the same way.
   Bundle b = MakeBundle(BRAWL_MOD);
   b.WriteTree();
   Bundle pp = MakeBundle(PPLUS_MOD);
@@ -1631,8 +1527,6 @@ TEST(OrcaMod, UxKeyPartIsPerGame)
   Orca::SetActiveProfile(std::nullopt);
 }
 
-// S3: a module's guest writes are recorded against the regions it declares, never refused
-// (Engine/Regions.h); the builtin's are sorted, disjoint, and hold its match block.
 TEST(OrcaMod, ModuleWritesAreRecordedNotRefused)
 {
   using Orca::Engine::Region;
@@ -1651,16 +1545,14 @@ TEST(OrcaMod, ModuleWritesAreRecordedNotRefused)
   Orca::Engine::NoteWrite(0x8000100C, 4);
   EXPECT_EQ(Orca::Engine::Writes().writes, 2u);
   EXPECT_EQ(Orca::Engine::Writes().outside, 0u);
-  Orca::Engine::NoteWrite(0x8000100E, 4);  // runs past the end
+  Orca::Engine::NoteWrite(0x8000100E, 4);
   Orca::Engine::NoteWrite(0x80000FFF, 1);
   Orca::Engine::NoteWrite(0x80002000, 2);
   EXPECT_EQ(Orca::Engine::Writes().writes, 5u);
   EXPECT_EQ(Orca::Engine::Writes().outside, 3u);
-  // No regions: nothing recorded.
   Orca::Engine::SetWriteRegions({}, {});
   Orca::Engine::NoteWrite(0x80002000, 2);
   EXPECT_EQ(Orca::Engine::Writes().writes, 0u);
-  // The builtin, through SetModule: its match block is in, main.dol's code is not.
   Orca::Engine::SetModule(&Orca::UX::Builtin());
   Orca::Engine::NoteWrite(0x806F2380, 4);
   Orca::Engine::NoteWrite(0x80004000, 4);
@@ -1670,13 +1562,9 @@ TEST(OrcaMod, ModuleWritesAreRecordedNotRefused)
   EXPECT_EQ(Orca::Engine::Writes().writes, 0u);
 }
 
-// The legacy key's inputs, pinned: with no ORCA_MOD_DIR the key is "orca2:" (the room protocol's
-// prefix, in both modes) over exactly what release-0.3.33 hashed (the profile and patches files, every game INI, the forced settings, the
-// universal settings, the disc and the UX version, in that order).
 TEST(OrcaMod, LegacyKeyIsUnchanged)
 {
   std::string error;
-  // The key reads the files where a session finds them (Sys); the profile comes from the source tree.
   const std::string sys = File::GetSysDirectory();
   const auto legacy = Orca::LoadProfileFrom(RepoPath("Data/Sys/"), "RSBE01", 2, &error);
   ASSERT_TRUE(legacy) << error;
@@ -1689,8 +1577,8 @@ TEST(OrcaMod, LegacyKeyIsUnchanged)
                std::string("-|");
   };
   const std::string head = fmt::format("orca|{}|RSBE01|2|{}{}", Common::GetScmRevGitStr(),
-                                       file_hash(sys + "Orca/RSBE01.ini"),
-                                       file_hash(sys + "Orca/RSBE01.patches"));
+                                       file_hash(sys + "Subspace/RSBE01.ini"),
+                                       file_hash(sys + "Subspace/RSBE01.patches"));
   EXPECT_TRUE(parts.starts_with(head)) << parts;
   EXPECT_NE(parts.find("|thread="), std::string::npos);
   EXPECT_NE(parts.find("|sdcard="), std::string::npos);
@@ -1699,9 +1587,6 @@ TEST(OrcaMod, LegacyKeyIsUnchanged)
   EXPECT_EQ(Orca::Online::CompatibilityKey(),
             fmt::format("orca2:{:016x}", XXH3_64bits(parts.data(), parts.size())));
 
-  // Mod mode: "orca2:" over "orca2|", the engine, the tree, the card and the disc (never the same
-  // hash input as a legacy key, which starts "orca|").
-  // A launcher profile's key reads the running game's ID (SConfig), as in a session.
   SConfig::Init();
   struct ConfigDone
   {
@@ -1721,7 +1606,6 @@ TEST(OrcaMod, LegacyKeyIsUnchanged)
       Orca::Mod::ENGINE_API, Orca::Mod::TreeHash(b.files), std::string(32, 'c'),
       disc.empty() ? "-" : disc)))
       << mod_parts;
-  // The Sys game INIs' hashes, then the forced settings.
   EXPECT_NE(mod_parts.find("|0.Core.WiiSDCard=True|0.Core.CustomRTCValue=1735689600|thread="),
             std::string::npos)
       << mod_parts;
@@ -1731,8 +1615,6 @@ TEST(OrcaMod, LegacyKeyIsUnchanged)
   File::DeleteDirRecursively(b.dir);
 }
 
-// "ready" and `orca caps` wait until a builtin's guards are decided, and a cap withdrawn after the
-// first line is off at once (a second `orca caps` line, which the app takes as the new offer).
 TEST(OrcaMod, CapsWaitForTheGuards)
 {
   const std::string session = Orca::GetEnv("ORCA_SESSION");
@@ -1744,7 +1626,6 @@ TEST(OrcaMod, CapsWaitForTheGuards)
   ASSERT_TRUE(profile) << error;
   Orca::SetActiveProfile(profile);
   EXPECT_FALSE(Orca::Status::CapsSettled());
-  // An app that answers early (a test tool) gets the builtin's caps once they are offered.
   Orca::Status::SetAppCaps("join results locks queue2");
   EXPECT_FALSE(Orca::Status::Cap("results"));
   Orca::Mod::NoteGuards(true, 2);
@@ -1762,7 +1643,7 @@ TEST(OrcaMod, CapsWaitForTheGuards)
   EXPECT_TRUE(Orca::Status::Cap("join"));
   Orca::Status::SetAppCaps("");
   Orca::SetActiveProfile(std::nullopt);
-  EXPECT_TRUE(Orca::Status::CapsSettled());  // legacy: never waits
+  EXPECT_TRUE(Orca::Status::CapsSettled());
   SetEnv("ORCA_SESSION", session);
   File::DeleteDirRecursively(b.dir);
 }
@@ -1919,8 +1800,6 @@ TEST(OrcaMod, NoOriginWithdrawsOnlineForOnlyThisBoot)
   Orca::SetActiveProfile(std::nullopt);
 }
 
-// Pin the complete legacy serialization, including absent INIs, per-profile settings and the
-// engine/game UX suffix. Only the build revision is normalized: commits intentionally change it.
 TEST(OrcaMod, GoldenLegacyCompatibilityKey)
 {
   const std::string dir = File::CreateTempDir();
@@ -1952,7 +1831,6 @@ TEST(OrcaMod, GoldenLegacyCompatibilityKey)
   ASSERT_TRUE(loaded) << error;
   const auto& profile = *loaded;
   Config::AddLayer(Orca::GenerateConfigLoader(profile));
-  // FMA support is a host input, so pin it for this portable fixture.
   Config::Set(Config::LayerType::Netplay, Config::SESSION_USE_FMA, false);
   Orca::SetActiveProfile(profile);
   Orca::Engine::SetModule(&Orca::UX::Builtin());
@@ -1964,8 +1842,6 @@ TEST(OrcaMod, GoldenLegacyCompatibilityKey)
   const std::string revision = Common::GetScmRevGitStr();
   ASSERT_TRUE(parts.starts_with("orca|" + revision + "|"));
   parts.replace(5, revision.size(), "fixture-engine-revision");
-  // UX 32 plus Brawl revision 2 (room team colours). Normalize only that suffix
-  // to keep both earlier serialization goldens pinned.
   ASSERT_TRUE(parts.ends_with("|ux=32.2"));
   std::string previous = parts;
   previous.replace(previous.size() - 8, 8, "|ux=30");
@@ -1991,7 +1867,6 @@ std::string ResultsMod()
   return value.serialize();
 }
 
-// ResultsMod without rankedRules (and so offering nothing): a friends-only pack.
 std::string UnruledResultsMod()
 {
   picojson::value value;
@@ -2010,7 +1885,7 @@ std::string ResultsWith(std::string_view key, const std::string& json)
   value.get<picojson::object>()[std::string(key)] = field;
   return value.serialize();
 }
-}  // namespace
+}
 
 TEST(OrcaMod, ResultsOnlyBuiltinIsValidated)
 {
@@ -2021,7 +1896,6 @@ TEST(OrcaMod, ResultsOnlyBuiltinIsValidated)
   ASSERT_TRUE(plain) << error;
   EXPECT_EQ(plain->builtin, Builtin::BrawlRev2Results);
   EXPECT_EQ(plain->offers, std::vector<std::string>{"results"});
-  // results only with declared ranked rules; without them the pack offers nothing.
   const auto unruled = Orca::Mod::ParseManifest(UnruledResultsMod(), &error);
   ASSERT_TRUE(unruled) << error;
   EXPECT_FALSE(unruled->ranked_rules);
@@ -2070,8 +1944,6 @@ TEST(OrcaMod, ResultsOnlyUsesEightCommonGuards)
 
 namespace
 {
-// An isolated in-memory Wii guest (MEM1 and MEM2, zeros), with no disc, device backend or user
-// configuration, as RoomTest's FriendsHeadlessCore.
 struct ResultsGuest
 {
   ResultsGuest()
@@ -2085,8 +1957,6 @@ struct ResultsGuest
     old_wii = system.IsWii();
     system.SetIsWii(true);
     system.GetMemory().Init();
-    // Brawl's view of memory: MEM1 at 0x80000000 and MEM2 at 0x90000000, the BATs a Wii boot sets
-    // (CBoot::SetupBAT).
     auto& ppc = system.GetPPCState();
     ppc.spr[SPR_DBAT0U] = 0x80001fff;
     ppc.spr[SPR_DBAT0L] = 0x00000002;
@@ -2125,9 +1995,6 @@ struct ResultsGuest
   bool old_wii = false;
 };
 
-// Brawl's scene manager and g_GameGlobal as Results.h reads them, at free MEM1 addresses: the scene
-// named `scene`, a 1v1's result info (port 1 won) and the rules block (3 stocks, 8:00, handicap
-// off, damage 1.0), items off.
 void ResultsScreen(Orca::UX::GuestMemory& m, std::string_view scene)
 {
   m.Write32(0x805A0060, 0x80900000);
@@ -2154,7 +2021,7 @@ void ResultsScreen(Orca::UX::GuestMemory& m, std::string_view scene)
   m.Write8(0x80905008, 8);
   m.Write8(0x9017BE50, 0);
 }
-}  // namespace
+}
 
 TEST(OrcaMod, ResultsOnlyAdmitsRankedWithoutRulesetGates)
 {
@@ -2192,7 +2059,6 @@ TEST(OrcaMod, ResultsOnlyAdmitsRankedWithoutRulesetGates)
                                        Orca::Status::HOSTUI_CAP);
   const std::string base = std::string(Orca::Status::CAPS) + " " + Orca::Status::MUSIC_CAP;
   EXPECT_EQ(Orca::Status::OfferedCaps(), base + tail);
-  // Its eight guard words held: results and the menus, and nothing a ruleset brings.
   Orca::Mod::NoteGuards(true, 2);
   ASSERT_TRUE(module.Active());
   EXPECT_TRUE(Orca::UX::ResultsVerified());
@@ -2205,8 +2071,6 @@ TEST(OrcaMod, ResultsOnlyAdmitsRankedWithoutRulesetGates)
     EXPECT_FALSE(Orca::Mod::Offers(cap)) << cap;
   EXPECT_EQ(module.ProfileRuleset(), Orca::Engine::Ruleset::None);
   EXPECT_EQ(Orca::UX::Rules::ProfileRuleset(), Orca::UX::Rules::Ruleset::None);
-  // Mod::Offers keeps to the builtin's one cap even if a manifest listed more (the parser refuses
-  // them first).
   auto listed = *profile;
   listed.mod->manifest.offers = {"results", "locks", "queue2"};
   Orca::SetActiveProfile(listed);
@@ -2222,7 +2086,6 @@ TEST(OrcaMod, ResultsOnlyAdmitsRankedWithoutRulesetGates)
   EXPECT_TRUE(Orca::Status::Cap("results"));
   for (const char* cap : {"locks", "queue2", "pick-casual", "pick-ranked"})
     EXPECT_FALSE(Orca::Status::Cap(cap)) << cap;
-  // The Online menu's exit codes 30 and 31 start the older search at the pick (no queue2).
   for (const u32 code : {30u, 31u})
   {
     Orca::UX::OnlineMenuReader reader;
@@ -2237,8 +2100,6 @@ TEST(OrcaMod, ResultsOnlyAdmitsRankedWithoutRulesetGates)
     Orca::UX::AnnounceMenuCancel();
   }
 
-  // sora_scene's free space holds a valid ranked Project+ header, and the rest of it bytes that are
-  // nobody's: every step that reads the match block would act on it. None may write there.
   const Core::CPUThreadGuard guard(guest.system);
   Orca::UX::GuardMemory memory(guard);
   constexpr u32 free_begin = Orca::UX::FreeSpace::kMatchBlock.begin;
@@ -2251,9 +2112,6 @@ TEST(OrcaMod, ResultsOnlyAdmitsRankedWithoutRulesetGates)
             0);
   ASSERT_TRUE(Orca::UX::Rules::ReadHeader(memory).Locked());
   ASSERT_TRUE(Orca::UX::SetBlock::ReadHeader(memory));
-  // A set's second game (port 1 won the first), whose character order would start on the
-  // character select below: its task (scene +0x400) and two human player areas (task +0x44, kind
-  // at +0x1B4).
   memory.Write8(Orca::UX::SetBlock::BASE + Orca::UX::SetBlock::SET_WINS, 1);
   memory.Write8(Orca::UX::SetBlock::BASE + Orca::UX::SetBlock::SET_LAST_WINNER, 0);
   memory.Write32(0x80901400, 0x80906000);
@@ -2266,11 +2124,8 @@ TEST(OrcaMod, ResultsOnlyAdmitsRankedWithoutRulesetGates)
     before.push_back(memory.Read8(address));
   ASSERT_TRUE(memory.Valid(0x9017BE50));
   (void)module.Header().TakeMismatch();
-  // The session's asks too: a ranked room's header and the queue's rules preset.
   module.Header().SetWanted(Orca::UX::Rules::Mode::Ranked, 0, "room");
   Orca::UX::RequestQueueRules();
-  // Two players plugged in on the built main menu, a friend's drop-in move due; pads pressing
-  // everything the masks would take.
   const std::vector<Orca::Events::PortInfo> ports{{0, "Ada", false, {}, {}},
                                                   {1, "Bo", true, {}, {}}};
   std::array<std::optional<GCPadStatus>, Rollback::InputGate::PORTS> raw;
@@ -2286,7 +2141,6 @@ TEST(OrcaMod, ResultsOnlyAdmitsRankedWithoutRulesetGates)
     ResultsScreen(memory, scene);
     if (scene == "scSelctCharacter")
     {
-      // What a ruleset game's character order would start from here.
       const auto set = Orca::UX::CharOrder::ReadSet(memory);
       EXPECT_NE(set.ruleset, Orca::UX::CharOrder::Ruleset::None);
       EXPECT_EQ(set.game, 2);
@@ -2326,7 +2180,6 @@ TEST(OrcaMod, ResultsOnlyAdmitsRankedWithoutRulesetGates)
     ASSERT_EQ(memory.Read8(address), before[address - free_begin]) << std::hex << address;
   EXPECT_FALSE(module.Header().TakeMismatch());
   EXPECT_TRUE(module.Header().HeaderInPlace());
-  // The results come from the vanilla result info, not from the header's (empty) ranked set.
   std::vector<int> starts;
   auto results = module.Results().Confirm(frame, -1, &starts);
   ASSERT_EQ(results.size(), 1u);
@@ -2336,7 +2189,6 @@ TEST(OrcaMod, ResultsOnlyAdmitsRankedWithoutRulesetGates)
   EXPECT_EQ(results[0].start, fight_start);
   EXPECT_EQ(starts, std::vector<int>{fight_start});
 
-  // rankedRules reaches the reader from mod.json: the same match under items Medium is not rated.
   Bundle rules_bundle =
       MakeBundle(ResultsWith("rankedRules", R"({"stocks":3,"timeMinutes":8,"items":"off"})"));
   dirs.list.push_back(rules_bundle.dir);
@@ -2362,13 +2214,10 @@ TEST(OrcaMod, ResultsOnlyAdmitsRankedWithoutRulesetGates)
     EXPECT_EQ(results[0].why, items == 0 ? "" : "rules-items");
   }
 
-  // Its guards broken after holding: nothing offered, nothing on.
   Orca::Mod::NoteGuards(false, 500);
   EXPECT_FALSE(Orca::Mod::Offers("results"));
   EXPECT_FALSE(module.Active());
   EXPECT_FALSE(Orca::UX::ResultsVerified());
-  // Without rankedRules: no results read, so no Ranked, even if a manifest got "results" past the
-  // parser.
   auto unruled = *profile;
   unruled.mod->manifest.ranked_rules.reset();
   Orca::SetActiveProfile(unruled);
@@ -2379,7 +2228,6 @@ TEST(OrcaMod, ResultsOnlyAdmitsRankedWithoutRulesetGates)
   EXPECT_FALSE(Orca::Mod::Offers("results"));
   EXPECT_EQ(Orca::Status::OfferedCaps(), base + tail);
   EXPECT_FALSE(Rollback::OnlineMatch::RoomRefusal("ranked", module.Describe().results).empty());
-  // A Brawl pack with no builtin still can't play Ranked.
   auto none = *profile;
   none.mod->manifest.builtin = Builtin::None;
   none.mod->manifest.offers.clear();
@@ -2432,7 +2280,6 @@ TEST(OrcaMod, SchemaKnowsRankedRules)
     EXPECT_EQ(rules.get(key).get("maximum").get<double>(), 99.0) << key;
   }
   EXPECT_EQ(rules.get("items").get("const").get<std::string>(), "off");
-  // brawl-rev2-results offers results only with it.
   bool results_need_rules = false;
   for (const auto& rule : schema.get("allOf").get<picojson::array>())
   {
@@ -2505,14 +2352,11 @@ TEST(OrcaMod, BuiltinFixedWritersHaveExactRegions)
     return std::any_of(regions.begin(), regions.end(),
                        [&](const auto& region) { return region.Contains(address, bytes); });
   };
-  // ClearStaleMusicSelect's complete word list, ForceCodeMenu's pause word, and
-  // FriendsMove::Apply / FreshMove::Apply's two scene-manager words.
   for (const u32 address : {0x80002810u, 0x80002818u, 0x8000281Cu, 0x80002820u,
                             0x80002824u, 0x80002828u, 0x80002830u, 0x80002834u,
                             0x80002838u, 0x8000283Cu, 0x805B8A08u, 0x805B8E24u,
                             0x805B8E28u})
     EXPECT_TRUE(contains(address, 4)) << std::hex << address;
-  // The adjacent words and the holes between the My Music words stay undeclared.
   for (const u32 address : {0x8000280Cu, 0x80002814u, 0x8000282Cu, 0x80002840u,
                             0x805B8A04u, 0x805B8A0Cu, 0x805B8E20u, 0x805B8E2Cu})
     EXPECT_FALSE(contains(address, 4)) << std::hex << address;

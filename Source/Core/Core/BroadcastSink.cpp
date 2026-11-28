@@ -87,13 +87,9 @@ private:
   int m_file = -1;
 #endif
 };
-// Intentionally leaked: static destruction can race the video/audio writer threads at exit.
-// The OS releases the mapping and handles after the last thread has gone.
 Mapping* s_mapping = nullptr;
 bool s_attempted = false;
 
-// The null backend never calls Mixer::Mix. Give the muxer a real-time sample clock without
-// consuming game audio or competing with a real backend for the ring's single audio producer.
 class SilentAudioClock
 {
 public:
@@ -136,7 +132,6 @@ private:
   bool m_stop = false;
 };
 SilentAudioClock s_silent_clock;
-// Serialize sink/backend lifetime changes; the clock and real mixer callbacks never share state.
 std::mutex s_control_mutex;
 bool s_silent_audio = false;
 void UpdateSilentAudio()
@@ -146,7 +141,7 @@ void UpdateSilentAudio()
   else
     s_silent_clock.Stop();
 }
-}  // namespace
+}
 
 u64 NowMicros()
 {
@@ -209,7 +204,6 @@ void Audio(const s16* samples, size_t frames, u32 rate)
 {
   if (!Active() || !rate)
     return;
-  // Only the final mixer thread calls this. Fixed storage, no allocation, locks or file I/O.
   static std::array<s16, AUDIO_FRAMES * CHANNELS> chunk{};
   static size_t filled = 0;
   static u64 timestamp = 0;
@@ -243,7 +237,6 @@ void Audio(const s16* samples, size_t frames, u32 rate)
       {
         Write(s_mapping->Memory(), true,
               {reinterpret_cast<const u8*>(chunk.data()), AUDIO_BYTES}, timestamp);
-        // Chunk timestamps follow the sample clock, never sound callback scheduling jitter.
         timestamp += AUDIO_FRAMES * 1000000ull / RATE;
         filled = 0;
       }
@@ -251,4 +244,4 @@ void Audio(const s16* samples, size_t frames, u32 rate)
     previous = {samples[i * 2], samples[i * 2 + 1]};
   }
 }
-}  // namespace Broadcast
+}

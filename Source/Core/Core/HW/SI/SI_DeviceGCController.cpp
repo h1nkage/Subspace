@@ -307,9 +307,6 @@ void CSIDevice_GCController::SendCommand(u32 command, u8 poll)
     // get the correct pad number that should rumble locally when using netplay
     const int pad_num = NetPlay_InGamePadToLocalPad(m_device_number);
 
-    // Orca: a session's rumble reaches the player through the app (Orca/UX/Rumble.h), read from
-    // the local port at live frame boundaries. Here it would follow the in-game port, not this
-    // machine's, and fire again on every rollback re-run.
     if (pad_num < 4 && !Orca::SessionActive())
     {
       const SIDevices device = m_system.GetSerialInterface().GetDeviceType(pad_num);

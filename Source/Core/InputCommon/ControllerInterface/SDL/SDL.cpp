@@ -173,12 +173,6 @@ InputBackend::InputBackend(ControllerInterface* controller_interface)
       SDL_SetHint(location.key.c_str(), value->c_str());
   }
 
-  // Orca: SDL never opens the GameCube adapter (Wii U adapter, 057e:0337), whatever the config
-  // says. The desktop app owns it and Orca reads it through the app's stream
-  // (Orca/UX/ControllerSource.cpp); every port is a GameCube controller (Orca/Profile.cpp), so
-  // Dolphin's own adapter check would always hand it to SDL. On Windows SDL then holds it through
-  // libusb/WinUSB, which lets one program hold a device, and the app's helper gets "Permission ...
-  // denied" (running as administrator doesn't help). Set before the joystick init below.
   SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_GAMECUBE, "0");
   SDL_SetHint(SDL_HINT_HIDAPI_LIBUSB_GAMECUBE, "0");
 

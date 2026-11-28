@@ -36,7 +36,6 @@ std::string Digest(std::string_view bytes)
   return hash;
 }
 
-// A complete 64 KiB disc with only invented bytes: one root file, a directory and an empty file.
 std::string GameCubeImage()
 {
   std::string image(0x10000, '\0');
@@ -55,7 +54,6 @@ std::string GameCubeImage()
   Write32(&image, 0x3090, 4);
   image.replace(0x3100, 4, "code");
 
-  // Root (0), hello.txt (1), folder (2), data.bin (3), empty (4).
   Write32(&image, 0x4000, 0x01000000);
   Write32(&image, 0x4008, 5);
   Write32(&image, 0x400c, 0);
@@ -306,7 +304,6 @@ TEST_F(DiscReportTest, InvalidReferenceFailsBeforeReadingTheDisc)
   EXPECT_EQ(code, 1);
 }
 
-// Wii metadata/offset comparison is tested independently of encrypted game fixtures.
 TEST(OrcaDiscReport, WiiHeaderAndReferenceRoundTrip)
 {
   const std::string sha1(40, 'a');
@@ -384,4 +381,4 @@ TEST(OrcaDiscReport, VerdictsStayOnOneLineAndShowOnlyFivePaths)
   ASSERT_TRUE(picojson::parse(json, Report::FileLine(file)).empty());
   EXPECT_EQ(json.get("path").get<std::string>(), file.path);
 }
-}  // namespace
+}

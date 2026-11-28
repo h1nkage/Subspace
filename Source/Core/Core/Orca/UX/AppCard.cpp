@@ -24,7 +24,6 @@ ImU32 Rgba(int r, int g, int b, float a)
   return IM_COL32(r, g, b, static_cast<int>(std::lround(std::clamp(a, 0.0f, 1.0f) * 255)));
 }
 
-// The service site's dark card colours.
 constexpr std::array<int, 3> CARD{15, 23, 42};
 constexpr std::array<int, 3> EDGE{148, 163, 184};
 constexpr std::array<int, 3> INK{248, 250, 252};
@@ -38,9 +37,6 @@ ImU32 Of(const std::array<int, 3>& c, float a)
 
 constexpr const char* FONT_NAME = "Orca App Roboto";
 
-// Roboto, added to ImGui's atlas on first use, or ImGui's default font if it can't load. The video
-// backend can replace the atlas, so the font is looked up by name each time and re-added if gone.
-// A missing or broken file is tried once. Video thread only.
 ImFont* Face()
 {
   static bool s_unusable = false;
@@ -53,7 +49,7 @@ ImFont* Face()
   }
   if (!s_unusable && (io.BackendFlags & ImGuiBackendFlags_RendererHasTextures))
   {
-    const std::string path = File::GetSysDirectory() + "Orca/Fonts/Roboto-Medium.ttf";
+    const std::string path = File::GetSysDirectory() + "Subspace/Fonts/Roboto-Medium.ttf";
     ImFont* font = nullptr;
     if (File::Exists(path))
     {
@@ -84,7 +80,6 @@ void Put(ImDrawList* dl, ImVec2 pos, float px, ImU32 colour, std::string_view te
   }
 }
 
-// Card background: soft shadow, slate fill, hairline edge.
 void Slab(ImDrawList* dl, ImVec2 min, ImVec2 max, float unit, float alpha)
 {
   const float r = 1.9f * unit;
@@ -94,7 +89,6 @@ void Slab(ImDrawList* dl, ImVec2 min, ImVec2 max, float unit, float alpha)
   dl->AddRect(min, max, Of(EDGE, 0.28f * alpha), r, 0, std::max(1.0f, 0.14f * unit));
 }
 
-// Case mapping for ASCII and Latin-1 (U+00C0..U+00DE except U+00D7), matching JavaScript's.
 char16_t Lower(char16_t c)
 {
   if ((c >= u'A' && c <= u'Z') || (c >= 0xC0 && c <= 0xDE && c != 0xD7))
@@ -108,7 +102,6 @@ char16_t Upper(char16_t c)
   return c;
 }
 
-// The site's avatar initial: the trimmed name's first character, uppercased, or "?".
 std::string Initial(std::string_view name)
 {
   const std::u16string wide = UTF8ToUTF16(name);
@@ -117,13 +110,12 @@ std::string Initial(std::string_view name)
     const char16_t c = wide[i];
     if (c == u' ' || c == u'\t' || c == u'\n' || c == u'\r')
       continue;
-    // Keep a surrogate pair whole, so an emoji's initial is the emoji.
     const bool pair = c >= 0xD800 && c <= 0xDBFF && i + 1 < wide.size();
     return UTF16ToUTF8(pair ? wide.substr(i, 2) : std::u16string(1, Upper(c)));
   }
   return "?";
 }
-}  // namespace
+}
 
 void Warm()
 {
@@ -139,8 +131,6 @@ ImU32 AvatarColour(std::string_view name)
                                                               {180, 83, 9},
                                                               {220, 38, 38},
                                                               {14, 116, 144}}};
-  // FNV-1a over UTF-16 code units, mod 2^32 like the site's Math.imul. Names the app truncated to 24
-  // characters may hash differently from the site.
   u32 h = 2166136261u;
   for (const char16_t c : UTF8ToUTF16(name))
   {
@@ -157,7 +147,6 @@ float TextWidth(std::string_view text, float px)
 
 std::vector<std::string> Wrap(std::string_view text, float px, float width)
 {
-  // ImGui's word wrap, which also breaks words wider than the line, so every line fits.
   std::vector<std::string> lines;
   const char* at = text.data();
   const char* const end = text.data() + text.size();
@@ -171,7 +160,7 @@ std::vector<std::string> Wrap(std::string_view text, float px, float width)
       break;
     const char* stop = font->CalcWordWrapPosition(size, at, end, std::max(1.0f, width));
     if (stop <= at)
-      stop = at + 1;  // always move on
+      stop = at + 1;
     std::string_view line(at, static_cast<std::size_t>(stop - at));
     while (!line.empty() && line.back() == ' ')
       line.remove_suffix(1);
@@ -184,7 +173,6 @@ std::vector<std::string> Wrap(std::string_view text, float px, float width)
 
 void Logo(ImDrawList* dl, ImVec2 pos, float size, float alpha)
 {
-  // The site icon on a 28-unit grid: red tile, white pill, red cross and two red buttons.
   const float k = size / 28;
   const auto at = [&](float x, float y) { return ImVec2(pos.x + x * k, pos.y + y * k); };
   const ImU32 red = Rgba(255, 0, 0, alpha), white = Rgba(255, 255, 255, alpha);
@@ -214,7 +202,6 @@ Kit::Box ChatCard(ImDrawList* dl, ImVec2 pos, float unit, std::string_view name,
   if (alpha <= 0)
     return box;
   Slab(dl, box.min, box.max, unit, alpha);
-  // Avatar with a green online dot.
   const ImVec2 c(pos.x + pad + avatar, pos.y + pad + avatar);
   dl->AddCircleFilled(c, avatar,
                       (AvatarColour(name) & ~IM_COL32_A_MASK) |
@@ -228,7 +215,6 @@ Kit::Box ChatCard(ImDrawList* dl, ImVec2 pos, float unit, std::string_view name,
   const ImVec2 dot(c.x + avatar * 0.72f, c.y + avatar * 0.72f);
   dl->AddCircleFilled(dot, avatar * 0.34f, Of(CARD, alpha), 16);
   dl->AddCircleFilled(dot, avatar * 0.24f, Of(ONLINE, alpha), 16);
-  // Name, logo at the right end, message below.
   const float tx = pos.x + text_x;
   float y = pos.y + pad - 0.15f * unit;
   Put(dl, ImVec2(tx, y), px, Of(INK, alpha), name);
@@ -244,7 +230,6 @@ Kit::Box ChatCard(ImDrawList* dl, ImVec2 pos, float unit, std::string_view name,
 Kit::Box NoticeCard(ImDrawList* dl, ImVec2 pos, float unit, std::string_view text, float width,
                     float alpha)
 {
-  // Subspace: text only, no logo mark.
   const float pad = 1.4f * unit, px = 1.95f * unit;
   const float text_x = pad;
   const std::vector<std::string> lines = Wrap(text, px, std::max(10.0f * unit, width - text_x - pad));
@@ -268,7 +253,6 @@ Kit::Box NoticeCard(ImDrawList* dl, ImVec2 pos, float unit, std::string_view tex
 
 void RoundLogo(ImDrawList* dl, ImVec2 pos, float size, float alpha)
 {
-  // On a 40-unit grid: red disc, white pill, red cross and two red buttons.
   const float k = size / 40;
   const auto at = [&](float x, float y) { return ImVec2(pos.x + x * k, pos.y + y * k); };
   const ImU32 red = Rgba(255, 0, 0, alpha), white = Rgba(255, 255, 255, alpha);
@@ -330,4 +314,4 @@ void AvatarOf(ImDrawList* dl, ImVec2 centre, float r, ImU32 colour, std::string_
   Put(dl, ImVec2(centre.x - is.x / 2, centre.y - is.y / 2), ipx, Rgba(255, 255, 255, alpha),
       initial);
 }
-}  // namespace Orca::UX::AppCard
+}

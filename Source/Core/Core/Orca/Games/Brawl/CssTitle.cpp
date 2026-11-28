@@ -17,25 +17,25 @@ namespace
 {
 constexpr u32 SCENE_MANAGER = 0x805A0060;
 constexpr u32 MANAGER_SCENE = 0x4;
-constexpr u32 MANAGER_SEQUENCE = 0x10;  // running sequence
-constexpr u32 SCENE_ARCHIVE = 0x410;    // scSelctCharacter's gfArchive*
+constexpr u32 MANAGER_SEQUENCE = 0x10;
+constexpr u32 SCENE_ARCHIVE = 0x410;
 constexpr u32 ARCHIVE_WORDS = 0x80 / 4;
-constexpr u32 SEQUENCE_PICK = 0x18;    // menu pick stored by Orca's patch (RSBE01.patches)
-constexpr u32 ARC_MAGIC = 0x41524300;  // "ARC\0"
+constexpr u32 SEQUENCE_PICK = 0x18;
+constexpr u32 ARC_MAGIC = 0x41524300;
 constexpr u32 ARC_NAME = 0x10;
 constexpr u32 ARC_FIRST = 0x40;
-constexpr u32 TITLE_FILE = 30;  // MiscData 30: character select's bres
+constexpr u32 TITLE_FILE = 30;
 
-constexpr u32 BRES_MAGIC = 0x62726573;  // "bres"
-constexpr u32 BRES_ROOT = 0xC;          // u16 offset of the root section
-constexpr u32 ROOT_GROUP = 0x8;         // root's index group
+constexpr u32 BRES_MAGIC = 0x62726573;
+constexpr u32 BRES_ROOT = 0xC;
+constexpr u32 ROOT_GROUP = 0x8;
 constexpr u32 GROUP_COUNT = 0x4;
-constexpr u32 GROUP_ENTRIES = 0x8;  // 16-byte entries; the first is the group's own
+constexpr u32 GROUP_ENTRIES = 0x8;
 constexpr u32 ENTRY_SIZE = 0x10;
-constexpr u32 ENTRY_NAME = 0x8;  // offset from the group's start
+constexpr u32 ENTRY_NAME = 0x8;
 constexpr u32 ENTRY_DATA = 0xC;
 constexpr u32 MAX_ENTRIES = 1024;
-constexpr u32 PLT0_MAGIC = 0x504C5430;  // "PLT0"
+constexpr u32 PLT0_MAGIC = 0x504C5430;
 constexpr u32 PLT0_DATA = 0x10;
 constexpr u32 PLT0_FORMAT = 0x18;
 constexpr u32 PLT0_COUNT = 0x1C;
@@ -44,8 +44,6 @@ constexpr u32 FORMAT_RGB5A3 = 2;
 constexpr std::string_view PALETTES = "Palettes(NW4R)";
 constexpr std::string_view TITLE_TEXTURE = "MenSelchrPanelRule3.1";
 
-// Known title textures, keyed by palette size: the background entry, its shipped value, and the
-// direction a mark moves its blue (one step per title; alpha stays zero).
 struct Variant
 {
   u16 count;
@@ -54,8 +52,8 @@ struct Variant
   int step;
 };
 constexpr std::array<Variant, 2> VARIANTS{{
-    {96, 0, 0x0EEE, -1},   // Brawl's BRAWL (132x48)
-    {256, 7, 0x0000, +1},  // Project+'s VERSUS (128x56)
+    {96, 0, 0x0EEE, -1},
+    {256, 7, 0x0000, +1},
 }};
 
 bool Pointer(const GuestMemory& m, u32 p)
@@ -74,13 +72,11 @@ bool StringAt(const GuestMemory& m, u32 at, std::string_view want)
   return true;
 }
 
-// Scenes and sequences start with a pointer to their name.
 bool Named(const GuestMemory& m, u32 object, std::string_view name)
 {
   return Pointer(m, object) && StringAt(m, m.Read32(object), name);
 }
 
-// The scene manager's word at `offset`, or 0 if unreadable.
 u32 ManagerWord(const GuestMemory& m, u32 offset)
 {
   if (!Pointer(m, SCENE_MANAGER))
@@ -89,7 +85,6 @@ u32 ManagerWord(const GuestMemory& m, u32 offset)
   return Pointer(m, manager + offset) ? m.Read32(manager + offset) : 0;
 }
 
-// The character select's archive image, or 0 if it isn't loaded.
 u32 FindArchive(const GuestMemory& m)
 {
   const u32 scene = ManagerWord(m, MANAGER_SCENE);
@@ -110,7 +105,6 @@ u32 FindArchive(const GuestMemory& m)
   return 0;
 }
 
-// Data of the entry named `name` in the bres index group at `group`, or 0.
 u32 GroupEntry(const GuestMemory& m, u32 group, std::string_view name)
 {
   if (!Pointer(m, group) || !m.Valid(group + GROUP_ENTRIES - 1))
@@ -122,14 +116,13 @@ u32 GroupEntry(const GuestMemory& m, u32 group, std::string_view name)
   {
     const u32 entry = group + GROUP_ENTRIES + ENTRY_SIZE * i;
     const u32 at = group + m.Read32(entry + ENTRY_NAME);
-    // A name is preceded by its length.
     if (!Pointer(m, at - 4) || m.Read32(at - 4) != name.size() || !StringAt(m, at, name))
       continue;
     return group + m.Read32(entry + ENTRY_DATA);
   }
   return 0;
 }
-}  // namespace
+}
 
 std::string_view TitleName(Title title)
 {
@@ -243,7 +236,6 @@ void Frame(const Core::CPUThreadGuard& guard, bool resimulating,
   }
   GuardMemory memory(guard);
   Title shown = Title::Game;
-  // Log only on first runs; a resimulated frame repeats the write.
   if (Apply(memory, players, &shown) && !resimulating)
   {
     const Slot slot = FindSlot(memory);
@@ -251,4 +243,4 @@ void Frame(const Core::CPUThreadGuard& guard, bool resimulating,
                    TitleName(shown), slot.address, memory.Read16(slot.address));
   }
 }
-}  // namespace Orca::UX::CssTitle
+}

@@ -3,8 +3,8 @@
 # the way the desktop app's linux-x64 build unpacks it:
 #   subspace/subspace  the NoGUI program ("subspace/subspace" in 0.3.40 and 0.3.41;
 #                         "Orca/orca" before)
-#   subspace/Sys/      Dolphin's and Orca's data, read from beside the program (Sys/Orca/ keeps its
-#                      name: installed apps check Sys/Orca/<profile>.ini)
+#   subspace/Sys/      Dolphin's and Orca's data, read from beside the program (Orca's in
+#                      Sys/Subspace/: installed apps check Sys/Subspace/<profile>.ini)
 #   subspace/COPYING, LICENSES/, THIRD_PARTY/, SOURCE.txt, VERSION.txt
 #
 #   Tools/orca-package-linux.sh [build-dir] [out-dir]
@@ -226,7 +226,7 @@ find "$PKG/Sys/Resources" -maxdepth 1 -type f \
   -o -name 'isoproperties_*' -o -name 'nobanner*' \) -delete
 [ -z "$(find "$PKG" -type l)" ] || fail "a symbolic link is left in $PKG"
 for profile in RSBE01 PPLUS32; do
-  [ -s "$PKG/Sys/Orca/$profile.ini" ] || fail "no Sys/Orca/$profile.ini: the app refuses an Orca without it"
+  [ -s "$PKG/Sys/Subspace/$profile.ini" ] || fail "no Sys/Subspace/$profile.ini: the app refuses an Orca without it"
 done
 
 # What the GPL asks to travel with the binary: where the source is, and the licences.

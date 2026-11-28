@@ -25,20 +25,14 @@ namespace Orca
 {
 namespace
 {
-// Super Smash Bros. Brawl (USA) (Rev 1), read as (USA, Canada) (Rev 2). The dumps differ in the
-// revision byte of both disc headers and in main.dol at 0x8001BC9C (`li r7,1`; Rev 2 `li r7,2`).
-// Their TMDs and tickets differ only in hashes, signatures and the ticket ID, which the game
-// doesn't read (ORCA.md, "Orca.app and the disc").
 constexpr std::string_view BRAWL_USA_ID = "RSBE01";
 constexpr u16 BRAWL_REV1 = 1;
 constexpr u16 BRAWL_REV2 = 2;
-// The game partition's content SHA-1 in the Rev 1 TMD: only this exact dump is aliased.
 constexpr std::array<u8, 20> BRAWL_REV1_CONTENT_SHA1 = {0xab, 0x93, 0xef, 0x28, 0x0b, 0x83, 0x45,
                                                         0x72, 0x52, 0x3f, 0x64, 0xc5, 0x5c, 0x6a,
                                                         0x32, 0x05, 0xea, 0xd6, 0x6d, 0x04};
-// main.dol starts at 0x3DD00 in the partition; 0x8001BC9C's low byte is 0x11A1F into it.
 constexpr u64 BRAWL_REV1_DOL_VERSION = 0x3DD00 + 0x11A1F;
-}  // namespace
+}
 
 bool AliasRevision(DiscIO::VolumeDisc& volume, std::string* reason)
 {
@@ -143,8 +137,6 @@ DiscCheck CheckDisc(const std::string& path, std::string_view game_id)
 
 DiscCheck CheckBootFile(const std::string& path)
 {
-  // Inside the app's sandbox, a file it wasn't given looks missing or unreadable: say it's the
-  // sandbox, so the app can tell the player to move the disc (Orca/Sandbox.h).
   const auto refuse = [&path](const char* code) {
     if (!path.empty() && Sandbox::Jailed() && Sandbox::ReadDenied(path))
       return DiscCheck{false, Sandbox::DISC_ERROR, Sandbox::DISC_SENTENCE};
@@ -152,9 +144,8 @@ DiscCheck CheckBootFile(const std::string& path)
   };
   if (path.empty() || !File::Exists(path))
     return refuse("disc_missing");
-  // A folder (an extracted disc) is left to the boot's own checks.
   if (!File::IsDirectory(path) && !File::IOFile(path, "rb").IsOpen())
     return refuse("disc_unreadable");
   return DiscCheck{true, {}, {}};
 }
-}  // namespace Orca
+}

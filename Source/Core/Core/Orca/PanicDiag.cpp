@@ -64,7 +64,6 @@ std::string DescribeWord(u32 physical_address, const std::vector<View>& views)
 
 std::optional<u32> GuestRam::Physical(u32 address) const
 {
-  // 0x8/0x9 (cached) and 0xC/0xD (uncached) segments only.
   const u32 segment = address >> 28;
   if (segment != 0x8 && segment != 0x9 && segment != 0xC && segment != 0xD)
     return std::nullopt;
@@ -178,8 +177,6 @@ std::vector<std::string> DescribeWords(const GuestRam& ram, std::string_view lab
 
 namespace
 {
-// OSModuleInfo: id +0x0, next +0x4, section count +0xC, section table +0x10 (8-byte entries:
-// address with bit 0 = executable, size). Pointers are absolute once a module is linked.
 template <typename F>
 void ForEachModule(const GuestRam& ram, F&& f)
 {
@@ -191,7 +188,7 @@ void ForEachModule(const GuestRam& ram, F&& f)
     module = ram.Word(*module + 4);
   }
 }
-}  // namespace
+}
 
 std::string ModuleOf(const GuestRam& ram, u32 address)
 {
@@ -241,7 +238,6 @@ std::vector<std::string> DescribeOS(const GuestRam& ram, u32 r1)
 {
   using Core::Debug::OSContext;
   using Core::Debug::OSThread;
-  // u32, not size_t: MSVC's /W4 /WX rejects the narrowing.
   const auto Off = [](std::size_t offset) { return static_cast<u32>(offset); };
   const auto word = [&ram](u32 at) {
     const std::optional<u32> w = ram.Word(at);
@@ -336,12 +332,11 @@ std::vector<std::string> DescribeExceptions(std::span<const ExceptionNote> ring,
 
 namespace
 {
-// The scene the dump names; written and read on the CPU thread only.
 std::string s_scene;
 int s_scene_frame = 0;
 int s_scene_changes = 0;
 std::optional<JitWarm::Scene> s_scene_key;
-}  // namespace
+}
 
 void NoteScene(const Core::CPUThreadGuard& guard, int frame)
 {
@@ -363,9 +358,6 @@ void NoteScene(const Core::CPUThreadGuard& guard, int frame)
 
 namespace
 {
-// The `orca diag code` line for one register: the RAM words from address-8 to address+4 (the
-// address's own in brackets), the module section holding it, and the JIT blocks compiled over it
-// ("ok" if their RAM is what was compiled, "changed" if not, "?" if it couldn't be hashed).
 struct CodeBlock
 {
   u32 start;
@@ -394,8 +386,6 @@ void DumpMore(Core::System& system, std::vector<std::string>& lines)
 {
   const PowerPC::PowerPCState& ppc = system.GetPPCState();
   const GuestRam ram = RamOf(system);
-  // As ppcState holds them: under the JIT, a register changed earlier in the faulting block may
-  // still be in a host register (block entry's value here). LR and the exception ring are exact.
   for (int first = 0; first < 32; first += 8)
   {
     std::string line = fmt::format("orca diag gpr{}:", first);
@@ -412,10 +402,6 @@ void DumpMore(Core::System& system, std::vector<std::string>& lines)
     lines.push_back(std::move(line));
   lines.push_back(DescribeModules(ram));
 
-  // The JIT's blocks over pc, lr and srr0, and every block whose RAM changed since it was
-  // compiled. Only on the CPU thread, which owns the block cache. "changed" is a lead, not proof:
-  // code rewritten and invalidated keeps no block, but RAM a block came from can also change
-  // harmlessly (freed module memory never run again, a rollback load, which keeps the JIT).
   const std::array<std::pair<const char*, u32>, 3> regs{
       {{"pc", ppc.pc}, {"lr", ppc.spr[SPR_LR]}, {"srr0", ppc.spr[SPR_SRR0]}}};
   std::array<std::vector<CodeBlock>, 3> at;
@@ -463,7 +449,7 @@ void DumpMore(Core::System& system, std::vector<std::string>& lines)
                                   s_scene.empty() ? "?" : s_scene, s_scene_frame, s_scene_changes) :
                       std::string("orca diag scene unknown"));
 }
-}  // namespace
+}
 
 namespace
 {
@@ -486,7 +472,7 @@ std::string ViewName(Memory::MemoryManager& memory, const u8* base)
   }
   return "view";
 }
-}  // namespace
+}
 
 void DumpOnce(Core::System& system, u32 effective_address, bool write)
 {
@@ -528,12 +514,10 @@ void DumpOnce(Core::System& system, u32 effective_address, bool write)
   lines.push_back(std::move(list));
   for (const u32 address : WORDS)
     lines.push_back(DescribeWord(address, views));
-  // fmt is built without exceptions (FMT_EXCEPTIONS=0) and nothing below throws, as the CPU
-  // thread under JIT code requires (CrashNote.h).
   DumpMore(system, lines);
 
   for (const std::string& line : lines)
     std::fprintf(stderr, "%s\n", line.c_str());
   std::fflush(stderr);
 }
-}  // namespace Orca::PanicDiag
+}

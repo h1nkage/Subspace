@@ -18,17 +18,15 @@ bool IsWordChar(char c)
   return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
 }
 
-// Part of a path or a file name, not a word on its own.
 bool IsPathChar(char c)
 {
   return c == '/' || c == '\\';
 }
-}  // namespace
+}
 
 std::string WindowTitle()
 {
   std::string title(PRODUCT_NAME);
-  // A launcher profile's title is the mod it boots (Project+, not Brawl).
   const Profile* profile = ActiveProfile();
   if (profile && !profile->title.empty())
     title += " — " + profile->title;
@@ -36,8 +34,6 @@ std::string WindowTitle()
     title += " — " + game;
   if (std::string status = Online::StatusLine(); !status.empty())
   {
-    // Drop the room code: screen-share and streaming pickers show window titles, and the code lets
-    // anyone join.
     if (status.starts_with("Room "))
     {
       if (const auto colon = status.find(": "); colon != std::string::npos)
@@ -50,7 +46,6 @@ std::string WindowTitle()
 
 std::string BrandWords(std::string_view text)
 {
-  // The codename players never see. Dolphin keeps its own name.
   static constexpr std::array<std::string_view, 1> WORDS = {"Orca"};
   std::string branded;
   branded.reserve(text.size());
@@ -65,7 +60,6 @@ std::string BrandWords(std::string_view text)
       const std::size_t end = at + word.size();
       const bool open_before = at == 0 || (!IsWordChar(text[at - 1]) && !IsPathChar(text[at - 1]) &&
                                            text[at - 1] != '.');
-      // A '.' after the word ends a sentence unless a letter or digit follows it (a file name).
       const bool open_after =
           end == text.size() ||
           (!IsWordChar(text[end]) && !IsPathChar(text[end]) &&
@@ -94,4 +88,4 @@ std::string BrandText(std::string_view text)
     return std::string(text);
   return BrandWords(text);
 }
-}  // namespace Orca
+}

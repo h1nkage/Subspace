@@ -1,11 +1,6 @@
 // Copyright 2026 YouGame
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Orca's game patches (Core/Orca/UX/GamePatches.h): the toggled groups (`when` ... `end`), which
-// follow a condition on emulated memory both ways, and the plan every kind is applied through. The
-// file format's other kinds and the shipped files are also covered in UXTest.cpp
-// (OrcaUXGamePatches) and OnlineMenuTest.cpp.
-
 #include <filesystem>
 #include <map>
 #include <set>
@@ -23,7 +18,6 @@ using namespace Orca::UX;
 
 namespace
 {
-// Emulated memory as a map of bytes (big-endian words); only what a test set is mapped.
 class Memory final : public GuestMemory
 {
 public:
@@ -59,8 +53,6 @@ std::vector<GamePatch> Parse(const std::string& text)
   return patches.value_or(std::vector<GamePatch>{});
 }
 
-// The writes of one plan, as the frame hook makes them (every word, code or data alike, lands in
-// emulated memory; the code flag only decides whether the JIT's copy is dropped).
 void Write(const PatchPlan& plan, Memory& memory)
 {
   for (const PatchWrite& w : plan.writes)
@@ -75,11 +67,10 @@ std::vector<u32> Addresses(const std::vector<PatchPlan::Group>& groups)
   return out;
 }
 
-constexpr u32 MAGIC = 0x90001000;  // a stand-in for the match block's header
+constexpr u32 MAGIC = 0x90001000;
 constexpr u32 MODE = 0x90001004;
 constexpr u32 SSM1 = 0x53534D31;
 
-// Two toggled groups (one with a guard word), a guarded group that lands once and a `*` line.
 const char* const FILE_WITH_TOGGLES = "# toggled while the header says an online mode\n"
                                       "when 90001000 == 53534D31      # the magic\n"
                                       "when 90001004 & FF000000 != 0  # the mode: not none\n"
@@ -91,7 +82,6 @@ const char* const FILE_WITH_TOGGLES = "# toggled while the header says an online
                                       "81002000 11111111 22222222     # lands once\n"
                                       "9017B640 * 000003FF            # data, every frame\n";
 
-// What the module and the record hold before anything is patched, and a header saying `mode`.
 Memory Booted(u32 mode)
 {
   Memory m;
@@ -105,7 +95,7 @@ Memory Booted(u32 mode)
   m.Write32(MODE, mode);
   return m;
 }
-}  // namespace
+}
 
 TEST(OrcaGamePatches, ParsesWhenBlocks)
 {
@@ -134,20 +124,17 @@ TEST(OrcaGamePatches, ParsesWhenBlocks)
   EXPECT_EQ(p[6].when, magic);
   EXPECT_EQ(p[7].when, magic);
   EXPECT_TRUE(p[8].when.empty());
-  // A group never spans a `when` or an `end`, whatever the addresses; inside a block, groups form
-  // as everywhere else.
   EXPECT_FALSE(p[0].joins_previous);
-  EXPECT_FALSE(p[1].joins_previous);  // after `when`: not with the line before the block
+  EXPECT_FALSE(p[1].joins_previous);
   EXPECT_TRUE(p[2].joins_previous);
-  EXPECT_FALSE(p[3].joins_previous);  // not consecutive
+  EXPECT_FALSE(p[3].joins_previous);
   EXPECT_TRUE(p[4].joins_previous);
-  EXPECT_FALSE(p[5].joins_previous);  // after `end`
-  EXPECT_FALSE(p[6].joins_previous);  // a second block, even with the same condition
+  EXPECT_FALSE(p[5].joins_previous);
+  EXPECT_FALSE(p[6].joins_previous);
   EXPECT_TRUE(p[7].joins_previous);
-  EXPECT_FALSE(p[8].joins_previous);  // after `end`
+  EXPECT_FALSE(p[8].joins_previous);
   EXPECT_EQ(p[1].original, std::optional<u32>(0x4082007C));
   EXPECT_EQ(p[1].value, 0x4800007Cu);
-  // A file without `when` blocks: every line untoggled.
   for (const GamePatch& g : Parse("81000000 1 2\n81000004 3 4\n9017B640 * 5\n"))
     EXPECT_TRUE(g.when.empty());
 }
@@ -157,38 +144,35 @@ TEST(OrcaGamePatches, RefusesMalformedBlocks)
   struct Bad
   {
     const char* text;
-    const char* line;  // the line the error names
+    const char* line;
   };
   for (const Bad& bad : std::initializer_list<Bad>{
-           {"end\n", "line 1"},                                                      // no `when`
-           {"81000000 1 2\nwhen 90001000 == 1\n81000008 1 2\n", "line 2"},            // no `end`
-           {"when 90001000 == 1\nend\n", "line 2"},                                  // no line
-           {"when 90001000 == 1\n9017B640 * 5\nend\n", "line 2"},                    // a `*` line
-           {"when 90001000 == 1\n81000000 1 2\nwhen 90001004 == 1\nend\n", "line 3"},  // nested
-           {"when 90001000 == 1\n81000000 1 2\nend 1\n", "line 3"},                  // `end` + more
-           {"when 90001002 == 1\n81000000 1 2\nend\n", "line 1"},                    // unaligned
-           {"when 70001000 == 1\n81000000 1 2\nend\n", "line 1"},                    // not RAM
-           {"when 94000000 == 1\n81000000 1 2\nend\n", "line 1"},                    // past MEM2
-           {"when 90001000 = 1\n81000000 1 2\nend\n", "line 1"},                     // operator
-           {"when 90001000 1\n81000000 1 2\nend\n", "line 1"},                       // no operator
-           {"when 90001000\n81000000 1 2\nend\n", "line 1"},                         // nothing
-           {"when 90001000 == 1 2\n81000000 1 2\nend\n", "line 1"},                  // too much
-           {"when 90001000 == G\n81000000 1 2\nend\n", "line 1"},                    // not hex
-           {"when 90001000 == 123456789\n81000000 1 2\nend\n", "line 1"},            // > 32 bits
-           {"when 90001000 & 0 == 0\n81000000 1 2\nend\n", "line 1"},                // mask 0
-           {"when 90001000 & FF == 100\n81000000 1 2\nend\n", "line 1"},             // outside it
-           {"when 90001000 | FF == 1\n81000000 1 2\nend\n", "line 1"},               // not `&`
-           {"when 90001000 & FF ==\n81000000 1 2\nend\n", "line 1"},                 // no value
-           {"WHEN 90001000 == 1\n81000000 1 2\nEND\n", "line 1"},                    // keywords
-           // A condition may not read a word the file writes, before, inside or after its block.
+           {"end\n", "line 1"},
+           {"81000000 1 2\nwhen 90001000 == 1\n81000008 1 2\n", "line 2"},
+           {"when 90001000 == 1\nend\n", "line 2"},
+           {"when 90001000 == 1\n9017B640 * 5\nend\n", "line 2"},
+           {"when 90001000 == 1\n81000000 1 2\nwhen 90001004 == 1\nend\n", "line 3"},
+           {"when 90001000 == 1\n81000000 1 2\nend 1\n", "line 3"},
+           {"when 90001002 == 1\n81000000 1 2\nend\n", "line 1"},
+           {"when 70001000 == 1\n81000000 1 2\nend\n", "line 1"},
+           {"when 94000000 == 1\n81000000 1 2\nend\n", "line 1"},
+           {"when 90001000 = 1\n81000000 1 2\nend\n", "line 1"},
+           {"when 90001000 1\n81000000 1 2\nend\n", "line 1"},
+           {"when 90001000\n81000000 1 2\nend\n", "line 1"},
+           {"when 90001000 == 1 2\n81000000 1 2\nend\n", "line 1"},
+           {"when 90001000 == G\n81000000 1 2\nend\n", "line 1"},
+           {"when 90001000 == 123456789\n81000000 1 2\nend\n", "line 1"},
+           {"when 90001000 & 0 == 0\n81000000 1 2\nend\n", "line 1"},
+           {"when 90001000 & FF == 100\n81000000 1 2\nend\n", "line 1"},
+           {"when 90001000 | FF == 1\n81000000 1 2\nend\n", "line 1"},
+           {"when 90001000 & FF ==\n81000000 1 2\nend\n", "line 1"},
+           {"WHEN 90001000 == 1\n81000000 1 2\nEND\n", "line 1"},
            {"9017B640 * 5\nwhen 9017B640 == 5\n81000000 1 2\nend\n", "line 2"},
            {"when 81000000 == 1\n81000000 1 2\nend\n", "line 1"},
            {"when 90001000 == 1\n81000000 1 2\nend\nwhen 81000000 == 2\n81000010 1 2\nend\n",
             "line 4"},
            {"when 90001000 == 1\n81000000 1 2\nend\n90001000 * 3\n", "line 1"},
-           // An address once, toggled or not.
            {"81000000 1 2\nwhen 90001000 == 1\n81000000 1 3\nend\n", "line 3"},
-           // A toggled group of one word, or one that changes nothing.
            {"when 90001000 == 1\n81000000 1 2\nend\n", "line 2"},
            {"when 90001000 == 1\n81000000 1 2\n81000004 3 3\n81000010 5 6\nend\n", "line 4"},
            {"when 80000000 == 0\nwhen 90000000 == 0\n81000000 1 1\n81000004 2 2\nend\n",
@@ -222,48 +206,40 @@ TEST(OrcaGamePatches, ConditionsReadOneMaskedWordEach)
   EXPECT_TRUE(holds({{MODE, 0xFF000000, 0x02000000, true}}));
   EXPECT_TRUE(holds({{MODE, 0xFF000000, 0, false}}));
   EXPECT_FALSE(holds({{MODE, 0x00FF0000, 0, false}}));
-  // All of them.
   EXPECT_TRUE(holds({{MAGIC, 0xFFFFFFFF, SSM1, true}, {MODE, 0xFF000000, 0, false}}));
   EXPECT_FALSE(holds({{MAGIC, 0xFFFFFFFF, SSM1, true}, {MODE, 0xFF000000, 0, true}}));
   EXPECT_FALSE(holds({{MAGIC, 0xFFFFFFFF, 0, true}, {MODE, 0xFF000000, 0, false}}));
-  // Unmapped memory never holds, either operator.
   EXPECT_FALSE(holds({{0x90002000, 0xFFFFFFFF, 0, true}}));
   EXPECT_FALSE(holds({{0x90002000, 0xFFFFFFFF, 0, false}}));
 }
 
 TEST(OrcaGamePatches, AToggledGroupOnlyEverMovesBetweenItsTwoStates)
 {
-  // Three words: a branch flip, a guard, a second flip.
   const auto p = Parse("when 90001000 == 1\n"
                        "81000000 1 A\n81000004 2 2\n81000008 3 C\n"
                        "end\n");
   ASSERT_EQ(p.size(), 3u);
   const auto toggle = [&](std::vector<u32> now, bool holds) { return ToggleGroup(p, now, holds); };
-  EXPECT_EQ(toggle({1, 2, 3}, true), Toggle::On);     // originals, condition holds: values
+  EXPECT_EQ(toggle({1, 2, 3}, true), Toggle::On);
   EXPECT_EQ(toggle({0xA, 2, 0xC}, true), Toggle::Leave);
-  EXPECT_EQ(toggle({0xA, 2, 0xC}, false), Toggle::Off);  // values, condition gone: originals
+  EXPECT_EQ(toggle({0xA, 2, 0xC}, false), Toggle::Off);
   EXPECT_EQ(toggle({1, 2, 3}, false), Toggle::Leave);
-  // Anything else is not this group's memory (another module, or the module not loaded): left
-  // alone either way, as a guarded group is.
   for (const bool holds : {true, false})
   {
     SCOPED_TRACE(holds);
-    EXPECT_EQ(toggle({1, 2, 0xC}, holds), Toggle::Leave);    // half and half
+    EXPECT_EQ(toggle({1, 2, 0xC}, holds), Toggle::Leave);
     EXPECT_EQ(toggle({0xA, 2, 3}, holds), Toggle::Leave);
-    EXPECT_EQ(toggle({1, 9, 3}, holds), Toggle::Leave);      // the guard differs
+    EXPECT_EQ(toggle({1, 9, 3}, holds), Toggle::Leave);
     EXPECT_EQ(toggle({0xA, 9, 0xC}, holds), Toggle::Leave);
-    EXPECT_EQ(toggle({1, 2, 9}, holds), Toggle::Leave);      // one word differs
-    EXPECT_EQ(toggle({1, 2}, holds), Toggle::Leave);         // not all of it mapped
+    EXPECT_EQ(toggle({1, 2, 9}, holds), Toggle::Leave);
+    EXPECT_EQ(toggle({1, 2}, holds), Toggle::Leave);
     EXPECT_EQ(toggle({}, holds), Toggle::Leave);
   }
-  // A group of guards only (the parser refuses one) never writes.
   const std::vector<PatchCondition> when{{0x90001000, 0xFFFFFFFF, 1, true}};
   const std::vector<GamePatch> guards{{0x81000000, 7, 7, false, when},
                                       {0x81000004, 8, 8, true, when}};
   EXPECT_EQ(ToggleGroup(guards, std::vector<u32>{7, 8}, true), Toggle::Leave);
   EXPECT_EQ(ToggleGroup(guards, std::vector<u32>{7, 8}, false), Toggle::Leave);
-  // GroupApplies (the shipped-file tests' check) reads a toggled group as landing on its
-  // originals.
   EXPECT_TRUE(GroupApplies(p, std::vector<u32>{1, 2, 3}));
   EXPECT_FALSE(GroupApplies(p, std::vector<u32>{0xA, 2, 0xC}));
 }
@@ -272,16 +248,13 @@ TEST(OrcaGamePatches, ToggledGroupsFollowTheirConditionBothWays)
 {
   const auto patches = Parse(FILE_WITH_TOGGLES);
   ASSERT_EQ(patches.size(), 6u);
-  Memory m = Booted(0);  // the header says none: friends play
+  Memory m = Booted(0);
   const auto toggled = [&] { return PlanGamePatches(patches, m, true); };
 
-  // Off: nothing written, the module's code stays the game's.
   PatchPlan plan = toggled();
   EXPECT_TRUE(plan.writes.empty());
   EXPECT_TRUE(plan.on.empty() && plan.off.empty() && plan.landed.empty());
 
-  // The header says an online mode: both groups land, every changed word (and only those)
-  // through the code path, which drops the JIT's copy.
   m.Write32(MODE, 0x01000000);
   plan = toggled();
   EXPECT_EQ(Addresses(plan.on), (std::vector<u32>{0x81001000, 0x81001010}));
@@ -296,14 +269,10 @@ TEST(OrcaGamePatches, ToggledGroupsFollowTheirConditionBothWays)
   for (const PatchWrite& w : plan.writes)
     EXPECT_TRUE(w.code) << std::hex << w.address;
   Write(plan, m);
-  // Idempotent: the same boundary again (a re-run from the snapshot saved there) writes nothing.
   EXPECT_TRUE(toggled().writes.empty());
-  // Another online mode: still on.
   m.Write32(MODE, 0x02000000);
   EXPECT_TRUE(toggled().writes.empty());
 
-  // The header goes back to none (the opponent left a casual game): the originals come back, the
-  // same way.
   m.Write32(MODE, 0);
   plan = toggled();
   EXPECT_EQ(Addresses(plan.off), (std::vector<u32>{0x81001000, 0x81001010}));
@@ -319,7 +288,6 @@ TEST(OrcaGamePatches, ToggledGroupsFollowTheirConditionBothWays)
   EXPECT_EQ(m.Read32(0x81001010), 0x41820010u);
   EXPECT_TRUE(toggled().writes.empty());
 
-  // A header that isn't the block's (no magic) never holds, whatever its mode says.
   m.Write32(MAGIC, 0);
   m.Write32(MODE, 0x01000000);
   EXPECT_TRUE(toggled().writes.empty());
@@ -327,7 +295,6 @@ TEST(OrcaGamePatches, ToggledGroupsFollowTheirConditionBothWays)
   Write(toggled(), m);
   EXPECT_EQ(m.Read32(0x81001000), 0x4800007Cu);
 
-  // The condition's memory unmapped: it doesn't hold, so the groups go back off.
   m.Unmap(MODE);
   plan = toggled();
   EXPECT_EQ(Addresses(plan.off), (std::vector<u32>{0x81001000, 0x81001010}));
@@ -335,20 +302,17 @@ TEST(OrcaGamePatches, ToggledGroupsFollowTheirConditionBothWays)
   m.Write32(MODE, 0x01000000);
   Write(toggled(), m);
 
-  // The module unloaded while on, something else in its memory: left alone both ways.
   m.Write32(0x81001000, 0xDEADBEEF);
   m.Write32(0x81001004, 0xDEADBEEF);
   m.Write32(0x81001010, 0xDEADBEEF);
   EXPECT_TRUE(toggled().writes.empty());
   m.Write32(MODE, 0);
   EXPECT_TRUE(toggled().writes.empty());
-  // Loaded again (the game's own words) while the condition holds: it lands again, whole.
   m.Write32(MODE, 0x01000000);
   m.Write32(0x81001000, 0x4082007C);
   m.Write32(0x81001004, 0x38600001);
   m.Write32(0x81001010, 0x41820010);
   EXPECT_EQ(Addresses(toggled().on), (std::vector<u32>{0x81001000, 0x81001010}));
-  // The guard differs (not the module the group was written for): the flip never lands.
   m.Write32(0x81001004, 0x38600002);
   EXPECT_EQ(Addresses(toggled().on), (std::vector<u32>{0x81001010}));
 }
@@ -357,8 +321,6 @@ TEST(OrcaGamePatches, EachPassTakesItsOwnKind)
 {
   const auto patches = Parse(FILE_WITH_TOGGLES);
   Memory m = Booted(0x01000000);
-  // The first pass (the groups that land once and the `*` lines) never touches a toggled group,
-  // whatever the condition says.
   PatchPlan plan = PlanGamePatches(patches, m, false);
   EXPECT_EQ(Addresses(plan.landed), (std::vector<u32>{0x81002000}));
   EXPECT_EQ(plan.landed[0].words, 1u);
@@ -366,19 +328,17 @@ TEST(OrcaGamePatches, EachPassTakesItsOwnKind)
   ASSERT_EQ(plan.writes.size(), 2u);
   EXPECT_EQ(plan.writes[0].address, 0x81002000u);
   EXPECT_EQ(plan.writes[0].value, 0x22222222u);
-  EXPECT_TRUE(plan.writes[0].code);  // guarded: through the memory-patch path
+  EXPECT_TRUE(plan.writes[0].code);
   EXPECT_EQ(plan.writes[1].address, 0x9017B640u);
   EXPECT_EQ(plan.writes[1].value, 0x3FFu);
-  EXPECT_FALSE(plan.writes[1].code);  // data: a plain write
+  EXPECT_FALSE(plan.writes[1].code);
   Write(plan, m);
-  // The guarded group has landed for good; the `*` line is written again only when it differs.
   EXPECT_TRUE(PlanGamePatches(patches, m, false).writes.empty());
   m.Write32(0x9017B640, 7);
   plan = PlanGamePatches(patches, m, false);
   ASSERT_EQ(plan.writes.size(), 1u);
   EXPECT_EQ(plan.writes[0].address, 0x9017B640u);
   EXPECT_TRUE(plan.landed.empty());
-  // The toggled pass never touches the other kinds.
   m = Booted(0x01000000);
   plan = PlanGamePatches(patches, m, true);
   for (const PatchWrite& w : plan.writes)
@@ -388,9 +348,6 @@ TEST(OrcaGamePatches, EachPassTakesItsOwnKind)
 
 TEST(OrcaGamePatches, TogglesArePureFunctionsOfMemory)
 {
-  // Two machines at the same boundary: one played friends games and queue games back and forth
-  // (every toggle on and off, the module reloaded), the other loaded a keyframe holding the same
-  // bytes. Their plans are the same, frame after frame, and nothing outside memory decides them.
   const auto patches = Parse(FILE_WITH_TOGGLES);
   Memory played = Booted(0);
   for (int round = 0; round < 5; ++round)
@@ -410,7 +367,7 @@ TEST(OrcaGamePatches, TogglesArePureFunctionsOfMemory)
     SCOPED_TRACE(frame);
     if (frame == 2)
     {
-      played.Write32(MODE, 0);  // what both games' own code wrote this frame
+      played.Write32(MODE, 0);
       keyframe.Write32(MODE, 0);
     }
     for (const bool toggled : {false, true})
@@ -431,11 +388,9 @@ TEST(OrcaGamePatches, TogglesArePureFunctionsOfMemory)
       Write(b, keyframe);
     }
     EXPECT_EQ(played.bytes, keyframe.bytes);
-    // A re-run of this boundary, from what was saved here: nothing new.
     EXPECT_TRUE(PlanGamePatches(patches, played, false).writes.empty());
     EXPECT_TRUE(PlanGamePatches(patches, played, true).writes.empty());
   }
-  // Planning only reads.
   const auto before = played.bytes;
   played.Write32(MODE, 0x01000000);
   const auto with_mode = played.bytes;
@@ -450,18 +405,15 @@ namespace
 std::vector<GamePatch> Shipped(const char* name)
 {
   const std::string path =
-      (std::filesystem::path(__FILE__).parent_path() / "../../../../Data/Sys/Orca" / name).string();
+      (std::filesystem::path(__FILE__).parent_path() / "../../../../Data/Sys/Subspace" / name).string();
   std::string text;
   EXPECT_TRUE(File::ReadFileToString(path, text)) << path;
   return Parse(text);
 }
-}  // namespace
+}
 
 TEST(OrcaGamePatches, TheShippedFilesLandAsBefore)
 {
-  // On memory holding every guarded line's original (and 0 under each `*` line), the first pass
-  // writes exactly what each group's GroupApplies says. Every toggled group in the shipped files is
-  // guarded, and its condition reads a word outside what the file writes.
   for (const char* name : {"RSBE01.patches", "PPLUS32.patches"})
   {
     SCOPED_TRACE(name);

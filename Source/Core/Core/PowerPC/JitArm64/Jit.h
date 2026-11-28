@@ -189,10 +189,6 @@ public:
 
   bool IsFPRStoreSafe(size_t guest_reg) const;
 
-  // Orca: whether this CPU's FPCR flushes denormal inputs in the guest's non-IEEE mode, in an Orca
-  // session: an ARM CPU without FEAT_AFP (Apple M1 to M3), where FZ flushes inputs and outputs and
-  // AH does nothing, or one with ORCA_TEST_NO_AFP. Jit64 and an AFP CPU (FZ and AH, FIZ clear)
-  // flush outputs only.
   bool DenormalInputsFlushed() const;
   // Whether a guest register held as a single may go into a single-precision operation: always,
   // unless DenormalInputsFlushed and the value could be a denormal single (one no arithmetic
@@ -399,8 +395,6 @@ protected:
   bool MultiplyImmediate(u32 imm, int a, int d, bool rc);
 
   void SetFPRFIfNeeded(bool single, Arm64Gen::ARM64Reg reg);
-  // Orca: fneg/fabs/fnabs and the final negation of fnmadd/fnmsub, as bitwise sign operations
-  // (JitArm64_FloatingPoint.cpp).
   enum class SignOp
   {
     Negate,
@@ -413,8 +407,6 @@ protected:
   void EmitSignOp(SignOp op, u8 size, Arm64Gen::ARM64Reg Vd, Arm64Gen::ARM64Reg Vn, bool packed,
                   Arm64Gen::ARM64Reg scratch_gpr, Arm64Gen::ARM64Reg scratch_fpr);
   void Force25BitPrecision(Arm64Gen::ARM64Reg output, Arm64Gen::ARM64Reg input);
-  // Orca: PowerPC's default NaN (positive, quiet, no payload: 0x7FC00000 as a single,
-  // 0x7FF8000000000000 as a double) into Vd's low lane, without a GPR. Vd's other lanes change.
   void EmitPPCDefaultNaN(Arm64Gen::ARM64Reg Vd, bool single);
 
   // <Fast path fault location, slow path handler location>

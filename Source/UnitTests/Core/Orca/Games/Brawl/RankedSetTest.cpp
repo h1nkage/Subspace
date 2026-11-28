@@ -1,9 +1,6 @@
 // Copyright 2026 YouGame
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Ranked sets (ORCA.md "Ranked sets"): the match block's layout, the set followed in the game's
-// memory, each ruleset's verdict, and the tracker's reports from the block.
-
 #include <array>
 #include <map>
 #include <vector>
@@ -53,7 +50,6 @@ public:
   int writes = 0;
 };
 
-// The block as the game leaves it before Orca writes it: dead code, not zeros.
 FakeMemory Block()
 {
   FakeMemory m;
@@ -62,7 +58,6 @@ FakeMemory Block()
   return m;
 }
 
-// A 1v1's result block: two humans on ports 1 and 2.
 ResultBlock Result(int place0, int place1, int stocks0 = 1, int stocks1 = 0, int character0 = 0,
                    int character1 = 3)
 {
@@ -83,7 +78,6 @@ RankedSet::Facts At(Scene scene)
   return f;
 }
 
-// One whole game through Step: CSS, between, the fight, between, the results screen.
 SetState Play(SetState s, Ruleset ruleset, u32 start, const ResultBlock& result,
               const std::vector<RankedSet::Live>& live = {}, bool sudden = false)
 {
@@ -108,7 +102,6 @@ SetState Play(SetState s, Ruleset ruleset, u32 start, const ResultBlock& result,
   results.block = result;
   results.decision = static_cast<u8>(result.decision);
   s = RankedSet::Step(s, ruleset, results, frame++);
-  // The results screen stays: nothing more is recorded.
   s = RankedSet::Step(s, ruleset, results, frame++);
   return s;
 }
@@ -125,7 +118,6 @@ RankedSet::Live LiveAt(bool time_up, u8 stocks0, u8 stocks1, u16 percent0, u16 p
   return l;
 }
 
-// `grabs` ledge grabs by `port`: on the ledge, off it, again.
 std::vector<RankedSet::Live> Grabs(int port, int grabs)
 {
   std::vector<RankedSet::Live> out;
@@ -136,7 +128,7 @@ std::vector<RankedSet::Live> Grabs(int port, int grabs)
   }
   return out;
 }
-}  // namespace
+}
 
 TEST(OrcaSetBlock, HeaderRoundTripsAndStartsAFreshSet)
 {
@@ -146,14 +138,12 @@ TEST(OrcaSetBlock, HeaderRoundTripsAndStartsAFreshSet)
   ASSERT_TRUE(SetBlock::ReadHeader(m));
   EXPECT_EQ(*SetBlock::ReadHeader(m), (SetBlock::Header{Mode::Ranked, Ruleset::Brawl}));
   EXPECT_EQ(SetBlock::ReadSet(m), SetState{});
-  // The same header again writes nothing and keeps the set.
   SetState s;
   s.games = 1;
   s.wins = {1, 0};
   SetBlock::WriteSet(m, s);
   EXPECT_EQ(SetBlock::WriteHeader(m, {Mode::Ranked, Ruleset::Brawl}), 0);
   EXPECT_EQ(SetBlock::ReadSet(m), s);
-  // Another mode starts a fresh set.
   EXPECT_GT(SetBlock::WriteHeader(m, {Mode::Casual, Ruleset::Brawl}), 0);
   EXPECT_EQ(SetBlock::ReadSet(m), SetState{});
   EXPECT_GT(SetBlock::Clear(m), 0);
@@ -183,7 +173,6 @@ TEST(OrcaSetBlock, SetRoundTripsAndWritesOnlyWhatChanged)
   EXPECT_EQ(m.writes, 0);
   EXPECT_EQ(s.StagesWonBy(0), u64(1) << 2);
   EXPECT_EQ(s.StagesWonBy(1), u64(1) << 0x1F);
-  // Nothing outside the block.
   for (const auto& [a, v] : m.bytes)
     EXPECT_TRUE(a >= SetBlock::BASE && a < SetBlock::BASE + SetBlock::SIZE);
 }
@@ -208,7 +197,6 @@ TEST(OrcaRankedSet, BestOfThree)
   EXPECT_EQ(s.done, 1);
   EXPECT_EQ(s.winner, 1);
   EXPECT_EQ(s.games, 3);
-  // A finished set follows nothing more.
   const SetState after = Play(s, Ruleset::Brawl, 13000, Result(0, 1));
   EXPECT_EQ(after.games, 3);
   EXPECT_FALSE(after.fight);
@@ -226,7 +214,6 @@ TEST(OrcaRankedSet, VoidGamesAreNotRecorded)
   quit.decision = 9;
   s = Play(s, Ruleset::Brawl, 2000, quit);
   EXPECT_EQ(s.games, 0);
-  // A fight left for the menus without its results screen.
   s = RankedSet::Step(s, Ruleset::Brawl, At(Scene::Fight), 3000);
   EXPECT_TRUE(s.fight);
   s = RankedSet::Step(s, Ruleset::Brawl, At(Scene::Other), 3001);
@@ -236,7 +223,6 @@ TEST(OrcaRankedSet, VoidGamesAreNotRecorded)
 
 TEST(OrcaRankedSet, BrawlTimeOutLedgeLimitThenStocksThenPercent)
 {
-  // Port 1 grabs the ledge 31 times (over 30): port 2 wins although port 1 had more stocks.
   std::vector<RankedSet::Live> live = Grabs(0, 31);
   live.push_back(LiveAt(true, 3, 2, 10, 20));
   SetState s = Play({}, Ruleset::Brawl, 1000, Result(0, 1, 3, 2), live);
@@ -244,13 +230,11 @@ TEST(OrcaRankedSet, BrawlTimeOutLedgeLimitThenStocksThenPercent)
   EXPECT_EQ(s.records[0].winner, 1);
   EXPECT_EQ(s.records[0].how, How::Ledge);
   EXPECT_TRUE(s.records[0].timeout);
-  // 30 is within the limit: stocks decide.
   live = Grabs(0, 30);
   live.push_back(LiveAt(true, 3, 2, 10, 20));
   s = Play({}, Ruleset::Brawl, 1000, Result(0, 1, 3, 2), live);
   EXPECT_EQ(s.records[0].winner, 0);
   EXPECT_EQ(s.records[0].how, How::Stocks);
-  // Meta Knight's limit is 20.
   live = Grabs(0, 21);
   live.push_back(LiveAt(true, 3, 2, 10, 20));
   s = Play({}, Ruleset::Brawl, 1000, Result(0, 1, 3, 2, static_cast<u8>(Rulesets::Brawl2025().meta_knight)), live);
@@ -261,7 +245,6 @@ TEST(OrcaRankedSet, BrawlTimeOutLedgeLimitThenStocksThenPercent)
   s = Play({}, Ruleset::Brawl, 1000, Result(0, 1, 3, 2, 0x18), live);
   EXPECT_EQ(s.records[0].how, How::Stocks);
   EXPECT_EQ(s.records[0].winner, 0);
-  // Both over: the limit is ignored.
   live = Grabs(0, 40);
   for (const auto& l : Grabs(1, 40))
     live.push_back(l);
@@ -269,13 +252,11 @@ TEST(OrcaRankedSet, BrawlTimeOutLedgeLimitThenStocksThenPercent)
   s = Play({}, Ruleset::Brawl, 1000, Result(1, 0, 2, 3), live);
   EXPECT_EQ(s.records[0].how, How::Stocks);
   EXPECT_EQ(s.records[0].winner, 1);
-  // Level on stocks at time-up (sudden death follows, and is ignored): lower percent wins.
   live = {LiveAt(false, 2, 2, 10, 20), LiveAt(true, 2, 2, 88, 40)};
   s = Play({}, Ruleset::Brawl, 1000, Result(0, 1, 1, 0), live, true);
   EXPECT_EQ(s.records[0].how, How::Percent);
   EXPECT_EQ(s.records[0].winner, 1);
   EXPECT_EQ(s.wins, (std::array<u8, 2>{0, 1}));
-  // What happens after time-up never changes the snapshot.
   live = {LiveAt(true, 2, 2, 40, 88), LiveAt(true, 1, 2, 300, 300)};
   s = Play({}, Ruleset::Brawl, 1000, Result(1, 0, 0, 1), live, true);
   EXPECT_EQ(s.records[0].how, How::Percent);
@@ -284,7 +265,6 @@ TEST(OrcaRankedSet, BrawlTimeOutLedgeLimitThenStocksThenPercent)
 
 TEST(OrcaRankedSet, BrawlTieMeansATiebreakGame)
 {
-  // Level on everything at time-up.
   std::vector<RankedSet::Live> live = {LiveAt(true, 2, 2, 50, 50)};
   SetState s = Play({}, Ruleset::Brawl, 1000, Result(0, 1, 1, 0), live, true);
   EXPECT_EQ(s.games, 1);
@@ -294,7 +274,6 @@ TEST(OrcaRankedSet, BrawlTieMeansATiebreakGame)
   EXPECT_EQ(s.tb_streak, 1);
   EXPECT_EQ(s.wins, (std::array<u8, 2>{0, 0}));
   EXPECT_EQ(s.GameNumber(), 1);
-  // The tiebreak game is played with 1 stock and 3:00.
   FakeMemory m;
   for (u32 a : {0x805A00E0u, 0x805A00E1u, 0x805A00E2u, 0x805A00E3u})
     m.bytes[a] = 0;
@@ -309,7 +288,6 @@ TEST(OrcaRankedSet, BrawlTieMeansATiebreakGame)
   EXPECT_EQ(m.Read8(0x9017F364), 1);
   EXPECT_EQ(m.Read8(0x9017F368), 3);
   EXPECT_EQ(RankedSet::WriteSetRules(m, s, Rulesets::Brawl2025()), 0);
-  // Exactly 10 grabs are within the tiebreak limit; 11 are over it.
   live = Grabs(1, 10);
   live.push_back(LiveAt(true, 1, 1, 50, 60));
   const SetState within = Play(s, Ruleset::Brawl, 5000, Result(0, 1, 1, 1), live);
@@ -329,11 +307,9 @@ TEST(OrcaRankedSet, BrawlTieMeansATiebreakGame)
   EXPECT_EQ(RankedSet::WriteSetRules(m, t, Rulesets::Brawl2025()), 2);
   EXPECT_EQ(m.Read8(0x9017F364), 3);
   EXPECT_EQ(m.Read8(0x9017F368), 8);
-  // A simultaneous last-stock loss (sudden death, no time-up): a tie as well.
   SetState u = Play({}, Ruleset::Brawl, 1000, Result(0, 1, 1, 0), {}, true);
   EXPECT_EQ(u.records[0].how, How::Tie);
   EXPECT_TRUE(u.tiebreak);
-  // Five ties in a row void the set.
   SetState v;
   for (int i = 0; i < Rulesets::Brawl2025().void_after_ties; ++i)
     v = Play(v, Ruleset::Brawl, 1000 + 1000 * i, Result(0, 1, 1, 0), {}, true);
@@ -344,7 +320,6 @@ TEST(OrcaRankedSet, BrawlTieMeansATiebreakGame)
 
 TEST(OrcaRankedSet, BrawlSuddenDeathInTheSameFightScene)
 {
-  // As a level time-up leaves the result info: two players tied for first (+0x0F), decision 1.
   ResultBlock level = Result(0, 1, 1, 0);
   level.end = 2;
   level.decision = 1;
@@ -356,9 +331,6 @@ TEST(OrcaRankedSet, BrawlSuddenDeathInTheSameFightScene)
     EXPECT_EQ(s.records[0].how, How::Percent);
     EXPECT_EQ(s.records[0].winner, 1);
   }
-  // Brawl's time-up sudden death stays in scMelee: the fighters are gone for a few frames, then
-  // rebuilt with 1 stock each. Level stocks at time-up: the lower percent wins, whoever wins the
-  // sudden death; and the ledge grabs after time-up don't count.
   const RankedSet::Live gone{};
   std::vector<RankedSet::Live> live = {LiveAt(false, 2, 2, 10, 20), LiveAt(true, 2, 2, 30, 20),
                                        gone, gone, LiveAt(false, 1, 1, 300, 300)};
@@ -368,17 +340,14 @@ TEST(OrcaRankedSet, BrawlSuddenDeathInTheSameFightScene)
   EXPECT_EQ(s.records[0].how, How::Percent);
   EXPECT_EQ(s.records[0].winner, 1);
   EXPECT_EQ(s.records[0].ledge, (std::array<u8, 2>{0, 0}));
-  // A simultaneous last-stock loss: the fighters rebuilt with no time-up seen, a tie.
   live = {LiveAt(false, 1, 1, 80, 90), gone, LiveAt(false, 1, 1, 300, 300)};
   s = Play({}, Ruleset::Brawl, 1000, Result(0, 1, 1, 0), live);
   EXPECT_EQ(s.records[0].how, How::Tie);
   EXPECT_TRUE(s.tiebreak);
-  // The fighters gone at the fight's end (no sudden death): the results screen's winner.
   live = {LiveAt(false, 1, 1, 80, 90), gone, gone};
   s = Play({}, Ruleset::Brawl, 1000, Result(1, 0, 0, 1), live);
   EXPECT_EQ(s.records[0].how, How::Results);
   EXPECT_EQ(s.records[0].winner, 1);
-  // Before the fighters are first read (the fight's first frames), nothing is gone.
   live = {gone, gone, LiveAt(false, 3, 3, 0, 0), gone};
   s = Play({}, Ruleset::Brawl, 1000, Result(0, 1, 1, 0), live);
   EXPECT_EQ(s.records[0].how, How::Results);
@@ -386,7 +355,6 @@ TEST(OrcaRankedSet, BrawlSuddenDeathInTheSameFightScene)
 
 TEST(OrcaRankedSet, BrawlTimeOutWithoutTheClockUsesTheGamesStocks)
 {
-  // The game's own time-up (decision 1) with no live reading: more stocks, as the result info says.
   ResultBlock r = Result(1, 0, 1, 2);
   r.decision = 1;
   SetState s = Play({}, Ruleset::Brawl, 1000, r);
@@ -405,18 +373,12 @@ TEST(OrcaRankedSet, ProjectPlusKeepsItsOwnTimeOutRules)
   EXPECT_EQ(s.records[0].how, How::Results);
   EXPECT_EQ(s.records[0].winner, 0);
   EXPECT_FALSE(s.tiebreak);
-  // The live fight is read only to see the fighters in (the game began): no ledge grabs or time-up
-  // snapshot are counted.
   EXPECT_EQ(s.records[0].ledge, (std::array<u8, 2>{0, 0}));
-  // A tie (overtime should have prevented it) is recorded without a tiebreak game.
   s = Play({}, Ruleset::PPlus, 1000, Result(0, 0, 1, 1));
   EXPECT_EQ(s.records[0].how, How::Tie);
   EXPECT_FALSE(s.tiebreak);
 }
 
-// A ranked header whose ruleset byte names no ruleset (Orca never writes one) keeps the tracker's
-// behaviour from before rulesets were data: the results screen decides a time-out, two wins take the
-// set, five ties void it, no tiebreak game, and ledge grabs aren't counted.
 TEST(OrcaRankedSet, NoRulesetKeepsTheOldDefaults)
 {
   std::vector<RankedSet::Live> live = Grabs(0, 40);
@@ -440,9 +402,6 @@ TEST(OrcaRankedSet, NoRulesetKeepsTheOldDefaults)
   EXPECT_EQ(t.done, 2);
 }
 
-// A ranked game begins once its fighters are in (FIGHT_SEEN), not at the fight scene's first frame:
-// the stage's loading image comes first (Brawl to frame ~169, Project+ to 27), and a crash or a
-// stall there leaves the set void (service docs/ORCA_ONLINE_UX.md "3B leaving mid-game").
 TEST(OrcaRankedSet, AGameBeginsWhenItsFightersAreIn)
 {
   for (const Ruleset ruleset : {Ruleset::Brawl, Ruleset::PPlus})
@@ -450,8 +409,6 @@ TEST(OrcaRankedSet, AGameBeginsWhenItsFightersAreIn)
     SCOPED_TRACE(static_cast<int>(ruleset));
     SetState s;
     s = RankedSet::Step(s, ruleset, At(Scene::Between), 99);
-    // The loading image: the fight is followed from its first frame, but nobody is in yet, read or
-    // not.
     RankedSet::Facts loading = At(Scene::Fight);
     s = RankedSet::Step(s, ruleset, loading, 100);
     loading.live_read = true;
@@ -460,14 +417,12 @@ TEST(OrcaRankedSet, AGameBeginsWhenItsFightersAreIn)
     EXPECT_TRUE(s.fight);
     EXPECT_EQ(s.fight_start, 100u);
     EXPECT_FALSE(s.fight_flags & SetBlock::FIGHT_SEEN);
-    // The fighters are in: the game began, still named by the fight's first frame.
     RankedSet::Facts in = At(Scene::Fight);
     in.live = LiveAt(false, 3, 3, 0, 0, true, false);
     in.live_read = true;
     s = RankedSet::Step(s, ruleset, in, 270);
     EXPECT_TRUE(s.fight_flags & SetBlock::FIGHT_SEEN);
     EXPECT_EQ(s.fight_start, 100u);
-    // They vanish (Brawl's sudden death) and come back: the same game, still begun.
     s = RankedSet::Step(s, ruleset, loading, 271);
     EXPECT_TRUE(s.fight_flags & SetBlock::FIGHT_SEEN);
     s = RankedSet::Step(s, ruleset, in, 272);
@@ -480,11 +435,9 @@ TEST(OrcaRankedSet, AGameBeginsWhenItsFightersAreIn)
     }
     else
     {
-      // Project+ counts nothing else from the live fight: its own codeset settles time-outs.
       EXPECT_EQ(s.fight_flags, SetBlock::FIGHT_SEEN);
       EXPECT_EQ(s.ledge, (std::array<u8, 2>{0, 0}));
     }
-    // A fight left without its results screen: the next one starts unbegun.
     s = RankedSet::Step(s, ruleset, At(Scene::Other), 300);
     s = RankedSet::Step(s, ruleset, At(Scene::Fight), 400);
     EXPECT_EQ(s.fight_start, 400u);
@@ -500,7 +453,6 @@ TEST(OrcaRankedSet, ScoreLine)
   s.wins = {1, 0};
   EXPECT_EQ(RankedSet::ScoreLine(s, 0), "");
   EXPECT_EQ(RankedSet::ScoreLine(s, 1), "");
-  // The results screen names the game just played: game 1's says Game 1.
   EXPECT_EQ(RankedSet::ScoreLine(s, 0, true), "Game 1 · 1–0");
   EXPECT_EQ(RankedSet::ScoreLine(s, 1, true), "Game 1 · 0–1");
   s.wins = {1, 1};
@@ -517,7 +469,6 @@ TEST(OrcaRankedSet, ScoreLine)
   EXPECT_EQ(RankedSet::ScoreLine(s, 0), "Set void · 2–1");
 }
 
-// A matchmade game's result toast: no "Game N", and the local player's score first.
 TEST(OrcaRankedSet, ResultToast)
 {
   EXPECT_EQ(RankedSet::ResultToast("won", 1, 0), "You won · 1–0");
@@ -527,8 +478,6 @@ TEST(OrcaRankedSet, ResultToast)
   EXPECT_EQ(RankedSet::ResultToast("", 0, 0), "That game didn't count");
 }
 
-// The overlay's set dots: each decided game's winner in order, a tied game skipped, then the game
-// being played next; none once the set is over.
 TEST(OrcaRankedSet, DotsFollowTheDecidedGames)
 {
   SetState s;
@@ -542,7 +491,6 @@ TEST(OrcaRankedSet, DotsFollowTheDecidedGames)
   d = RankedSet::DotsOf(s);
   EXPECT_EQ(d.games, (std::array<int, 3>{0, -1, -1}));
   EXPECT_EQ(d.current, 1);
-  // A tie, then port 2's win: the tie takes no dot.
   s.games = 3;
   s.records[1].winner = NO_PORT;
   s.records[2].winner = 1;
@@ -570,11 +518,9 @@ TEST(OrcaRankedSet, TrackerReportsTheBlocksGames)
     r.set = set;
     t.Store(frame++, r, 0);
   };
-  // The first final reading only sets what was already there.
   s = Play(s, Ruleset::Brawl, 50, Result(0, 1));
   store(s);
   EXPECT_TRUE(t.Confirm(frame, 10).empty());
-  // A game whose fight began after the opponent's plug frame (10).
   s = Play(s, Ruleset::Brawl, 2000, Result(1, 0, 0, 1));
   store(s, Scene::Results);
   store(s, Scene::Results);
@@ -587,7 +533,6 @@ TEST(OrcaRankedSet, TrackerReportsTheBlocksGames)
   EXPECT_EQ(out[0].set_done, 0);
   EXPECT_EQ(out[0].DetailJson(),
             "{\"f\":2000,\"st\":2,\"c\":[0,3],\"s\":[0,1],\"to\":0,\"k\":1,\"lg\":[0,0],\"tb\":0}");
-  // Unconfirmed readings wait.
   s = Play(s, Ruleset::Brawl, 3000, Result(0, 1));
   store(s);
   EXPECT_TRUE(t.Confirm(frame - 2, 10).empty());
@@ -596,7 +541,6 @@ TEST(OrcaRankedSet, TrackerReportsTheBlocksGames)
   EXPECT_EQ(out[0].start, 3000);
   EXPECT_EQ(out[0].set_done, 1);
   EXPECT_EQ(out[0].set_winner, 0);
-  // A tie is a draw; a fight from before the plug frame isn't reported.
   ResultsTracker t2;
   SetState a;
   Reading r;
@@ -614,9 +558,6 @@ TEST(OrcaRankedSet, TrackerReportsTheBlocksGames)
   EXPECT_EQ(out[0].how, static_cast<int>(How::Tie));
 }
 
-// A ranked game began (ORCA.md "Matchmaking and results"): once the first frame with its fighters
-// in is final, the tracker names it by the fight's first frame, the id the game's report carries,
-// so the room's game-start goes once per game.
 TEST(OrcaRankedSet, TrackerSaysWhenEachGameBegan)
 {
   ResultsTracker t;
@@ -624,8 +565,6 @@ TEST(OrcaRankedSet, TrackerSaysWhenEachGameBegan)
   int frame = 0;
   std::vector<int> starts;
   std::vector<GameResult> games;
-  // Each frame: the set block's step, its reading, and every frame up to 3 back confirmed. A fight
-  // has its fighters in unless `loading`.
   const auto run = [&](Scene scene, int frames, const ResultBlock& result = Result(0, 1),
                        bool loading = false) {
     for (int i = 0; i < frames; ++i, ++frame)
@@ -648,18 +587,14 @@ TEST(OrcaRankedSet, TrackerSaysWhenEachGameBegan)
         games.push_back(std::move(g));
     }
   };
-  // The character select, then game 1's fight from frame 23: its loading image, then the fighters
-  // in at frame 193.
   run(Scene::Other, 20);
   run(Scene::Between, 3);
   run(Scene::Fight, 170, Result(0, 1), true);
   EXPECT_TRUE(starts.empty());
   run(Scene::Fight, 3);
-  // Frame 193 is read but not final yet.
   EXPECT_TRUE(starts.empty());
   run(Scene::Fight, 1);
   EXPECT_EQ(starts, std::vector<int>{23});
-  // A whole fight with a sudden death in it is still one game (a tie: Brawl plays a tiebreak).
   run(Scene::Fight, 200);
   run(Scene::Between, 5);
   run(Scene::Fight, 30);
@@ -668,24 +603,19 @@ TEST(OrcaRankedSet, TrackerSaysWhenEachGameBegan)
   EXPECT_EQ(starts, std::vector<int>{23});
   ASSERT_EQ(games.size(), 1u);
   EXPECT_EQ(games[0].kind, GameResult::Kind::Draw);
-  // The report's id is the start's.
   EXPECT_EQ(games[0].start, 23);
-  // A fight left during its loading image (a crash or a quit at load) never began.
   run(Scene::Other, 40);
   run(Scene::Between, 3);
   run(Scene::Fight, 160, Result(0, 1), true);
   run(Scene::Other, 10);
   EXPECT_EQ(starts, std::vector<int>{23});
   EXPECT_EQ(games.size(), 1u);
-  // Game 2 begins; leaving it for the menus without its results screen records no game, but it
-  // had begun.
   run(Scene::Between, 3);
   const int second = frame;
   run(Scene::Fight, 60);
   run(Scene::Other, 10);
   EXPECT_EQ(starts, (std::vector<int>{23, second}));
   EXPECT_EQ(games.size(), 1u);
-  // Games 3 and 4 to the set's end; nothing begins after it.
   std::vector<int> want{23, second};
   for (int i = 0; i < 2; ++i)
   {
@@ -721,8 +651,6 @@ TEST(OrcaRankedSet, AGameBeginsOnlyOnFinalFramesAfterThePlugFrame)
   };
   Reading select;
   select.set = SetState{};
-  // On guessed inputs the fight began at frame 10; the real inputs put it at 13. Only the re-run's
-  // start is ever named.
   {
     ResultsTracker t;
     std::vector<int> starts;
@@ -737,15 +665,12 @@ TEST(OrcaRankedSet, AGameBeginsOnlyOnFinalFramesAfterThePlugFrame)
       t.Store(f, f < 13 ? select : fight_from(13), 0);
     t.Confirm(19, -1, &starts);
     EXPECT_EQ(starts, std::vector<int>{13});
-    // A final frame is never read again, and the same fight is not named twice.
     t.Store(15, fight_from(10), 0);
     for (int f = 20; f < 30; ++f)
       t.Store(f, fight_from(13), 0);
     t.Confirm(29, -1, &starts);
     EXPECT_EQ(starts, std::vector<int>{13});
   }
-  // As the reports: a fight begun before the opponent plugged in (500), or right at the frame after
-  // it, never counts; one begun later does.
   {
     ResultsTracker t;
     std::vector<int> starts;
@@ -758,8 +683,6 @@ TEST(OrcaRankedSet, AGameBeginsOnlyOnFinalFramesAfterThePlugFrame)
     t.Confirm(f, 500, &starts);
     EXPECT_EQ(starts, std::vector<int>{502});
   }
-  // A keyframe loaded mid-fight (a resync): the fight began before this player's plug frame, so it
-  // is not named again.
   {
     ResultsTracker t;
     std::vector<int> starts;
@@ -772,8 +695,6 @@ TEST(OrcaRankedSet, AGameBeginsOnlyOnFinalFramesAfterThePlugFrame)
     t.Confirm(59, 50, &starts);
     EXPECT_EQ(starts, std::vector<int>{30});
   }
-  // A fight still loading (fighters not in) is named only once they come in, by its first frame;
-  // one whose fighters only came in on guessed inputs is not named.
   {
     ResultsTracker t;
     std::vector<int> starts;
@@ -794,7 +715,6 @@ TEST(OrcaRankedSet, AGameBeginsOnlyOnFinalFramesAfterThePlugFrame)
     u.Confirm(39, -1, &none);
     EXPECT_TRUE(none.empty());
   }
-  // Confirming in steps or at once names the same starts.
   {
     ResultsTracker a, b;
     std::vector<int> in_steps, at_once;
@@ -811,8 +731,6 @@ TEST(OrcaRankedSet, AGameBeginsOnlyOnFinalFramesAfterThePlugFrame)
     EXPECT_EQ(in_steps, (std::vector<int>{20, 120}));
     EXPECT_EQ(in_steps, at_once);
   }
-  // A join rebuilt from an input replay (Rebase) mid-fight: that fight began before this machine
-  // was there, whatever the plug frame; the next one is named.
   {
     ResultsTracker t;
     std::vector<int> starts;

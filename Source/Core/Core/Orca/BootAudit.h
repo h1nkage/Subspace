@@ -49,8 +49,6 @@ struct FileToVerify
   std::optional<u64> expected_size;
 };
 
-// A cache hit permits offline boot only. Every start hashes every file on this worker, including
-// hits. Online callers must Wait successfully before doing any room, queue or ticket work.
 class Audit final
 {
 public:
@@ -70,12 +68,9 @@ public:
   ~Audit();
   bool CacheHit() const { return m_cache_hit; }
   bool Wait(const std::atomic<bool>* stop = nullptr);
-  // Cancellation never passes, reports a mismatch or changes cache records.
   void Cancel();
   std::string Error() const;
   void ReportFailure();
-  // Install after BootCore returns. A failure that already completed is delivered immediately.
-  // The handler must schedule host work, never stop the CPU from the hash worker.
   void OnFailure(std::function<void()> handler);
 
 private:
@@ -99,13 +94,9 @@ private:
   std::thread m_worker;
 };
 
-// Capture the session audit on the calling thread, before starting background work.
 std::shared_ptr<Audit> SessionAudit();
 bool WaitForOnline(const std::shared_ptr<Audit>& audit, const std::atomic<bool>* stop = nullptr);
-// Request cancellation before joining the CPU or restoring configuration.
 void CancelSession();
 
-// Called after Core::Init succeeds, for every frontend. Failed warm audits end this session on
-// the host thread, including failures completed during core initialization.
 void WatchSession(const std::shared_ptr<Audit>& audit);
-}  // namespace Orca::BootAudit
+}

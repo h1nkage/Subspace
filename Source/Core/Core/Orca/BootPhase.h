@@ -13,7 +13,6 @@
 
 namespace Orca::BootPhase
 {
-// Fixed names: no caller-provided strings, allocations, or protocol line injection.
 enum class Phase
 {
   Main,
@@ -50,10 +49,7 @@ public:
   explicit Clock(std::FILE* output, Time::time_point start = Time::now());
   void SetOutput(std::FILE* output);
   void Mark(Phase phase);
-  // Finish and emit the guest counters in the same critical section, once.
-  // Frames are the presented unique XFB count since console boot (including a launcher).
   void FirstFrame(std::uint64_t frames, std::size_t jit_blocks);
-  // Replay early marks to Dolphin's logger once UICommon has initialized it.
   void LogPending();
 
 private:
@@ -84,10 +80,9 @@ private:
   bool m_summary_logged = false;
 };
 
-// Start at the first statement of main (wmain on Windows). Never resets in this process.
 void Start();
 void SetOutput(std::FILE* output);
 void Mark(Phase phase);
 void FirstFrame(std::uint64_t frames, std::size_t jit_blocks);
 void LogPending();
-}  // namespace Orca::BootPhase
+}

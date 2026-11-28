@@ -37,7 +37,7 @@ void OneLine(Line& line, std::string_view value)
   for (const char c : value)
     line << (static_cast<unsigned char>(c) < 32 ? std::string_view(" ") : std::string_view(&c, 1));
 }
-}  // namespace
+}
 
 bool SampleDue(Clock::time_point now, std::optional<Clock::time_point> last, bool force)
 {
@@ -160,7 +160,7 @@ std::array<char, 64> s_scene{'u', 'n', 'k', 'n', 'o', 'w', 'n'};
 std::optional<u64> s_scene_frame;
 std::atomic<int> s_frame{-1};
 std::array<std::atomic<u32>, 4> s_shaders{};
-}  // namespace
+}
 
 void Log(const char* line)
 {
@@ -264,4 +264,4 @@ void LogRender(Render render)
   Log(text);
 }
 #endif
-}  // namespace Orca::GpuDiagnostics
+}

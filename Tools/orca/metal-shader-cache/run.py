@@ -50,7 +50,7 @@ for arm, source in [('BASE', args.base_app), ('NEW', args.new_app)]:
     bundle = f'org.subspace.orca.shaderbench.{namespace}.{arm.lower()}'
     data.update(CFBundleIdentifier=bundle, CFBundleDisplayName='AGENT TEST Orca', CFBundleName='AGENT TEST Orca')
     plist.write_bytes(plistlib.dumps(data))
-    profile = app / 'Contents/Resources/Sys/Orca/RSBE01.ini'
+    profile = app / 'Contents/Resources/Sys/Subspace/RSBE01.ini'
     profile.write_text(profile.read_text().replace('[Profile]\n', '[Profile]\nTitle = AGENT TEST Brawl shader cache\n', 1))
     user = arm_dir / 'user'
     for folder in ('home', 'tmp', 'Cache', 'Config'):

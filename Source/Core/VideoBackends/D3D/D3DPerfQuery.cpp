@@ -111,8 +111,6 @@ void PerfQuery::FlushOne()
   {
     // TODO: Might cause us to be stuck in an infinite loop!
     hr = D3D::context->GetData(entry.query.Get(), &result, sizeof(result), 0);
-    // Orca: a lost device answers DXGI_ERROR_DEVICE_REMOVED forever; the count is 0 while the run
-    // stops (D3DCommon/DeviceLost.h). S_FALSE (not ready yet) is no failure.
     if (FAILED(hr))
     {
       D3DCommon::CheckDeviceLost(hr, "a query");

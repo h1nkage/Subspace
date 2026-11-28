@@ -19,7 +19,6 @@ using Common::Log::LogManager;
 using Common::Log::LogType;
 using Orca::BootLogs::EndAtFirstFrame;
 
-// A layer kept in memory only: Logger.ini (Base) and the command line.
 class MemoryLayer final : public Config::ConfigLayerLoader
 {
 public:
@@ -33,8 +32,6 @@ Config::Info<bool> Category(const char* name)
   return {{Config::System::Logger, "Logs", name}, false};
 }
 
-// Logger.ini and the command line as a test gives them; then the log manager reads them, as at
-// Orca's start. Its log file goes to a folder of the test's own.
 class OrcaBootLogs : public testing::Test
 {
 protected:
@@ -68,12 +65,10 @@ protected:
 private:
   std::string m_old_user, m_dir;
 };
-}  // namespace
+}
 
 TEST_F(OrcaBootLogs, TheAppsBootLogsEndAtTheFirstFrame)
 {
-  // The app's BOOT_DIAG_ARGS, over a Logger.ini with every category off. Its MEMMAP names no
-  // category (that one's key is MI), so it turns nothing on.
   for (const char* name : {"OSREPORT", "IOS", "IOS_SD", "MEMMAP"})
   {
     LoggerIni(name, false);
@@ -87,9 +82,7 @@ TEST_F(OrcaBootLogs, TheAppsBootLogsEndAtTheFirstFrame)
   EXPECT_EQ(EndAtFirstFrame(), "OSREPORT, IOS, IOS_SD");
   for (const LogType type : Orca::BootLogs::TYPES)
     EXPECT_FALSE(logs.IsEnabled(type)) << logs.GetShortName(type);
-  // Anything else the command line turned on stays on.
   EXPECT_TRUE(logs.IsEnabled(LogType::ROLLBACK));
-  // Once is all it does.
   EXPECT_EQ(EndAtFirstFrame(), "");
 }
 

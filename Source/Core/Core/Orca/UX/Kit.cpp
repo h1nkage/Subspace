@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <iterator>
 #include <string_view>
 #include <atomic>
 #include <cfloat>
@@ -21,8 +22,10 @@
 
 #include <fmt/format.h>
 
+#include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
 #include "Core/Orca/UX/GameFont.h"
+#include "Core/Orca/UX/NameRaster.h"
 #include "Core/Orca/UX/Overlay.h"
 #include "DiscIO/DiscExtractor.h"
 #include "DiscIO/Filesystem.h"
@@ -37,10 +40,9 @@ namespace Orca::UX::Kit
 namespace
 {
 constexpr int FACES = 2;
-// Font files on the disc (Project+ uses Brawl's unchanged).
 constexpr std::array<const char*, FACES> FONT_FILES = {
-    "system/font/font_latin1.arc",  // Body: rounded sans, LZ77-compressed
-    "system/font/font_hira.brfnt",  // Heavy: display face
+    "system/font/font_latin1.arc",
+    "system/font/font_hira.brfnt",
 };
 constexpr const char* GAME_ID = "RSBE01";
 constexpr int ATLAS_LEVELS = 4;
@@ -50,41 +52,58 @@ std::string s_disc;
 bool s_started = false;
 std::thread s_reader;
 std::atomic<bool> s_read{false};
-std::array<std::optional<GameFont::Atlas>, FACES> s_read_atlases;  // under s_lock
+std::array<std::optional<GameFont::Atlas>, FACES> s_read_atlases;
 
-// Video thread only: each face's atlas on the GPU, freed by ReleaseGpu as the backend shuts down.
-// A texture still here from a backend that went without it is leaked, since its device is gone.
 struct GpuFace
 {
   const AbstractGfx* gfx = nullptr;
   bool tried = false;
   std::unique_ptr<AbstractTexture> texture;
-  GameFont::Atlas atlas;  // glyphs and metrics only, no pixels
+  GameFont::Atlas atlas;
 };
 std::array<GpuFace, FACES> s_gpu;
-std::atomic<int> s_faces_ready{0};  // bit per face
+std::atomic<int> s_faces_ready{0};
 std::atomic<Look> s_look{Look::Brawl};
 
-// Subspace: the connection lamp is Brawl's own Wi-Fi signal lamp (MenWifiSignal05 poor, 03 OK,
-// 01 good, from the friend list's menu file), read from the player's disc on the font thread, so
-// it is the game's art without Subspace shipping it. Without it, no lamp is drawn.
 constexpr const char* SIGNAL_FILE = "menu/wifi/wifi_friend_list_en.brres";
-constexpr int SIGNALS = 3;
-constexpr std::array<std::string_view, SIGNALS> SIGNAL_NAMES = {"MenWifiSignal05", "MenWifiSignal03",
-                                                                "MenWifiSignal01"};
+constexpr int SIGNALS = 5;
+constexpr std::array<std::string_view, SIGNALS> SIGNAL_NAMES = {
+    "MenWifiSignal05", "MenWifiSignal04", "MenWifiSignal03", "MenWifiSignal02", "MenWifiSignal01"};
 struct SignalImage
 {
   u32 width = 0, height = 0;
   std::vector<u8> rgba;
 };
-std::array<std::optional<SignalImage>, SIGNALS> s_read_signals;  // under s_lock
+std::array<std::optional<SignalImage>, SIGNALS> s_read_signals;
 struct GpuSignal
 {
   const AbstractGfx* gfx = nullptr;
   bool tried = false;
   std::unique_ptr<AbstractTexture> texture;
 };
-std::array<GpuSignal, SIGNALS> s_gpu_signals;  // video thread only, as s_gpu
+std::array<GpuSignal, SIGNALS> s_gpu_signals;
+constexpr const char* STROKE_FILE = "menu/main/MenuMain_en.pac";
+constexpr std::string_view STROKE_NAME = "MenMainFrontMlti01Icon";
+std::optional<SignalImage> s_read_stroke;
+GpuSignal s_gpu_stroke;
+struct NameTexture
+{
+  std::string key;
+  const AbstractGfx* gfx = nullptr;
+  std::unique_ptr<AbstractTexture> texture;
+  u32 width = 0;
+  u32 height = 0;
+  float left = 0;
+  float top = 0;
+  int used = 0;
+};
+std::vector<NameTexture> s_name_textures;
+std::string s_name_font_path;
+std::vector<u8> s_name_font;
+bool s_name_font_read = false;
+int s_name_frame = -1;
+constexpr int NAME_KEEP_FRAMES = 120;
+constexpr std::size_t NAME_TEXTURES_MAX = 64;
 
 u32 Be32(const std::vector<u8>& b, std::size_t at)
 {
@@ -96,7 +115,6 @@ u16 Be16(const std::vector<u8>& b, std::size_t at)
   return at + 2 <= b.size() ? static_cast<u16>((b[at] << 8) | b[at + 1]) : 0;
 }
 
-// The resource `name` in the BRRES index group at `group`, or 0.
 std::size_t BrresFind(const std::vector<u8>& b, std::size_t group, std::string_view name)
 {
   const u32 count = Be32(b, group + 4);
@@ -116,7 +134,6 @@ std::size_t BrresFind(const std::vector<u8>& b, std::size_t group, std::string_v
   return 0;
 }
 
-// One GX colour: IA8 (0), RGB565 (1) or RGB5A3 (2), as RGBA8.
 std::array<u8, 4> GxColour(u16 v, u32 format)
 {
   const auto five = [](u32 x) { return static_cast<u8>((x << 3) | (x >> 2)); };
@@ -132,10 +149,9 @@ std::array<u8, 4> GxColour(u16 v, u32 format)
           static_cast<u8>((v & 15) * 17), static_cast<u8>((a << 5) | (a << 2) | (a >> 1))};
 }
 
-// A TEX0 in C4, C8 (with its PLT0 of the same name) or RGB5A3, as RGBA8.
 std::optional<SignalImage> DecodeTex(const std::vector<u8>& b, std::size_t tex, std::size_t plt)
 {
-  if (Be32(b, tex) != 0x54455830)  // "TEX0"
+  if (Be32(b, tex) != 0x54455830)
     return std::nullopt;
   SignalImage image;
   image.width = Be16(b, tex + 0x1C);
@@ -147,7 +163,7 @@ std::optional<SignalImage> DecodeTex(const std::vector<u8>& b, std::size_t tex, 
   std::vector<std::array<u8, 4>> palette;
   if (format == 8 || format == 9)
   {
-    if (plt == 0 || Be32(b, plt) != 0x504C5430)  // "PLT0"
+    if (plt == 0 || Be32(b, plt) != 0x504C5430)
       return std::nullopt;
     const u32 plt_format = Be32(b, plt + 0x18);
     const u32 count = Be16(b, plt + 0x1C);
@@ -157,14 +173,14 @@ std::optional<SignalImage> DecodeTex(const std::vector<u8>& b, std::size_t tex, 
     for (u32 i = 0; i < count; ++i)
       palette.push_back(GxColour(Be16(b, data + std::size_t{i} * 2), plt_format));
   }
-  else if (format != 5)
+  else if (format != 5 && format != 0)
   {
     return std::nullopt;
   }
-  const u32 tile_w = format == 5 ? 4 : 8, tile_h = format == 8 ? 8 : 4;
+  const u32 tile_w = format == 5 ? 4 : 8, tile_h = format == 8 || format == 0 ? 8 : 4;
   const u32 padded_w = (image.width + tile_w - 1) / tile_w * tile_w;
   const u32 padded_h = (image.height + tile_h - 1) / tile_h * tile_h;
-  const std::size_t bytes = format == 8 ? std::size_t{padded_w} * padded_h / 2 :
+  const std::size_t bytes = format == 8 || format == 0 ? std::size_t{padded_w} * padded_h / 2 :
                             format == 9 ? std::size_t{padded_w} * padded_h :
                                           std::size_t{padded_w} * padded_h * 2;
   if (at + bytes > b.size())
@@ -193,6 +209,13 @@ std::optional<SignalImage> DecodeTex(const std::vector<u8>& b, std::size_t tex, 
           else if (format == 9)
           {
             put(tx + x, ty + y, entry(b[at++]));
+          }
+          else if (format == 0)
+          {
+            const u8 i = static_cast<u8>((x % 2 == 0 ? b[at] >> 4 : b[at] & 15) * 17);
+            put(tx + x, ty + y, {255, 255, 255, i});
+            if (x % 2 == 1)
+              ++at;
           }
           else
           {
@@ -251,6 +274,52 @@ std::array<std::optional<SignalImage>, SIGNALS> ReadSignals(const std::string& d
   return images;
 }
 
+std::optional<SignalImage> ReadStroke(const std::string& disc, std::string* error)
+{
+  const std::unique_ptr<DiscIO::Volume> volume = DiscIO::CreateVolume(disc);
+  if (!volume)
+  {
+    *error = "can't open the disc";
+    return std::nullopt;
+  }
+  const DiscIO::Partition partition = volume->GetGamePartition();
+  const DiscIO::FileSystem* fs = volume->GetFileSystem(partition);
+  if (!fs || volume->GetGameID(partition) != GAME_ID)
+  {
+    *error = "not RSBE01";
+    return std::nullopt;
+  }
+  const std::unique_ptr<DiscIO::FileInfo> info = fs->FindFileInfo(STROKE_FILE);
+  if (!info || info->GetSize() < 0x20 || info->GetSize() > (32u << 20))
+  {
+    *error = fmt::format("{} not on the disc", STROKE_FILE);
+    return std::nullopt;
+  }
+  std::vector<u8> b(info->GetSize());
+  if (DiscIO::ReadFile(*volume, partition, info.get(), b.data(), b.size()) != b.size())
+  {
+    *error = fmt::format("{} unreadable", STROKE_FILE);
+    return std::nullopt;
+  }
+  for (std::size_t at = 0; at + 0x24 <= b.size(); at += 4)
+  {
+    if (Be32(b, at) != 0x54455830)
+      continue;
+    const s64 name_at = static_cast<s64>(at) + static_cast<s32>(Be32(b, at + 0x14));
+    if (name_at < 0 || static_cast<u64>(name_at) + STROKE_NAME.size() + 1 > b.size())
+      continue;
+    if (std::string_view(reinterpret_cast<const char*>(b.data() + name_at), STROKE_NAME.size()) ==
+            STROKE_NAME &&
+        b[static_cast<std::size_t>(name_at) + STROKE_NAME.size()] == 0)
+    {
+      if (std::optional<SignalImage> image = DecodeTex(b, at, 0))
+        return image;
+    }
+  }
+  *error = fmt::format("{}: {} not found", STROKE_FILE, STROKE_NAME);
+  return std::nullopt;
+}
+
 void ReadFonts(std::string path)
 {
   std::array<std::optional<GameFont::Atlas>, FACES> atlases;
@@ -273,10 +342,15 @@ void ReadFonts(std::string path)
   std::array<std::optional<SignalImage>, SIGNALS> signals = ReadSignals(path, &signal_error);
   if (!signal_error.empty())
     WARN_LOG_FMT(ROLLBACK, "Orca kit: the signal lamps: {}", signal_error);
+  std::string stroke_error;
+  std::optional<SignalImage> stroke = ReadStroke(path, &stroke_error);
+  if (!stroke_error.empty())
+    WARN_LOG_FMT(ROLLBACK, "Orca kit: the name stroke: {}", stroke_error);
   {
     std::lock_guard lk(s_lock);
     s_read_atlases = std::move(atlases);
     s_read_signals = std::move(signals);
+    s_read_stroke = std::move(stroke);
   }
   s_read = true;
 }
@@ -299,8 +373,6 @@ std::optional<FaceRef> GameFace(Face face)
   return FaceRef{&g.atlas, *g.texture};
 }
 
-// ImGui uses a point sampler, but the game's glyphs are drawn downscaled, so switch to trilinear
-// for them and restore ImGui's sampler afterwards.
 void LinearSampler(const ImDrawList*, const ImDrawCmd*)
 {
   if (g_gfx)
@@ -317,7 +389,6 @@ ImU32 Rgb(int r, int g, int b, float a = 1)
   return IM_COL32(r, g, b, static_cast<int>(std::lround(std::clamp(a, 0.0f, 1.0f) * 255)));
 }
 
-// `c` with its alpha scaled by `alpha`.
 ImU32 Fade(ImU32 c, float alpha)
 {
   const float a = static_cast<float>((c >> IM_COL32_A_SHIFT) & 0xFF) * std::clamp(alpha, 0.0f, 1.0f);
@@ -337,8 +408,6 @@ ImU32 Mix(ImU32 a, ImU32 b, float t)
   return out;
 }
 
-// Applies a vertical gradient to vertices from `first` on, keeping each vertex's alpha as a factor
-// so ImGui's anti-aliased edges still fade out.
 void Recolour(ImDrawList* dl, int first, float y0, float y1, ImU32 top, ImU32 bottom)
 {
   const float span = std::max(1e-3f, y1 - y0);
@@ -350,16 +419,14 @@ void Recolour(ImDrawList* dl, int first, float y0, float y1, ImU32 top, ImU32 bo
   }
 }
 
-// How a tone is painted, matching the game's own buttons: a rim lit from above, a dark inner line,
-// a gradient body, a gloss over the top half, and the text colour.
 struct Paint
 {
-  ImU32 top, bottom;          // body gradient
-  ImU32 rim_top, rim_bottom;  // rim gradient
-  ImU32 line;                 // between rim and body
-  ImU32 ink, ink_bottom;      // text gradient
-  ImU32 ink_outline;          // zero alpha = no outline
-  float gloss = 0.3f;         // gloss alpha at the top
+  ImU32 top, bottom;
+  ImU32 rim_top, rim_bottom;
+  ImU32 line;
+  ImU32 ink, ink_bottom;
+  ImU32 ink_outline;
+  float gloss = 0.3f;
 };
 
 Paint PaintOf(Tone tone)
@@ -390,32 +457,26 @@ Paint PaintOf(Tone tone)
   default:
     if (CurrentLook() == Look::ProjectPlus)
     {
-      // Project+: flat teal, black edge, white text.
       return {Rgb(28, 174, 128, 0.97f), Rgb(8, 122, 88, 0.97f), Rgb(22, 30, 30),
               Rgb(4, 8, 8), Rgb(0, 0, 0), white, Rgb(222, 244, 236), Rgb(0, 30, 22), 0.1f};
     }
-    // Brawl: rose, white rim, black line, cream text.
     return {Rgb(182, 104, 110, 0.96f), Rgb(120, 56, 62, 0.96f), Rgb(252, 250, 250),
             Rgb(194, 188, 188), Rgb(18, 8, 8), Rgb(255, 252, 240), Rgb(246, 224, 168),
             Rgb(30, 10, 10)};
   }
 }
 
-// Fallback to ImGui's font until the game's font is loaded.
 ImVec2 FallbackMeasure(const TextLook& look, std::string_view text)
 {
   return ImGui::GetFont()->CalcTextSizeA(std::max(1.0f, look.px), FLT_MAX, 0, text.data(),
                                          text.data() + text.size());
 }
 
-// Minimum word gap as a fraction of line height; the heavy face's own space is too thin.
 float MinSpace(Face face)
 {
   return face == Face::Heavy ? 0.42f : 0.0f;
 }
 
-// Calls `emit(glyph, x)` for each glyph (x in unscaled font pixels), substituting missing ones.
-// Returns the line's total advance.
 template <typename Emit>
 float LayOut(const GameFont::Atlas& atlas, float tracking_font_px, float min_space,
              std::string_view text, Emit&& emit)
@@ -451,7 +512,6 @@ float LayOut(const GameFont::Atlas& atlas, float tracking_font_px, float min_spa
   return std::max(0.0f, x - tracking_font_px);
 }
 
-// Draws one pass of glyph quads with a `top`-to-`bottom` gradient.
 void GlyphPass(ImDrawList* dl, const GameFont::Atlas& atlas, ImVec2 pos, float scale,
                const TextLook& look, std::string_view text, ImU32 top, ImU32 bottom)
 {
@@ -479,7 +539,6 @@ void GlyphPass(ImDrawList* dl, const GameFont::Atlas& atlas, ImVec2 pos, float s
   });
 }
 
-// Outline offsets: 8 directions, or 12 when thicker than 2 pixels.
 template <typename F>
 void AroundOutline(float outline, F&& f)
 {
@@ -511,14 +570,13 @@ float Snap(float v)
   return std::floor(v + 0.5f);
 }
 
-// Final-seconds pulse: 1 at the start of each second, easing to 0 by mid-second.
 float Pulse(double now_s)
 {
   const float t = static_cast<float>(now_s - std::floor(now_s));
   const float k = std::max(0.0f, 1.0f - 2.0f * t);
   return k * k;
 }
-}  // namespace
+}
 
 Tone PortTone(int port)
 {
@@ -554,14 +612,12 @@ TextLook TitleLook(float unit, float size)
   look.px = std::max(1.0f, size * unit);
   if (CurrentLook() == Look::ProjectPlus)
   {
-    // Project+: white to mint.
     look.top = Rgb(240, 248, 248);
     look.bottom = Rgb(96, 226, 196);
     look.outline_colour = Rgb(0, 0, 0);
   }
   else
   {
-    // Brawl: cream to gold.
     look.top = Rgb(255, 250, 226);
     look.bottom = Rgb(238, 186, 72);
     look.outline_colour = Rgb(22, 8, 8);
@@ -608,7 +664,7 @@ void BeginFrame()
     GpuFace& g = s_gpu[face];
     if (g.gfx != g_gfx.get())
     {
-      (void)g.texture.release();  // leak the old backend's texture (see GpuFace)
+      (void)g.texture.release();
       g.gfx = g_gfx.get();
       g.tried = false;
     }
@@ -646,7 +702,7 @@ void BeginFrame()
     GpuSignal& g = s_gpu_signals[i];
     if (g.gfx != g_gfx.get())
     {
-      (void)g.texture.release();  // leak the old backend's texture (see GpuFace)
+      (void)g.texture.release();
       g.gfx = g_gfx.get();
       g.tried = false;
     }
@@ -662,6 +718,28 @@ void BeginFrame()
     g.texture = g_gfx->CreateTexture(config, "Orca signal lamp");
     if (g.texture)
       g.texture->Load(0, read->width, read->height, read->width, read->rgba.data(), read->rgba.size());
+  }
+  if (GpuSignal& g = s_gpu_stroke; g.gfx != g_gfx.get())
+  {
+    (void)g.texture.release();
+    g.gfx = g_gfx.get();
+    g.tried = false;
+  }
+  if (GpuSignal& g = s_gpu_stroke; !g.tried)
+  {
+    g.tried = true;
+    std::lock_guard lk(s_lock);
+    if (const std::optional<SignalImage>& read = s_read_stroke)
+    {
+      const TextureConfig config(read->width, read->height, 1, 1, 1, AbstractTextureFormat::RGBA8,
+                                 0, AbstractTextureType::Texture_2DArray);
+      g.texture = g_gfx->CreateTexture(config, "Orca name stroke");
+      if (g.texture)
+      {
+        g.texture->Load(0, read->width, read->height, read->width, read->rgba.data(),
+                        read->rgba.size());
+      }
+    }
   }
 }
 
@@ -679,6 +757,10 @@ void ReleaseGpu()
     g.gfx = nullptr;
     g.tried = false;
   }
+  s_gpu_stroke.texture.reset();
+  s_gpu_stroke.gfx = nullptr;
+  s_gpu_stroke.tried = false;
+  s_name_textures.clear();
   s_faces_ready = 0;
 }
 
@@ -751,8 +833,6 @@ ImVec2 Text(ImDrawList* dl, ImVec2 pos, const TextLook& look, std::string_view t
   else if (align == Align::Right)
     pos.x -= size.x;
   pos = ImVec2(Snap(pos.x + look.outline), Snap(pos.y));
-  // Overlapping passes stack, so each of n outline or shadow passes uses the alpha whose n-fold
-  // stack equals the requested one.
   const int passes = look.outline > 2.0f ? 12 : 8;
   const auto per_pass = [passes](float a) {
     a = std::clamp(a, 0.0f, 1.0f);
@@ -823,7 +903,6 @@ ImVec2 Text(ImDrawList* dl, ImVec2 pos, const TextLook& look, std::string_view t
 
 namespace
 {
-// A game-style button: soft shadow, lit rim, dark inner line, gradient body, top gloss.
 void Slab(ImDrawList* dl, ImVec2 min, ImVec2 max, float radius, float unit, const Paint& p,
           float alpha)
 {
@@ -848,8 +927,6 @@ void Slab(ImDrawList* dl, ImVec2 min, ImVec2 max, float radius, float unit, cons
   }
 }
 
-// Text colour for a tone: light text outlined in the tone's dark shade (black on gold and yellow,
-// grey with a white outline on grey).
 TextLook Inked(TextLook look, const Paint& p)
 {
   look.top = p.ink;
@@ -862,7 +939,7 @@ TextLook Inked(TextLook look, const Paint& p)
   }
   return look;
 }
-}  // namespace
+}
 
 void Plate(ImDrawList* dl, ImVec2 min, ImVec2 max, float unit, Tone tone, float alpha)
 {
@@ -875,10 +952,8 @@ void Plate(ImDrawList* dl, ImVec2 min, ImVec2 max, float unit, Tone tone, float 
 
 namespace
 {
-// Height of each extra note line, as a fraction of the first row.
 constexpr float BANNER_NOTE_ROW = 0.3f;
 
-// Short titles use the heavy face; sentences use the body face.
 bool HeavyTitle(std::string_view title)
 {
   std::size_t letters = 0;
@@ -890,7 +965,6 @@ bool HeavyTitle(std::string_view title)
   return letters <= 18;
 }
 
-// Text styles for a Banner's title and note.
 std::pair<TextLook, TextLook> BannerLooks(float height, float unit, bool heavy, bool has_note,
                                           const Paint& p)
 {
@@ -905,7 +979,6 @@ std::pair<TextLook, TextLook> BannerLooks(float height, float unit, bool heavy, 
           Inked(LabelLook(unit, height * BANNER_NOTE_ROW / unit), p)};
 }
 
-// Splits a note on '\n'.
 std::vector<std::string_view> NoteLines(std::string_view note)
 {
   std::vector<std::string_view> lines;
@@ -920,12 +993,11 @@ std::vector<std::string_view> NoteLines(std::string_view note)
   return lines;
 }
 
-// Height of the first row (title plus first note line).
 float RowHeight(float height, std::size_t lines)
 {
   return lines > 1 ? height / (1 + BANNER_NOTE_ROW * static_cast<float>(lines - 1)) : height;
 }
-}  // namespace
+}
 
 float BannerHeight(float row, std::size_t note_lines)
 {
@@ -953,7 +1025,6 @@ Box Banner(ImDrawList* dl, float left, float right, float top, float height, flo
   const Paint p = PaintOf(tone);
   const float cut = height * 0.42f;
   const float bottom = top + height;
-  // A slanted band with parallel cut ends, layered like the buttons.
   const auto band = [&](float grow_x, float grow_y, ImVec2 d) {
     const float k = cut / height;
     return std::array<ImVec2, 4>{
@@ -985,9 +1056,7 @@ Box Banner(ImDrawList* dl, float left, float right, float top, float height, flo
     fill(shine, body[0].y, body[0].y + bh * 0.48f, Rgb(255, 255, 255, 0.87f * p.gloss * alpha),
          Rgb(255, 255, 255, 0.1f * p.gloss * alpha));
   }
-  // Title and note, centred.
   const float centre = (left + right) / 2;
-  // Body text is used for sentences, since it stays readable at that size.
   const std::vector<std::string_view> lines = NoteLines(note);
   const float row = RowHeight(height, lines.size());
   const auto [look, small] = BannerLooks(row, unit, HeavyTitle(title), !note.empty(), p);
@@ -1053,7 +1122,6 @@ Box Timer(ImDrawList* dl, ImVec2 centre, float unit, int seconds, double now_s, 
   look.italic = 0.08f;
   const bool urgent = seconds <= 5;
   const bool soon = seconds <= 10;
-  // White normally, gold in the last 10 seconds, red in the last 5.
   look.top = Rgb(255, 255, 255);
   look.bottom = Rgb(214, 220, 232);
   if (urgent)
@@ -1066,7 +1134,6 @@ Box Timer(ImDrawList* dl, ImVec2 centre, float unit, int seconds, double now_s, 
     look.top = Rgb(255, 248, 180);
     look.bottom = Rgb(255, 196, 30);
   }
-  // Size the plate for "0:00" so it never changes width.
   const ImVec2 widest = Measure(look, "0:00");
   const float pad_x = 1.3f * unit, pad_y = 0.45f * unit;
   const float w = widest.x + 2 * pad_x, h = widest.y + 2 * pad_y;
@@ -1085,7 +1152,6 @@ Box Timer(ImDrawList* dl, ImVec2 centre, float unit, int seconds, double now_s, 
 
 namespace
 {
-// Badge text style for `tone`.
 TextLook BadgeLook(float unit, float size, const Paint& p)
 {
   TextLook look = TitleLook(unit, size);
@@ -1095,7 +1161,7 @@ TextLook BadgeLook(float unit, float size, const Paint& p)
   return Inked(look, p);
 }
 constexpr float BADGE_PAD_X = 1.5f, BADGE_PAD_Y = 0.55f;
-}  // namespace
+}
 
 Box Badge(ImDrawList* dl, ImVec2 centre, float unit, std::string_view text, Tone tone, float size,
           float alpha)
@@ -1114,7 +1180,6 @@ Box Badge(ImDrawList* dl, ImVec2 centre, float unit, std::string_view text, Tone
 
 namespace
 {
-// A small tab button with body text, top-left at `pos`.
 Box Tab(ImDrawList* dl, ImVec2 pos, float unit, std::string_view text, Tone tone, bool right_aligned)
 {
   const Paint p = PaintOf(tone);
@@ -1127,7 +1192,7 @@ Box Tab(ImDrawList* dl, ImVec2 pos, float unit, std::string_view text, Tone tone
   Text(dl, ImVec2(x + pad_x, pos.y + pad_y), look, text);
   return {ImVec2(x, pos.y), ImVec2(x + w, pos.y + h)};
 }
-}  // namespace
+}
 
 Beat TurnPulse(double now_s)
 {
@@ -1143,7 +1208,6 @@ Blink Attention(double now_s, double since_s)
   Blink b;
   b.on = phase < 0.6f ? 1.0f : 0.15f;
   b.swell = phase < 0.6f ? std::sin(std::numbers::pi_v<float> * phase / 0.6f) : 0.0f;
-  // Three ripples 0.2 s apart, each lasting 0.4 s.
   for (int i = 0; i < 3; ++i)
   {
     const double r = (t - 0.2 * i) / 0.4;
@@ -1163,14 +1227,10 @@ void Pointer(ImDrawList* dl, ImVec2 c, float radius, float unit, int port, std::
 void Pointer(ImDrawList* dl, ImVec2 c, float radius, float unit, int port, std::string_view tag,
              PointerMode mode, bool tag_left, double now_s, double since_s)
 {
-  // A waiting ring goes grey; the face stays opaque so the game's crosshair never shows through.
   const Paint p = PaintOf(mode == PointerMode::Waiting ? Tone::Grey : PortTone(port));
-  // The tab stays put while the cursor swells.
   const float rest = radius;
   if (mode == PointerMode::Acting)
   {
-    // The acting player's cursor: a glow in their colour, a white ring lit on each beat, a 15%
-    // swell, and ripples when the turn starts.
     const Blink blink = Attention(now_s, since_s);
     for (const float r : blink.ripples)
     {
@@ -1205,7 +1265,6 @@ void Pointer(ImDrawList* dl, ImVec2 c, float radius, float unit, int port, std::
   first = dl->VtxBuffer.Size;
   dl->AddCircleFilled(c, radius - std::max(1.0f, 0.06f * radius), IM_COL32_WHITE, 48);
   Recolour(dl, first, c.y - radius, c.y + radius, p.top, p.bottom);
-  // Opaque light face, so the game's crosshair underneath never shows.
   dl->AddCircleFilled(c, radius - thick, p.line, 48);
   first = dl->VtxBuffer.Size;
   dl->AddCircleFilled(c, radius - thick - std::max(1.0f, 0.05f * radius), IM_COL32_WHITE, 48);
@@ -1239,7 +1298,6 @@ Box TurnTag(ImDrawList* dl, ImVec2 at, float radius, float unit, std::string_vie
   const float pad_x = 1.3f * unit, pad_y = 0.5f * unit;
   const float w = std::max(ts.x, ds.x) + 2 * pad_x;
   const float h = ts.y + ds.y + 2 * pad_y;
-  // Reserve the timer's "0:00" width.
   const float gap = 0.7f * unit;
   float chip_w = 0, chip_h = 0;
   if (seconds >= 0)
@@ -1250,7 +1308,6 @@ Box TurnTag(ImDrawList* dl, ImVec2 at, float radius, float unit, std::string_vie
   }
   const float total_w = w + (seconds >= 0 ? gap + chip_w : 0);
   const float total_h = std::max(h, chip_h);
-  // Above the cursor, leaning to its side; below it, clear of its name tab, near the top edge.
   float x = lean_left ? at.x + 0.6f * radius - total_w : at.x - 0.6f * radius;
   const float above = at.y - radius * 1.75f - total_h;
   const float under = at.y + radius * 0.55f + 3.6f * unit;
@@ -1283,7 +1340,6 @@ void PortraitFrame(ImDrawList* dl, ImVec2 min, ImVec2 max, float unit, Tone tone
   if (!(max.x > min.x && max.y > min.y))
     return;
   const Paint p = PaintOf(tone);
-  // Glow: rings around the frame, fainter further out.
   for (int k = 3; k >= 1; --k)
   {
     const float g = 0.55f * unit * static_cast<float>(k);
@@ -1300,7 +1356,6 @@ Box Ribbon(ImDrawList* dl, ImVec2 min, ImVec2 max, float unit, std::string_view 
     return box;
   const Paint p = PaintOf(tone);
   Slab(dl, min, max, (max.y - min.y) * 0.3f, unit, p, 1);
-  // White heavy text outlined in the tone's dark shade, shrunk to fit.
   TextLook look = TitleLook(unit, (max.y - min.y) * 0.62f / unit);
   look.italic = 0.08f;
   look.top = Rgb(255, 255, 255);
@@ -1330,7 +1385,6 @@ Box SetDots(ImDrawList* dl, ImVec2 centre, float unit, const std::array<int, 3>&
     const int won = games[static_cast<std::size_t>(i)];
     if (won == 0 || won == 1)
     {
-      // Decided: filled in the winner's colour, white rim.
       const Paint p = PaintOf(PortTone(won));
       dl->AddCircleFilled(ImVec2(c.x, c.y + 0.15f * unit), r + 0.2f * unit, Rgb(0, 0, 0, 0.35f), 24);
       dl->AddCircleFilled(c, r + 0.2f * unit, Rgb(255, 255, 255), 24);
@@ -1340,7 +1394,6 @@ Box SetDots(ImDrawList* dl, ImVec2 centre, float unit, const std::array<int, 3>&
     }
     else
     {
-      // Not yet played: hollow, brighter rim for the current game.
       dl->AddCircleFilled(c, r, Rgb(0, 0, 0, 0.35f), 24);
       dl->AddCircle(c, r, i == current ? Rgb(236, 236, 236) : Rgb(130, 130, 130), 24,
                     std::max(1.0f, 0.2f * unit));
@@ -1371,7 +1424,6 @@ Box GameTimer(ImDrawList* dl, ImVec2 centre, float unit, int seconds, double now
   TextLook look = TitleLook(unit, size);
   look.shadow = ImVec2(0, 0);
   const bool pplus = CurrentLook() == Look::ProjectPlus;
-  // Colours sampled from the game's own lettering.
   ImU32 edge = 0;
   if (lettering == Lettering::Band)
   {
@@ -1399,7 +1451,6 @@ Box GameTimer(ImDrawList* dl, ImVec2 centre, float unit, int seconds, double now
   const ImVec2 at(centre.x, centre.y - look.px / 2 + look.px * 0.04f);
   if (edge)
   {
-    // Brawl's band lettering has a dark edge outside the white one.
     TextLook outer = look;
     outer.outline = look.outline + std::max(1.0f, look.px * 0.06f);
     outer.outline_colour = edge;
@@ -1431,7 +1482,6 @@ bool Starts(std::string_view text, std::string_view prefix)
   return text.substr(0, prefix.size()) == prefix;
 }
 
-// Strips a trailing "s" from a verb ("strikes" -> "strike").
 std::string Plain(std::string_view verb)
 {
   if (verb.size() > 2 && verb.back() == 's')
@@ -1439,17 +1489,8 @@ std::string Plain(std::string_view verb)
   return std::string(verb);
 }
 
-// Parses one hint clause. Recognised shapes (after an optional "Your turn: " prefix):
-//   "[Press |Hold ]<button> to <what>"   B to change, Hold B to leave
-//   "<button> on <thing> to <what>"      A on it to agree
-//   "<button> on <thing> <does> it"      X on a stage strikes it
-//   "<button> on <thing>"                A on a character
-//   "<button> <does> [<what>]"           Start locks it in, Y skips
-//   "<what> with <button>"               Pick with A
-// Anything else becomes plain words.
 GuideItem ClauseOf(std::string_view clause)
 {
-  // "Your turn: X on a stage strikes it": parse what follows the colon.
   if (const std::size_t colon = clause.find(": "); colon != std::string_view::npos)
   {
     const std::string_view after = clause.substr(colon + 2);
@@ -1501,13 +1542,12 @@ GuideItem ClauseOf(std::string_view clause)
   }
   return {std::string(), std::string(hold ? "Hold " : "") + std::string(clause)};
 }
-}  // namespace
+}
 
 std::vector<GuideItem> GuideOf(std::string_view hint)
 {
   std::vector<GuideItem> items;
   const auto clauses = [&items](std::string_view part) {
-    // "Pick with A, then press Start to lock in": one entry per clause.
     for (;;)
     {
       const std::size_t then = part.find(", then ");
@@ -1533,7 +1573,6 @@ std::vector<GuideItem> GuideOf(std::string_view hint)
 
 namespace
 {
-// Size of a GameCube button face `h` pixels high (Start is shorter).
 ImVec2 ButtonSize(float h, std::string_view button)
 {
   if (button == "Start")
@@ -1541,7 +1580,6 @@ ImVec2 ButtonSize(float h, std::string_view button)
   return ImVec2(h * (button == "Z" || button == "L" || button == "R" ? 1.5f : 1.0f), h);
 }
 
-// Draws a GameCube button face centred on `c`.
 void ButtonFace(ImDrawList* dl, ImVec2 c, float h, float unit, std::string_view button, float alpha)
 {
   const bool start = button == "Start", z = button == "Z";
@@ -1573,11 +1611,10 @@ void ButtonFace(ImDrawList* dl, ImVec2 c, float h, float unit, std::string_view 
   const std::string text = start ? std::string("START") : std::string(button);
   Text(dl, ImVec2(c.x, c.y - look.px / 2 + look.px * 0.06f), look, text, alpha, Align::Centre);
 }
-}  // namespace
+}
 
 namespace
 {
-// Lays out the guide right to left from `right`. With a null `dl` it only measures.
 Box LayGuide(ImDrawList* dl, float right, float cy, float unit,
              const std::vector<GuideItem>& items, float alpha)
 {
@@ -1587,7 +1624,6 @@ Box LayGuide(ImDrawList* dl, float right, float cy, float unit,
   look.outline_colour = Rgb(20, 20, 20);
   Box box{ImVec2(right, cy - h / 2), ImVec2(right, cy + h / 2)};
   float x = right;
-  // The last entry ends at `right`.
   for (auto it = items.rbegin(); it != items.rend(); ++it)
   {
     if (!it->label.empty())
@@ -1609,13 +1645,11 @@ Box LayGuide(ImDrawList* dl, float right, float cy, float unit,
   }
   return box;
 }
-}  // namespace
+}
 
 Box Guide(ImDrawList* dl, float right, float cy, float unit, const std::vector<GuideItem>& items,
           float alpha, float max_width)
 {
-  // Too wide: shrink the whole line, down to 70%, as the games do with their own legends.
-  // Re-measure at each step, since outlines and font sizes don't scale exactly.
   if (max_width > 0)
   {
     const float full = unit;
@@ -1637,7 +1671,6 @@ void Frame(ImDrawList* dl, ImVec2 min, ImVec2 max, float unit, Tone tone, std::s
   min = ImVec2(min.x + inset, min.y + inset);
   max = ImVec2(max.x - inset, max.y - inset);
   const float round = 0.7f * unit;
-  // A ring layered like the buttons.
   dl->AddRect(ImVec2(min.x + 0.15f * unit, min.y + 0.35f * unit),
               ImVec2(max.x + 0.15f * unit, max.y + 0.35f * unit), Rgb(0, 0, 0, 0.32f), round, 0,
               1.2f * unit);
@@ -1656,7 +1689,6 @@ void Frame(ImDrawList* dl, ImVec2 min, ImVec2 max, float unit, Tone tone, std::s
 
 namespace
 {
-// Draws a disc's layers and returns the body's radius.
 float DiscBody(ImDrawList* dl, ImVec2 c, float radius, float unit, const Paint& p, float alpha)
 {
   const float rim = std::clamp(radius * 0.12f, 1.0f, 0.55f * unit);
@@ -1682,7 +1714,7 @@ float DiscBody(ImDrawList* dl, ImVec2 c, float radius, float unit, const Paint& 
   }
   return body;
 }
-}  // namespace
+}
 
 void Disc(ImDrawList* dl, ImVec2 centre, float radius, float unit, Tone tone, float alpha)
 {
@@ -1693,21 +1725,93 @@ void Disc(ImDrawList* dl, ImVec2 centre, float radius, float unit, Tone tone, fl
 
 void Connection(ImDrawList* dl, ImVec2 c, float radius, float unit, int bars, float alpha)
 {
-  // Subspace: Brawl's own Wi-Fi signal lamp, blue for good, yellow for OK, red for poor, read from
-  // the disc (s_gpu_signals). Nothing is drawn until it loads, or if it can't be read.
   (void)unit;
   if (radius <= 0 || alpha <= 0)
     return;
-  bars = std::clamp(bars, 1, 3);
+  bars = std::clamp(bars, 1, SIGNALS);
   GpuSignal& g = s_gpu_signals[bars - 1];
   if (!g.texture || !g_gfx || g.gfx != g_gfx.get())
     return;
-  // Its 32x32 art has a 1-pixel clear border, so the quad is 32/30 of the lamp's size.
   const float half = radius * 32.0f / 30.0f;
   const ImTextureRef texture = *g.texture;
   dl->AddCallback(&LinearSampler, nullptr);
   dl->AddImage(texture, ImVec2(c.x - half, c.y - half), ImVec2(c.x + half, c.y + half),
                ImVec2(0, 0), ImVec2(1, 1), Rgb(255, 255, 255, alpha));
+  dl->AddCallback(&PointSampler, nullptr);
+}
+
+bool OutlinedText(ImDrawList* dl, const std::string& font_path, float size, ImVec2 at,
+                  std::string_view text, float outline, ImU32 tint)
+{
+  if (!g_gfx || text.empty() || !(size > 0))
+    return false;
+  if (!s_name_font_read || s_name_font_path != font_path)
+  {
+    s_name_font_read = true;
+    s_name_font_path = font_path;
+    std::string bytes;
+    s_name_font.clear();
+    if (File::ReadFileToString(font_path, bytes))
+      s_name_font.assign(bytes.begin(), bytes.end());
+  }
+  if (s_name_font.empty())
+    return false;
+
+  const int frame = ImGui::GetFrameCount();
+  if (frame != s_name_frame)
+  {
+    s_name_frame = frame;
+    for (NameTexture& t : s_name_textures)
+    {
+      if (t.gfx != g_gfx.get())
+        (void)t.texture.release();
+    }
+    std::erase_if(s_name_textures, [frame](const NameTexture& t) {
+      return t.gfx != g_gfx.get() || frame - t.used > NAME_KEEP_FRAMES;
+    });
+  }
+
+  const float q_size = std::round(size * 4.0f) / 4.0f;
+  const float q_outline = std::round(outline * 4.0f) / 4.0f;
+  const std::string key = fmt::format("{}|{}|{}", q_size, q_outline, text);
+  auto it = std::ranges::find(s_name_textures, key, &NameTexture::key);
+  if (it == s_name_textures.end())
+  {
+    if (s_name_textures.size() >= NAME_TEXTURES_MAX)
+      return false;
+    const std::optional<NameRaster::Bitmap> bitmap =
+        NameRaster::Outlined(s_name_font, q_size, text, q_outline);
+    if (!bitmap)
+      return false;
+    const TextureConfig config(bitmap->width, bitmap->height, 1, 1, 1,
+                               AbstractTextureFormat::RGBA8, 0,
+                               AbstractTextureType::Texture_2DArray);
+    std::unique_ptr<AbstractTexture> texture = g_gfx->CreateTexture(config, "Orca name");
+    if (!texture)
+      return false;
+    texture->Load(0, bitmap->width, bitmap->height, bitmap->width, bitmap->rgba.data(),
+                  bitmap->rgba.size());
+    s_name_textures.push_back({key, g_gfx.get(), std::move(texture), bitmap->width,
+                               bitmap->height, bitmap->left, bitmap->top, frame});
+    it = std::prev(s_name_textures.end());
+  }
+  it->used = frame;
+  const ImVec2 min(at.x + it->left, at.y + it->top);
+  dl->AddCallback(&LinearSampler, nullptr);
+  dl->AddImage(*it->texture, min,
+               ImVec2(min.x + static_cast<float>(it->width), min.y + static_cast<float>(it->height)),
+               ImVec2(0, 0), ImVec2(1, 1), tint);
+  dl->AddCallback(&PointSampler, nullptr);
+  return true;
+}
+
+void NameStroke(ImDrawList* dl, ImVec2 min, ImVec2 max, ImU32 colour)
+{
+  GpuSignal& g = s_gpu_stroke;
+  if (max.x <= min.x || max.y <= min.y || !g.texture || !g_gfx || g.gfx != g_gfx.get())
+    return;
+  dl->AddCallback(&LinearSampler, nullptr);
+  dl->AddImage(*g.texture, min, max, ImVec2(0, 0), ImVec2(1, 1), colour);
   dl->AddCallback(&PointSampler, nullptr);
 }
 
@@ -1747,7 +1851,6 @@ Box TextPlate(ImDrawList* dl, ImVec2 pos, float unit, const std::vector<std::str
     const std::string_view line = lines[i];
     if (i == 0 && lead > 0 && lead <= line.size())
     {
-      // Sender's name in the accent colour, the rest in the ink colour.
       TextLook accent = look;
       accent.top = Accent();
       accent.bottom = Mix(Accent(), Rgb(0, 0, 0), 0.1f);
@@ -1792,11 +1895,9 @@ int DemoMode()
 void DrawDemo(ImDrawList* dl, ImVec2 o, ImVec2 size, float u, double now_s)
 {
   const auto at = [&](float fx, float fy) { return ImVec2(o.x + size.x * fx, o.y + size.y * fy); };
-  // Label each primitive with its name.
   const auto caption = [&](ImVec2 p, std::string_view name, Align align = Align::Centre) {
     Label(dl, p, u, name, 1.9f, align, Rgb(176, 206, 255));
   };
-  // Top centre: set banner and timers.
   const Box banner = Banner(dl, at(0.29f, 0).x, at(0.71f, 0).x, o.y + 2.2f * u, 9.0f * u, u,
                             Tone::Panel, "RANKED  GAME 2", "ada 1 – 0 bo · bo bans a stage");
   caption(ImVec2((banner.min.x + banner.max.x) / 2, banner.max.y + 0.4f * u), "Banner");
@@ -1804,7 +1905,6 @@ void DrawDemo(ImDrawList* dl, ImVec2 o, ImVec2 size, float u, double now_s)
   const Box t1 = Timer(dl, ImVec2(banner.max.x + 7.0f * u, mid), u, 24, now_s);
   const Box t2 = Timer(dl, ImVec2(t1.max.x + 7.5f * u, mid), u, 4, now_s);
   caption(ImVec2((t1.min.x + t2.max.x) / 2, t1.max.y + 0.6f * u), "Timer");
-  // Top left: toasts, a chat line and the ping.
   float y = o.y + 2.5f * u;
   y = LabelPlate(dl, ImVec2(o.x + 2.5f * u, y), u, "bo joined on port 2", 2.7f).max.y + 1.0f * u;
   y = LabelPlate(dl, ImVec2(o.x + 2.5f * u, y), u, "bo: gl hf … one more?", 2.7f).max.y +
@@ -1819,7 +1919,6 @@ void DrawDemo(ImDrawList* dl, ImVec2 o, ImVec2 size, float u, double now_s)
   y += 2 * lamp + 3.1f * u;
   y = Label(dl, ImVec2(o.x + 2.5f * u, y), u, "32 ms · 60 fps", 2.6f).max.y;
   caption(ImVec2(o.x + 2.5f * u, y), "Label", Align::Left);
-  // Middle: title, label, pointers and framed tiles.
   const Box title = Title(dl, at(0.5f, 0.19f), u, "Waiting for bo…", 5.5f, Align::Centre);
   caption(ImVec2(title.max.x + 1.5f * u, title.min.y + 2.0f * u), "Title", Align::Left);
   Label(dl, Add(at(0.5f, 0.19f), ImVec2(0, 6.4f * u)), u, "bo forfeits in 0:18", 3.2f,
@@ -1830,7 +1929,6 @@ void DrawDemo(ImDrawList* dl, ImVec2 o, ImVec2 size, float u, double now_s)
   Pointer(dl, at(0.44f, 0.40f), 2.6f * u, u, 0, "P1 ada", true, true, now_s);
   Pointer(dl, at(0.585f, 0.415f), 2.6f * u, u, 1, "P2 bo", false, false, now_s);
   caption(ImVec2(at(0.60f, 0).x + 1.5f * u, at(0, 0.40f).y), "Pointer", Align::Left);
-  // Lower middle: a results card.
   const ImVec2 c0 = at(0.335f, 0.475f), c1 = at(0.665f, 0.565f);
   Plate(dl, c0, c1, u, Tone::Panel);
   caption(ImVec2(c1.x + 1.5f * u, c0.y + 1.0f * u), "Plate", Align::Left);
@@ -1838,7 +1936,6 @@ void DrawDemo(ImDrawList* dl, ImVec2 o, ImVec2 size, float u, double now_s)
   Title(dl, ImVec2(c0.x + 2.0f * u, cy - 2.4f * u), u, "VICTORY", 4.8f);
   Label(dl, ImVec2(c1.x - 2.0f * u, cy - 3.3f * u), u, "1532 → 1550", 3.2f, Align::Right);
   Badge(dl, ImVec2(c1.x - 6.0f * u, cy + 2.0f * u), u, "+18", Tone::Gold, 2.8f);
-  // Character select panels: name plates and LOCKED IN.
   for (int port = 0; port < 2; ++port)
   {
     const float cx = o.x + size.x * (0.236f + 0.177f * static_cast<float>(port));
@@ -1850,7 +1947,6 @@ void DrawDemo(ImDrawList* dl, ImVec2 o, ImVec2 size, float u, double now_s)
   const Box waiting = Badge(dl, at(0.77f, 0.71f), u, "WAITING", Tone::Grey, 3.2f);
   caption(ImVec2(waiting.max.x + 1.5f * u, waiting.min.y + 0.8f * u), "Badge", Align::Left);
   LabelPlate(dl, at(0.70f, 0.58f), u, "Hold B to leave", 2.6f, Align::Centre, Tone::Green);
-  // Portrait frame, turn frame, set dots and the searching ring.
   const ImVec2 f0 = at(0.80f, 0.79f), f1 = at(0.88f, 0.95f);
   PortraitFrame(dl, f0, f1, u, Tone::Gold);
   Ribbon(dl, ImVec2(f0.x + 1.0f * u, f0.y + 1.2f * u), ImVec2(f1.x - 1.0f * u, f0.y + 5.2f * u), u,
@@ -1862,4 +1958,4 @@ void DrawDemo(ImDrawList* dl, ImVec2 o, ImVec2 size, float u, double now_s)
   SearchRing(dl, at(0.72f, 0.87f), 5.0f * u, u, now_s);
   caption(ImVec2(at(0.72f, 0).x, at(0, 0.87f).y + 5.6f * u), "SearchRing");
 }
-}  // namespace Orca::UX::Kit
+}

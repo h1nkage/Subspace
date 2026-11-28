@@ -60,12 +60,6 @@ void JitArm64::Force25BitPrecision(ARM64Reg output, ARM64Reg input)
   }
 }
 
-// Orca: PowerPC's fneg, fabs and fnabs (their paired forms and fnmadd/fnmsub's final negation too)
-// change only the sign bit, NaNs included, as Jit64 does with XORPD/ANDPD/ORPD. AArch64's FNEG and
-// FABS leave a NaN's sign alone while FPCR.AH is set (the guest's non-IEEE mode), which made Macs
-// and PCs compute NaNs of opposite sign and desync.
-// size: 32 or 64 (the lanes). packed: Vd and Vn are D (two singles) or Q (two doubles) registers
-// and every lane changes; otherwise only the low lane, and the rest of Vd is zeroed as FNEG did.
 void JitArm64::EmitSignOp(SignOp op, u8 size, ARM64Reg Vd, ARM64Reg Vn, bool packed,
                           ARM64Reg scratch_gpr, ARM64Reg scratch_fpr)
 {
@@ -743,8 +737,6 @@ void JitArm64::fctiwx(UGeckoInstruction inst)
 
     if (m_accurate_nans)
     {
-      // Orca: a NaN converts to 0x80000000 on PowerPC (the interpreter) and Jit64; FCVTZS makes
-      // it 0. FRINTI keeps a NaN a NaN, so test its result for one.
       m_float_emit.FCMP(converted);
       CSET(WB, CCFlags::CC_VS);
       ORR(WA, WA, WB, ArithOption(WB, ShiftType::LSL, 31));

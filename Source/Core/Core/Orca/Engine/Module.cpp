@@ -20,7 +20,7 @@ public:
   bool OwnPickArmed() override { return false; }
   std::optional<GCPadStatus> OwnPickPad() override { return std::nullopt; }
 };
-}  // namespace
+}
 
 CssAdapter& NoCss()
 {
@@ -31,7 +31,6 @@ CssAdapter& NoCss()
 void SetModule(Module* module)
 {
   assert(!module || module->Css());
-  // Its writes are recorded against its regions from now on (record-only, Engine/Regions.h).
   if (module)
     SetWriteRegions(module->Id(), module->Regions());
   else
@@ -65,4 +64,4 @@ void MergeMasks(Rollback::InputGate::Masks& masks, const Rollback::InputGate::Ma
     }
   }
 }
-}  // namespace Orca::Engine
+}

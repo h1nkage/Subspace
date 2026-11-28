@@ -173,8 +173,6 @@ NetKDRequestDevice::NetKDRequestDevice(EmulationKernel& ios, const std::string& 
   m_handle_mail = !ios.GetIOSC().IsUsingDefaultId() && !m_send_list.IsDisabled();
   m_scheduler_work_queue.Reset("WiiConnect24 Scheduler Worker");
 
-  // Orca: no wall-clock scheduled mail or downloads in a rollback session (they would touch the NAND
-  // from a host thread at host-dependent times).
   if (!Common::OfflineReplay() && !Orca::SessionActive())
     m_scheduler_timer_thread = std::thread([this] { SchedulerTimer(); });
 }

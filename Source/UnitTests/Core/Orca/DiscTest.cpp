@@ -43,7 +43,7 @@ public:
 private:
   std::string m_source, m_name;
 };
-}  // namespace
+}
 
 TEST(OrcaDisc, MissingFileIsRefused)
 {
@@ -64,8 +64,6 @@ TEST(OrcaDisc, NonDiscFileIsRefused)
   File::DeleteDirRecursively(path.substr(0, path.rfind('/')));
 }
 
-// The -e file is checked before the boot reads it: a path with nothing there, or a file that won't
-// open, is named on one line instead of a panic alert that waits forever.
 TEST(OrcaDisc, BootFileThatIsGoneIsNamed)
 {
   const Orca::DiscCheck gone = Orca::CheckBootFile("/nonexistent/brawl.iso");
@@ -81,7 +79,6 @@ TEST(OrcaDisc, BootFileThatOpensPasses)
   const std::string path = dir + "/brawl.iso";
   ASSERT_TRUE(File::WriteStringToFile(path, "x"));
   EXPECT_TRUE(Orca::CheckBootFile(path).ok);
-  // A folder is the boot's own business (an extracted disc), not a missing file.
   EXPECT_TRUE(Orca::CheckBootFile(dir).ok);
   File::DeleteDirRecursively(dir);
 }
@@ -104,11 +101,10 @@ TEST(OrcaDisc, BootFileThatWontOpenIsNamed)
 }
 #endif
 
-// With ORCA_TEST_DISC pointing at a Brawl disc image: it passes, and no other game ID matches it.
 TEST(OrcaDisc, TheRightDiscPasses)
 {
   const char* disc = std::getenv("ORCA_TEST_DISC");
-  if (!disc || !File::Exists(File::GetSysDirectory() + "Orca/RSBE01.ini"))
+  if (!disc || !File::Exists(File::GetSysDirectory() + "Subspace/RSBE01.ini"))
     GTEST_SKIP() << "set ORCA_TEST_DISC to a Brawl (USA, Rev 2) image";
   const Orca::DiscCheck check = Orca::CheckDisc(disc, Orca::APP_GAME_ID);
   EXPECT_TRUE(check.ok) << check.code << " " << check.sentence;
@@ -117,7 +113,6 @@ TEST(OrcaDisc, TheRightDiscPasses)
   EXPECT_EQ(other.code, "disc_revision");
 }
 
-// A read patch lands only in its own partition and only when its byte is inside the read.
 TEST(OrcaDisc, ReadPatchesLandInTheirRangeOnly)
 {
   const DiscIO::Partition game(0xF800000);
@@ -155,10 +150,8 @@ std::vector<u8> ReadDisc(const DiscIO::VolumeDisc& volume, u64 offset, u64 lengt
   EXPECT_TRUE(volume.Read(offset, length, data.data(), partition));
   return data;
 }
-}  // namespace
+}
 
-// With ORCA_TEST_DISC (Rev 2): one byte that doesn't hold its original refuses the whole list, and
-// no read changes.
 TEST(OrcaDisc, ReadPatchesWithAWrongOriginalPatchNothing)
 {
   const char* path = std::getenv("ORCA_TEST_DISC");
@@ -171,7 +164,6 @@ TEST(OrcaDisc, ReadPatchesWithAWrongOriginalPatchNothing)
   const std::vector<u8> header = ReadDisc(*disc, 0, 0x20, DiscIO::PARTITION_NONE);
   const std::vector<u8> boot = ReadDisc(*disc, 0, 0x20, game);
 
-  // The first byte holds its original (2); the second doesn't (2, not 1).
   EXPECT_FALSE(disc->SetReadPatches({{DiscIO::PARTITION_NONE, 7, 2, 9}, {game, 7, 1, 9}}));
   EXPECT_EQ(ReadDisc(*disc, 0, 0x20, DiscIO::PARTITION_NONE), header);
   EXPECT_EQ(ReadDisc(*disc, 0, 0x20, game), boot);
@@ -180,30 +172,23 @@ TEST(OrcaDisc, ReadPatchesWithAWrongOriginalPatchNothing)
   EXPECT_TRUE(Orca::SessionDiscReady(*disc));
 }
 
-// With ORCA_TEST_DISC_REV1 pointing at a Brawl (USA) (Rev 1) image: Orca plays it, and it reads as
-// Rev 2. With ORCA_TEST_DISC (Rev 2) too: the disc header and everything from the start of the game
-// partition to the end of its file table (boot.bin, bi2.bin, the apploader, main.dol, fst.bin) read
-// the same on both, and a Rev 2 disc is never patched.
 TEST(OrcaDisc, BrawlRev1ReadsAsRev2)
 {
   const char* rev1_path = std::getenv("ORCA_TEST_DISC_REV1");
-  if (!rev1_path || !File::Exists(File::GetSysDirectory() + "Orca/RSBE01.ini"))
+  if (!rev1_path || !File::Exists(File::GetSysDirectory() + "Subspace/RSBE01.ini"))
     GTEST_SKIP() << "set ORCA_TEST_DISC_REV1 to a Brawl (USA) (Rev 1) image";
 
   const std::unique_ptr<DiscIO::VolumeDisc> rev1 = DiscIO::CreateDisc(rev1_path);
   ASSERT_TRUE(rev1);
   const DiscIO::Partition game = rev1->GetGamePartition();
   ASSERT_EQ(rev1->GetRevision(game), 1);
-  // Unaliased, a session refuses to insert it.
   EXPECT_FALSE(Orca::SessionDiscReady(*rev1));
   ASSERT_TRUE(Orca::AliasRevision(*rev1));
   EXPECT_TRUE(Orca::SessionDiscReady(*rev1));
   EXPECT_EQ(rev1->GetRevision(), 2);
   EXPECT_EQ(rev1->GetRevision(game), 2);
   EXPECT_EQ(rev1->GetGameID(game), "RSBE01");
-  // The disc ID version main.dol builds at 0x8001BC9C: li r7,2.
   EXPECT_EQ(rev1->ReadSwapped<u32>(0x3DD00 + 0x11A1C, game), 0x38E00002u);
-  // Once is enough: the bytes no longer hold Rev 1's.
   EXPECT_FALSE(Orca::AliasRevision(*rev1));
 
   const Orca::DiscCheck check = Orca::CheckDisc(rev1_path, Orca::APP_GAME_ID);
@@ -235,7 +220,6 @@ TEST(OrcaDisc, SessionSaveSeedingCanBeTurnedOff)
   Orca::SetSeedSessionSave(true);
 }
 
-// No save, or an empty data folder (what ES leaves at boot), is hash 0; any file makes it non-zero.
 TEST(OrcaDisc, EmptySessionSaveHashesToZero)
 {
   const std::string root = File::CreateTempDir() + "/";
@@ -252,7 +236,6 @@ TEST(OrcaDisc, EmptySessionSaveHashesToZero)
   File::DeleteDirRecursively(root);
 }
 
-// The default pad mapping names "SDL/0/*": any model's first gamepad, never another source or id.
 TEST(OrcaInput, AnyNameMatchesSourceAndId)
 {
   ciface::Core::DeviceQualifier any;
@@ -288,7 +271,6 @@ public:
   void SetContents(size_t count, bool right_hash = true)
   {
     std::vector<u8> data(sizeof(IOS::ES::TMDHeader) + count * sizeof(IOS::ES::Content));
-    // RSA-2048 signature type and big-endian num_contents. The parser checks structure, not trust.
     data[1] = 1; data[3] = 1;
     data[offsetof(IOS::ES::TMDHeader, num_contents) + 1] = static_cast<u8>(count);
     const std::array<u8, 20> sha = {0xab,0x93,0xef,0x28,0x0b,0x83,0x45,0x72,0x52,0x3f,

@@ -164,8 +164,6 @@ std::chrono::nanoseconds Ms(double ms)
   return std::chrono::nanoseconds(static_cast<s64>(ms * 1'000'000));
 }
 
-// Short windows, so a test plays a few hundred frames: 1 s windows, 10 frames of warm-up, 40 valid
-// frames for a window to count.
 Rules TestRules()
 {
   Rules rules;
@@ -175,14 +173,11 @@ Rules TestRules()
   return rules;
 }
 
-// Drives a Meter frame by frame on a clock of its own.
 class Driver
 {
 public:
   explicit Driver(Rules rules = TestRules()) : m_meter(rules) {}
 
-  // One forward frame: `interval_ms` since the last forward boundary, of which `sleep_ms` the CPU
-  // thread slept, `wait_ms` the session waited and `gpu_ms` went to binding and presenting.
   std::optional<Window> Frame(double interval_ms, double sleep_ms = 0, double wait_ms = 0,
                               double gpu_ms = 0, Boundary boundary = Forward())
   {
@@ -197,7 +192,6 @@ public:
       m_windows.push_back(*window);
     return window;
   }
-  // A re-run boundary (rollback), `ms` after the last boundary.
   void Rerun(double ms, bool excluded = false)
   {
     m_now += Ms(ms);
@@ -209,7 +203,6 @@ public:
     boundary.rerun_total = m_rerun;
     m_meter.OnBoundary(boundary, m_now, m_totals);
   }
-  // The session waits `ms` (a stall or time sync) without a boundary.
   void Wait(double ms)
   {
     m_now += Ms(ms);
@@ -221,13 +214,11 @@ public:
     m_paused += Ms(ms);
   }
   void Scene(std::optional<bool> in_match) { m_meter.NoteScene(in_match); }
-  // In a match, past the warm-up, and at the start of a window.
   void Warm()
   {
     Scene(true);
     NextWindow(1);
   }
-  // Frames of `interval_ms` (of which `sleep_ms` asleep) until the next window comes out.
   Window NextWindow(double interval_ms, double sleep_ms = 0, Boundary boundary = Forward())
   {
     for (int i = 0; i < 100'000; ++i)
@@ -264,12 +255,11 @@ Window Win(double cap, int n = 50, Mode mode = Mode::OneVsOne, bool pf = false)
   window.pf = pf;
   return window;
 }
-}  // namespace
+}
 
 TEST(OrcaPerf, WorkTakesOutSleepsAndWaits)
 {
   EXPECT_DOUBLE_EQ(Orca::Perf::Work({20, 5, 3, 1}), 12);
-  // Waits longer than the interval (a wait that began before it) leave no negative work.
   EXPECT_DOUBLE_EQ(Orca::Perf::Work({10, 8, 5, 0}), 0);
 }
 
@@ -288,8 +278,6 @@ TEST(OrcaPerf, PercentilesAreNearestRank)
 
 TEST(OrcaPerf, CapIsWhatTheMachineCouldRunNotWhatItShowed)
 {
-  // A fast machine held at 60 by the throttle: 16.7 ms frames, 6.7 of them asleep. It shows 60 but
-  // could run 100.
   Driver d;
   d.Warm();
   const Window w = d.NextWindow(16.7, 6.7);
@@ -303,7 +291,6 @@ TEST(OrcaPerf, CapIsWhatTheMachineCouldRunNotWhatItShowed)
 
 TEST(OrcaPerf, ASlowMachineReadsUnder60)
 {
-  // 22.7 ms frames with no sleep at all: 44 fps, a3851fbb's rate.
   Driver d;
   d.Warm();
   const Window w = d.NextWindow(22.7, 0);
@@ -313,24 +300,18 @@ TEST(OrcaPerf, ASlowMachineReadsUnder60)
 
 TEST(OrcaPerf, ReRunsCountAsTheMachinesWork)
 {
-  // A rollback re-runs 4 frames at 3 ms each between two forward frames: the next forward frame's
-  // interval holds them, and so does its work.
   Driver d;
   d.Warm();
   d.Frame(16.7, 6.7);
   for (int i = 0; i < 4; ++i)
     d.Rerun(3);
-  // 12 ms of re-runs, then the frame itself: 16.7 ms more, 6.7 of it asleep.
   d.Frame(16.7, 6.7);
-  // One long, mostly asleep frame closes the window: three frames that worked 10, 22 and 10 ms.
   const Window w = d.NextWindow(1000, 1000 - 10);
   EXPECT_EQ(w.n, 3);
   EXPECT_NEAR(w.w95, 22, 0.01);
   EXPECT_NEAR(w.w50, 10, 0.01);
   EXPECT_NEAR(w.cap, 3 / 0.042, 0.1);
   EXPECT_EQ(w.rbf, 4);
-  // Split at the last re-run boundary: 12 ms of re-run work over 4 frames, and three forward
-  // frames of 10 ms each.
   EXPECT_EQ(w.rv, 4);
   EXPECT_NEAR(w.rw, 3, 0.01);
   EXPECT_NEAR(w.fc, 100, 0.1);
@@ -338,8 +319,6 @@ TEST(OrcaPerf, ReRunsCountAsTheMachinesWork)
 
 TEST(OrcaPerf, ReRunWorkLeavesItsWaitsOut)
 {
-  // A stall before the rollback (8 ms) is a wait, not re-run work; the re-runs themselves are 2 ms
-  // each.
   Driver d;
   d.Warm();
   d.Frame(16.7, 6.7);
@@ -350,15 +329,12 @@ TEST(OrcaPerf, ReRunWorkLeavesItsWaitsOut)
   const Window w = d.NextWindow(1000, 1000 - 10);
   EXPECT_EQ(w.rv, 3);
   EXPECT_NEAR(w.rw, 2, 0.01);
-  // Forward work: 10, 10 and 10 ms.
   EXPECT_NEAR(w.fc, 100, 0.1);
-  // All of it: 10, 16 and 10 ms.
   EXPECT_NEAR(w.cap, 3 / 0.036, 0.1);
 }
 
 TEST(OrcaPerf, ReRunsOfAFrameThatDoesntCountAreLeftOutToo)
 {
-  // Re-runs before a frame that a pause spoiled count toward rbf (the window's) but not rv.
   Driver d;
   d.Warm();
   d.Frame(16.7, 6.7);
@@ -373,14 +349,12 @@ TEST(OrcaPerf, ReRunsOfAFrameThatDoesntCountAreLeftOutToo)
 
 TEST(OrcaPerf, SessionWaitsAreNotWork)
 {
-  // Time sync held this machine a frame: its 33 ms frame was 16.7 ms of waiting and 6.7 asleep.
   Driver d;
   d.Warm();
   for (int i = 0; i < 50; ++i)
     d.Frame(16.7, 6.7);
   d.Frame(33.4, 6.7, 16.7);
   const Window w = d.NextWindow(16.7, 6.7);
-  // Counted as work, the wait would bring the cap down to about 97.
   EXPECT_NEAR(w.cap, 100, 0.2);
   EXPECT_NEAR(w.w95, 10, 0.01);
 }
@@ -399,26 +373,22 @@ TEST(OrcaPerf, GpuShareIsReported)
 TEST(OrcaPerf, MenusAndTheMatchStartAreLeftOut)
 {
   Driver d;
-  // Menus: no frame counts, but the window still comes out every second.
   d.Scene(false);
   Window w = d.NextWindow(10);
   EXPECT_EQ(w.n, 0);
   EXPECT_EQ(w.cap, 0);
   EXPECT_GT(w.fps, 90);
-  // A match starts: its first warm_frames frames don't count either.
   d.Scene(true);
   for (int i = 0; i < 10; ++i)
     d.Frame(10);
   w = d.NextWindow(10);
   EXPECT_GT(w.n, 0);
   const int first = w.n;
-  // Back to a menu: the count starts over at the next match.
   d.Scene(false);
   d.Frame(10);
   d.Scene(true);
   w = d.NextWindow(10);
   EXPECT_LT(w.n, first);
-  // The scene unreadable (a transition) changes nothing.
   d.Scene(std::nullopt);
   w = d.NextWindow(10);
   EXPECT_EQ(w.n, 100);
@@ -429,7 +399,6 @@ TEST(OrcaPerf, PausesHidingHoldsAndUnseenFramesAreLeftOut)
   Driver d;
   d.Warm();
   d.NextWindow(10);
-  // A pause: the frame across it doesn't count, and neither does its time.
   d.Pause(5000);
   std::optional<Window> w = d.Frame(10);
   EXPECT_FALSE(w);
@@ -441,10 +410,8 @@ TEST(OrcaPerf, PausesHidingHoldsAndUnseenFramesAreLeftOut)
   hidden.hidden = true;
   w = d.NextWindow(10, 0, hidden);
   EXPECT_EQ(w->n, 0);
-  // The game still ran at speed while hidden.
   EXPECT_NEAR(w->fps, 100, 0.5);
 
-  // A load the game held for 2 more frames: shown frames count it, the cap doesn't.
   Boundary held = Driver::Forward();
   held.held = true;
   held.held_frames = 2;
@@ -464,8 +431,6 @@ TEST(OrcaPerf, ACatchUpSpoilsTheNextFrame)
   Driver d;
   d.Warm();
   d.NextWindow(10);
-  // A joiner's catch-up runs frames back to back (not first runs, excluded): the next forward
-  // frame's interval spans it, so that frame doesn't count.
   for (int i = 0; i < 30; ++i)
     d.Rerun(1, true);
   const Window w = d.NextWindow(10);
@@ -484,7 +449,6 @@ TEST(OrcaPerf, ModeFollowsThePeers)
   Boundary friend_in = Driver::Forward();
   friend_in.peers = 1;
   d.Frame(10, 0, 0, 0, friend_in);
-  // The most peers seen in the window.
   EXPECT_EQ(d.NextWindow(10).mode, Mode::OneVsOne);
   EXPECT_EQ(d.NextWindow(10).mode, Mode::Solo);
 }
@@ -495,7 +459,6 @@ TEST(OrcaPerf, AWindowCountsWithEnoughFramesSoloOr1v1)
   EXPECT_TRUE(Win(50, 600, Mode::Solo).Counts(rules));
   EXPECT_TRUE(Win(50, 858, Mode::OneVsOne).Counts(rules));
   EXPECT_FALSE(Win(50, 599, Mode::OneVsOne).Counts(rules));
-  // 3-4 player rooms dip normally.
   EXPECT_FALSE(Win(50, 900, Mode::Multi).Counts(rules));
 }
 
@@ -508,7 +471,6 @@ TEST(OrcaPerf, TheSwitchFiresAfterFourSlowWindowsInARow)
   EXPECT_TRUE(s.Feed(Win(46)));
   EXPECT_TRUE(s.Fired());
   EXPECT_DOUBLE_EQ(s.TriggerCap(), 44.5);
-  // Once a run.
   for (int i = 0; i < 8; ++i)
     EXPECT_FALSE(s.Feed(Win(40)));
 }
@@ -517,12 +479,12 @@ TEST(OrcaPerf, MenusAndBigRoomsDontBreakTheRun)
 {
   AutoSwitch s(TestRules());
   EXPECT_FALSE(s.Feed(Win(50)));
-  EXPECT_FALSE(s.Feed(Win(0, 0)));  // a menu
+  EXPECT_FALSE(s.Feed(Win(0, 0)));
   EXPECT_FALSE(s.Feed(Win(50)));
-  EXPECT_FALSE(s.Feed(Win(70, 50, Mode::Multi)));  // a 4-player room, fast or slow
+  EXPECT_FALSE(s.Feed(Win(70, 50, Mode::Multi)));
   EXPECT_FALSE(s.Feed(Win(30, 50, Mode::Multi)));
   EXPECT_FALSE(s.Feed(Win(50)));
-  EXPECT_FALSE(s.Feed(Win(50, 39)));  // too few frames
+  EXPECT_FALSE(s.Feed(Win(50, 39)));
   EXPECT_TRUE(s.Feed(Win(50)));
 }
 
@@ -532,15 +494,15 @@ TEST(OrcaPerf, AFastWindowPerformanceOrAChangeStartsOver)
   s.Feed(Win(50));
   s.Feed(Win(50));
   s.Feed(Win(50));
-  EXPECT_FALSE(s.Feed(Win(58.0)));  // holds 58: not slow
+  EXPECT_FALSE(s.Feed(Win(58.0)));
   s.Feed(Win(50));
   s.Feed(Win(50));
   s.Feed(Win(50));
-  EXPECT_FALSE(s.Feed(Win(50, 50, Mode::Solo, true)));  // already Performance
+  EXPECT_FALSE(s.Feed(Win(50, 50, Mode::Solo, true)));
   s.Feed(Win(50));
   s.Feed(Win(50));
   s.Feed(Win(50));
-  s.Restart();  // the player changed a setting
+  s.Restart();
   EXPECT_FALSE(s.Feed(Win(50)));
   EXPECT_FALSE(s.Feed(Win(50)));
   EXPECT_FALSE(s.Feed(Win(50)));
@@ -549,20 +511,17 @@ TEST(OrcaPerf, AFastWindowPerformanceOrAChangeStartsOver)
 
 TEST(OrcaPerf, AFineMachineWithDipsNeverSwitches)
 {
-  // 2f80e4c8's shape: 58.6 most of the time, 49 in rollback-heavy windows, never four in a row.
   AutoSwitch s;
   for (int i = 0; i < 40; ++i)
   {
     const double cap = i % 4 == 3 ? 58.6 : (i % 2 ? 49.1 : 57.2);
     EXPECT_FALSE(s.Feed(Win(cap, 858))) << i;
   }
-  // A normal machine at 60 with one dip.
   AutoSwitch fine;
   for (int i = 0; i < 40; ++i)
     EXPECT_FALSE(fine.Feed(Win(i == 20 ? 51 : 72, 858)));
 }
 
-// A window as the `win` line has it: n, cap, fc, rw and rv, 1v1, Performance off.
 Window Line(int n, double cap, double fc, double rw, int rv)
 {
   Window window = Win(cap, n);
@@ -575,23 +534,16 @@ Window Line(int n, double cap, double fc, double rw, int rv)
 TEST(OrcaPerf, TheSwitchReadsTheReferenceRerunLoad)
 {
   const Rules rules;
-  // Forward work per frame plus 0.1 re-run frames at the measured cost: 1000 / (1000/64.9 + 0.93).
   EXPECT_NEAR(Orca::Perf::CapAtRef(Line(787, 53.6, 64.9, 9.3, 275), rules), 61.2, 0.05);
-  // Too few re-runs to trust their cost: the last cost measured, else forward speed alone.
   EXPECT_FALSE(Orca::Perf::RerunCost(Line(800, 60, 64.9, 40, 29), rules).has_value());
   EXPECT_NEAR(Orca::Perf::CapAtRef(Line(800, 60, 64.9, 40, 29), rules, 9.3), 61.2, 0.05);
   EXPECT_DOUBLE_EQ(Orca::Perf::CapAtRef(Line(800, 60, 64.9, 40, 29), rules), 64.9);
-  // Never above forward speed, and a window without one reads its all-in cap.
   EXPECT_DOUBLE_EQ(Orca::Perf::CapAtRef(Line(800, 70, 64.9, 0, 40), rules), 64.9);
   EXPECT_DOUBLE_EQ(Orca::Perf::CapAtRef(Win(51), rules), 51);
 }
 
 TEST(OrcaPerf, ANormalPcAtOnlineLatencyNeverSwitches)
 {
-  // The counted windows of the 0.3.39 candidate's 11 PC runs on 2026-10-10 (i7-8700, RTX 2080,
-  // 40 +- 8 ms each way, 0.35-0.40 re-run frames per frame) up to where the old rule switched: it
-  // read the raw cap (44-58, mostly under 58) and switched in every run. Read at the page's
-  // reference re-run load, the same windows are 48-72 and never four in a row under 58.
   const std::vector<std::vector<Window>> runs = {
       {Line(788, 54.6, 69.5, 14.5, 214), Line(784, 58.4, 72.0, 8.4, 303),
        Line(738, 51.8, 66.6, 13.4, 236), Line(756, 54.1, 65.2, 9.6, 249),
@@ -617,7 +569,7 @@ TEST(OrcaPerf, ANormalPcAtOnlineLatencyNeverSwitches)
       {Line(741, 52.2, 63.5, 9.0, 282), Line(801, 56.6, 78.8, 11.5, 348),
        Line(777, 53.9, 63.4, 9.1, 235), Line(709, 48.5, 56.7, 9.2, 230)},
   };
-  AutoSwitch all;  // one long session of all of them
+  AutoSwitch all;
   for (std::size_t r = 0; r < runs.size(); ++r)
   {
     int raw_slow = 0;
@@ -629,7 +581,6 @@ TEST(OrcaPerf, ANormalPcAtOnlineLatencyNeverSwitches)
       EXPECT_FALSE(s.Feed(w)) << "run " << r;
       EXPECT_FALSE(all.Feed(w)) << "run " << r;
     }
-    // The raw cap would have switched: four in a row under 58.
     EXPECT_GE(raw_slow, 4) << "run " << r;
   }
   EXPECT_FALSE(all.Fired());
@@ -637,19 +588,16 @@ TEST(OrcaPerf, ANormalPcAtOnlineLatencyNeverSwitches)
 
 TEST(OrcaPerf, ASlowMachineSwitchesWhateverItsRerunLoad)
 {
-  // 48 forward frames a second: slow at any re-run load. Rollback-heavy, its reference speed is 45.8.
   AutoSwitch busy;
   for (int i = 0; i < 3; ++i)
     EXPECT_FALSE(busy.Feed(Line(700, 40.1, 48, 10, 250)));
   EXPECT_TRUE(busy.Feed(Line(700, 40.1, 48, 10, 250)));
   EXPECT_NEAR(busy.TriggerCap(), 45.8, 0.05);
-  // On a calm link (too few re-runs to cost, none measured before) it reads its forward speed.
   AutoSwitch calm;
   for (int i = 0; i < 3; ++i)
     EXPECT_FALSE(calm.Feed(Line(700, 47.5, 48, 0, 4)));
   EXPECT_TRUE(calm.Feed(Line(700, 47.5, 48, 0, 4)));
   EXPECT_DOUBLE_EQ(calm.TriggerCap(), 48);
-  // A calm window after a busy one uses the cost measured then: 1000 / (1000/60 + 0.1 * 30) = 50.8.
   AutoSwitch costly;
   EXPECT_FALSE(costly.Feed(Line(700, 40, 60, 30, 200)));
   for (int i = 0; i < 2; ++i)
@@ -660,10 +608,6 @@ TEST(OrcaPerf, ASlowMachineSwitchesWhateverItsRerunLoad)
 
 TEST(OrcaPerf, ASlowMachineSwitchesInItsFirstMatch)
 {
-  // a3851fbb: 44 fps in 1v1, with the real rules, from the moment a match starts. Its 900 warm-up
-  // frames take 20.5 s, so the first window (0-15 s) has no valid frame and the second (15-30 s)
-  // too few (420) to count; windows 3 to 6 count, and the switch fires at the end of the sixth:
-  // 90 s into the match, after 60 s of counted play.
   Driver d(Rules{});
   d.Scene(true);
   AutoSwitch s;
@@ -705,7 +649,6 @@ TEST(OrcaPerf, TheLinesAreVersionedJson)
   EXPECT_EQ(Orca::Perf::WindowJson(w),
             R"({"v":1,"k":"win","m":"1v1","n":858,"cap":51.7,"fc":58.0,"rw":12.4,"rv":180,)"
             R"("w50":18.9,"w95":24.1,"g95":3.2,"fps":51.6,"rbf":212,"res":1,"pf":1,"as":1})");
-  // A test switch marks every window.
   w.test = true;
   EXPECT_NE(Orca::Perf::WindowJson(w).find(R"("as":1,"t":1})"), std::string::npos);
   EXPECT_EQ(Orca::Perf::AutoJson(44.25), R"({"v":1,"k":"auto","cap":44.3})");
@@ -714,7 +657,6 @@ TEST(OrcaPerf, TheLinesAreVersionedJson)
   EXPECT_EQ(Orca::Perf::WindowJson(empty),
             R"({"v":1,"k":"win","m":"solo","n":0,"cap":0.0,"fc":0.0,"rw":0.0,"rv":0,"w50":0.0,)"
             R"("w95":0.0,"g95":0.0,"fps":0.0,"rbf":0,"res":0,"pf":0,"as":0})");
-  // The longest a window line can be still fits the app's 300 characters.
   Window big;
   big.mode = Mode::Multi;
   big.n = 1'000'000;
@@ -747,7 +689,6 @@ TEST(OrcaPerf, TheInfoLineFitsThreeHundredBytes)
       R"("ad":["NVIDIA GeForce RTX 3060","Intel(R) UHD Graphics 770"],"ai":0,)"
       R"("cpu":"12th Gen Intel(R) Core(TM) i5-12400F","th":12,"os":"win","rev":"ccdc8e441a"})");
 
-  // The driver version, where the backend read one, right after the card.
   info.driver = "32.0.15.6094";
   EXPECT_EQ(
       Orca::Perf::InfoJson(info),
@@ -755,7 +696,6 @@ TEST(OrcaPerf, TheInfoLineFitsThreeHundredBytes)
       R"("ad":["NVIDIA GeForce RTX 3060","Intel(R) UHD Graphics 770"],"ai":0,)"
       R"("cpu":"12th Gen Intel(R) Core(TM) i5-12400F","th":12,"os":"win","rev":"ccdc8e441a"})");
 
-  // Long names: cut to 40, then the CPU goes, then adapters past the first.
   const std::string long_name(80, 'x');
   info.gpu = long_name;
   info.adapters = {long_name, long_name, long_name, long_name};

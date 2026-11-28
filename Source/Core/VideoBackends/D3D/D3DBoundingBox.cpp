@@ -80,7 +80,6 @@ std::vector<BBoxType> D3DBoundingBox::Read(u32 index, u32 length)
 
   D3D11_MAPPED_SUBRESOURCE map;
   HRESULT hr = D3D::context->Map(m_staging_buffer.Get(), 0, D3D11_MAP_READ, 0, &map);
-  // Orca: a lost device reads zeros, and says so once (D3DCommon/DeviceLost.h).
   if (FAILED(hr))
     D3DCommon::CheckDeviceLost(hr, "the bounding box's map");
   if (SUCCEEDED(hr))

@@ -39,21 +39,18 @@ std::mutex s_mutex;
 bool s_active = false;
 bool s_ranked = false;
 int s_rating = -1;
-// This player's pick on the queue's own character select, and where it was placed.
 Identity s_pick;
 std::atomic<bool> s_solo_ready{false};
 std::atomic<bool> s_on_solo_css{false};
 std::atomic<bool> s_on_queue_css{false};
 std::atomic<bool> s_clear_ready{false};
-// For the log. Guarded by s_mutex.
 std::string s_clear_ready_why;
 std::atomic<bool> s_last_timeout_mine{false};
 std::atomic<bool> s_tip_on{false};
 
-// The casual timeout per frame, until that frame is confirmed (like OnlineRules' no-show).
 struct TimeoutTracker
 {
-  std::map<int, u8> pending;  // bit 7: timed out; bits 0-1: who wasn't ready
+  std::map<int, u8> pending;
   u64 resyncs = 0;
   bool started = false;
   u8 last = 0;
@@ -76,9 +73,7 @@ void PublishIdentity()
   Orca::Events::SetOwnQueue(id.rating < 0 && !id.HasPick() ? std::vector<u8>{} :
                                                               EncodeIdentity(id));
 }
-}  // namespace
-
-// ---- The queue identity ----
+}
 
 std::vector<u8> EncodeIdentity(const Identity& id)
 {
@@ -96,7 +91,6 @@ std::vector<u8> EncodeIdentity(const Identity& id)
 
 std::optional<Identity> DecodeIdentity(const std::vector<u8>& b)
 {
-  // Newer versions may append bytes; only the known ones are read.
   if (b.size() < 13 || b[0] != 1)
     return std::nullopt;
   Identity id;
@@ -106,7 +100,6 @@ std::optional<Identity> DecodeIdentity(const std::vector<u8>& b)
   id.costume = b[4];
   id.x = std::bit_cast<float>(Get32(b, 5));
   id.y = std::bit_cast<float>(Get32(b, 9));
-  // An out-of-range position is dropped, and the player picks by hand.
   if (!std::isfinite(id.x) || !std::isfinite(id.y) || std::fabs(id.x) > 100 ||
       std::fabs(id.y) > 100)
   {
@@ -243,7 +236,6 @@ void SetSoloReady(bool ready)
 
 void SetOnSoloCss(bool on)
 {
-  // Returning from a room can keep the player ready and begin another search.
   if (s_on_solo_css.exchange(on) != on)
     Search::SetWaiting(on && s_solo_ready);
 }
@@ -308,4 +300,4 @@ void NoteTimeout(int frame, u8 value)
       t.pending.erase(t.pending.begin());
   }
 }
-}  // namespace Orca::UX::QueueApp
+}

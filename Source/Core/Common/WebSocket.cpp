@@ -36,7 +36,6 @@ bool IsVersion(std::string_view version)
          });
 }
 
-// Waits until the socket is readable (or writable). Returns false on timeout or error.
 bool WaitSocket(curl_socket_t socket, bool for_write, std::chrono::milliseconds timeout)
 {
 #ifdef _WIN32
@@ -47,7 +46,7 @@ bool WaitSocket(curl_socket_t socket, bool for_write, std::chrono::milliseconds 
   return poll(&pfd, 1, static_cast<int>(timeout.count())) > 0;
 #endif
 }
-}  // namespace
+}
 
 struct WebSocket::Impl
 {
@@ -164,7 +163,6 @@ bool WebSocket::Connect(const std::string& url, std::chrono::milliseconds timeou
   for (const auto& [option, value] : std::array<std::pair<CURLoption, const char*>, 2>{{
            {CURLOPT_URL, url.c_str()}, {CURLOPT_USERAGENT, "Orca/1"}}})
     curl_easy_setopt(curl, option, value);
-  // Capture only a bounded refusal body; expose recognized reasons, never arbitrary text.
   auto& refusal = m_impl->refusal;
   refusal.clear();
   m_impl->cancelled = cancelled;
@@ -245,10 +243,7 @@ bool WebSocket::Connect(const std::string& url, std::chrono::milliseconds timeou
     m_impl->Release();
     return false;
   }
-  // The live socket retains no caller captures after the handshake.
   m_impl->cancelled = {};
-  // The timeout was meant for the handshake only. libcurl keeps applying it afterwards, and on
-  // Windows (Schannel) every send fails once the socket is older than it, so clear it.
   curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 0L);
   m_impl->socket = socket;
   m_impl->open = true;
@@ -325,8 +320,6 @@ std::optional<std::string> WebSocket::ReceiveText(std::chrono::milliseconds time
         m_impl->close_code =
             static_cast<u16>(static_cast<u8>(buffer[0]) << 8 | static_cast<u8>(buffer[1]));
       }
-      // Complete the close handshake while the connection is still open. Echo only the code;
-      // an empty close gets an empty reply rather than a status the server never sent.
       m_impl->SendClose(std::string_view(buffer.data(), received >= 2 ? 2 : 0),
                         std::chrono::steady_clock::now() + std::chrono::milliseconds(250));
       m_impl->Fail(m_impl->close_code ?
@@ -335,7 +328,6 @@ std::optional<std::string> WebSocket::ReceiveText(std::chrono::milliseconds time
       m_impl->Release();
       return std::nullopt;
     }
-    // libcurl answers pings itself. Only text frames and their continuations carry messages.
     if (!(meta->flags & (CURLWS_TEXT | CURLWS_CONT)))
       continue;
     m_impl->partial.append(buffer.data(), received);
@@ -390,15 +382,11 @@ void WebSocket::Close(u16 code, std::chrono::milliseconds timeout)
   {
     const std::array<char, 2> payload{static_cast<char>(code >> 8), static_cast<char>(code & 0xFF)};
     const auto deadline = std::chrono::steady_clock::now() + timeout;
-    // A busy socket may not take the close immediately. Share the same bounded deadline
-    // between sending it and waiting for the acknowledgement.
     if (!m_impl->SendClose(std::string_view(payload.data(), payload.size()), deadline))
     {
       m_impl->Release();
       return;
     }
-    // Wait briefly for the server's close frame. Closing with unread data sends a TCP reset,
-    // which can drop the last message we sent (such as a room "leave").
     std::array<char, 4096> buffer;
     while (true)
     {
@@ -421,4 +409,4 @@ void WebSocket::Close(u16 code, std::chrono::milliseconds timeout)
   }
   m_impl->Release();
 }
-}  // namespace Common
+}

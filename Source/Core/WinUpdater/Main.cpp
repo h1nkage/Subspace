@@ -22,8 +22,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
   if (lstrlenW(pCmdLine) == 0)
   {
     MessageBoxW(nullptr,
-                L"This updater is not meant to be launched directly. Configure Auto-Update in "
-                "Dolphin's settings instead.",
+                L"This updater is not meant to be launched directly. Use Help > Check for Updates "
+                "in Subspace instead.",
                 L"Error", MB_ICONERROR);
     return 1;
   }

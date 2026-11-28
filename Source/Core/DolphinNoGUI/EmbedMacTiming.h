@@ -10,20 +10,17 @@
 
 namespace Embed::Mac
 {
-// Reduce WindowServer load after the 10-18 hang: following a window does not need 120 Hz queries.
 constexpr auto PARENT_QUERY_INTERVAL = std::chrono::milliseconds(100);
 constexpr auto ABOVE_QUERY_INTERVAL = std::chrono::milliseconds(250);
 constexpr auto FORCED_QUERY_FLOOR = std::chrono::milliseconds(20);
 constexpr auto SETTLE = std::chrono::milliseconds(500);
 
-// AppKit-free parent bounds: x, y, width, height, compared exactly in screen points.
 class SettleGate
 {
 public:
   using Clock = std::chrono::steady_clock;
   using Bounds = std::array<double, 4>;
 
-  // Missing bounds mean the parent is absent. A hidden parent cannot accrue stable time.
   void Observe(Clock::time_point now, bool on_screen, std::optional<Bounds> bounds)
   {
     if (!on_screen || !bounds)
@@ -53,10 +50,8 @@ public:
 
   explicit QueryTimer(std::chrono::milliseconds interval) : m_interval(interval) {}
 
-  // Keep a command refresh pending if it arrives inside the force floor.
   void Request() { m_requested = true; }
 
-  // Owner activation must check ordering immediately, independent of the periodic/command timer.
   void Reset()
   {
     m_last.reset();
@@ -99,4 +94,4 @@ public:
 private:
   std::size_t m_step = 0;
 };
-}  // namespace Embed::Mac
+}

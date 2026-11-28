@@ -46,8 +46,6 @@ std::unique_ptr<FileSystem> MakeFileSystem(Location location,
 {
   const std::string nand_root =
       File::GetUserPath(location == Location::Session ? D_SESSION_WIIROOT_IDX : D_WIIROOT_IDX);
-  // Orca: a session's NAND holds what a Wii NAND can hold and no more (a guest can't fill the
-  // host's disk), which no game that runs on a Wii notices.
   const u64 cluster_quota =
       location == Location::Session && Orca::SessionActive() ? USABLE_CLUSTERS : 0;
   return std::make_unique<HostFileSystem>(nand_root, std::move(nand_redirects), cluster_quota);

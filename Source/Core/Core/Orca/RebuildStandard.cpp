@@ -59,7 +59,7 @@ std::optional<std::string> ReadJson(const std::string& path)
     return {};
   return json;
 }
-}  // namespace
+}
 
 bool IsCancelled()
 {
@@ -144,7 +144,6 @@ int Run(const std::string& image, const std::string& layout_path,
   }
   if (IsCancelled())
     return fail("cancelled");
-  // Compare the normalized view: boot layout fields and FST have already been regenerated.
   auto view = DiscIO::CreateDisc(blob->CopyReader(), false);
   if (!view)
     return fail("cannot open rebuilt view");
@@ -153,7 +152,6 @@ int Run(const std::string& image, const std::string& layout_path,
     return fail(error);
   if (reference)
   {
-    // FST is derived from layout metadata, not copied from the rebuilt source.
     auto expected = *reference;
     auto actual = *normalized;
     std::erase_if(expected.files, [](auto& file) { return file.path == "sys/fst.bin"; });
@@ -167,7 +165,6 @@ int Run(const std::string& image, const std::string& layout_path,
   }
   if (!blob->ComputeH3(&error))
     return fail(error);
-  // A fresh volume must see the updated TMD/H3 rather than the lazy caches above.
   view = DiscIO::CreateDisc(blob->CopyReader(), false);
   if (!view || IsCancelled())
     return fail("cancelled or cannot open rebuilt view");
@@ -225,7 +222,6 @@ int Run(const std::string& image, const std::string& layout_path,
   const auto differences = DiscReport::Compare(*verified, *reference);
   if (!differences.empty())
     return fail(fmt::format("rebuilt disc file hash/size/set mismatch: {}", differences.front()));
-  // Close readers before publishing/cleanup (required on Windows).
   reopened.reset();
   if (!partial->Publish(output))
     return fail("cannot publish rebuilt RVZ; destination may already exist");
@@ -297,4 +293,4 @@ std::optional<int> RunCommandLine(int argc, char* argv[])
   return Run(options.at("--rebuild-standard"), options.at("--layout"), reference,
              options.at("--out"), stdout);
 }
-}  // namespace Orca::RebuildStandard
+}

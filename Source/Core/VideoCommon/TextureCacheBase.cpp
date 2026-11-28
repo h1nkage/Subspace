@@ -2216,8 +2216,6 @@ void TextureCacheBase::CopyRenderTargetToTexture(
   bool copy_to_ram =
       !(is_xfb_copy ? g_ActiveConfig.bSkipXFBCopyToRam : g_ActiveConfig.bSkipEFBCopyToRam) ||
       !copy_to_vram;
-  // Orca: in a session, copies write only the constant placeholder to RAM, on every backend, so
-  // both players' memory stays identical whatever their GPUs render.
   static const bool s_orca_session = Orca::SessionActive();
   if (s_orca_session)
     copy_to_ram = false;
@@ -2277,8 +2275,6 @@ void TextureCacheBase::CopyRenderTargetToTexture(
     return;
   }
 
-  // Orca: no GPU copy on a skipped frame. A texture-only copy still writes its placeholder, so
-  // RAM matches a rendered frame; a copy to RAM leaves the old pixels.
   if (VideoCommon_IsSkippingRender())
   {
     if (!copy_to_ram)

@@ -34,16 +34,15 @@ using Rollback::InputGate::ALL;
 using Rollback::InputGate::Mask;
 using Rollback::InputGate::Masks;
 
-// Brawl's character select (BrawlHeaders' muSelCharPlayerArea).
 constexpr u32 SCENE_MANAGER = 0x805A0060;
 constexpr u32 MANAGER_SCENE = 0x04;
 constexpr u32 SCENE_SELCHAR_TASK = 0x400;
 constexpr u32 TASK_AREAS = 0x44;
 constexpr u32 AREA_KIND = 0x1B4;
 constexpr u32 AREA_CHARACTER = 0x1B8;
-constexpr u32 AREA_COSTUME = 0x1BC;  // m_charColorNo
-constexpr u32 AREA_IN_HAND = 0x1F8;  // u8: 1 the token is in the hand, 0 down
-constexpr u32 AREA_FLYING = 0x1F9;   // u8: 1 while the token flies
+constexpr u32 AREA_COSTUME = 0x1BC;
+constexpr u32 AREA_IN_HAND = 0x1F8;
+constexpr u32 AREA_FLYING = 0x1F9;
 constexpr u32 KIND_HUMAN = 1;
 
 constexpr u16 BUTTON_B = PAD_BUTTON_B;
@@ -53,7 +52,6 @@ bool Pointer(const GuestMemory& m, u32 p)
   return p % 4 == 0 && m.Valid(p);
 }
 
-// Writes only what differs, counting the bytes changed.
 struct Writer
 {
   GuestMemory& m;
@@ -87,9 +85,7 @@ std::string Clock(int frames)
   const int seconds = (std::max(frames, 0) + 59) / 60;
   return fmt::format("{}:{:02}", seconds / 60, seconds % 60);
 }
-}  // namespace
-
-// ---- The host's own pick after a fresh start ----
+}
 
 OwnStep StepOwnPick(const CssPort& port, const Identity& pick, OwnSteer* st)
 {
@@ -105,9 +101,7 @@ OwnStep StepOwnPick(const CssPort& port, const Identity& pick, OwnSteer* st)
     out.done = true;
     return out;
   }
-  // Press every fourth frame, released between, as the joiner's steering does.
   const bool edge = (t & 3) == 0;
-  // The select's first frames: the hand may still be coming in.
   if (t < STEER_SETTLE_FRAMES)
     return out;
   if (port.placed)
@@ -135,7 +129,6 @@ OwnStep StepOwnPick(const CssPort& port, const Identity& pick, OwnSteer* st)
   }
   if (port.hand_target == Rules::CSS_HAND_GRID_HOLDING && port.character == pick.character)
   {
-    // Over the pick: A once the hand has nearly stopped (the character read lags the hand).
     out.buttons = edge && HandStill(port.hand_x, port.hand_y, prev_x, prev_y) ? PAD_BUTTON_A : 0;
     return out;
   }
@@ -152,7 +145,6 @@ struct OwnPickLocal
   bool armed = false;
   Identity pick;
   OwnSteer steer;
-  // The first first-run frame seen while armed (-1: none yet).
   int first = -1;
   std::optional<GCPadStatus> pad;
 };
@@ -162,7 +154,6 @@ OwnPickLocal& Own()
   return own;
 }
 
-// First runs only: one frame of the host's own pick.
 void SteerOwnPickFrame(const View& v, int frame)
 {
   OwnPickLocal& o = Own();
@@ -206,7 +197,7 @@ void SteerOwnPickFrame(const View& v, int frame)
   pad.isConnected = true;
   o.pad = pad;
 }
-}  // namespace
+}
 
 void ArmOwnPick(const Identity& pick)
 {
@@ -236,8 +227,6 @@ std::optional<GCPadStatus> OwnPickPad()
 {
   return Own().armed ? Own().pad : std::nullopt;
 }
-
-// ---- Where a pick's square is ----
 
 std::optional<PickPlaces::Placed> PickPlaces::Frame(int port, const CssPort& css)
 {
@@ -301,8 +290,6 @@ Identity Publishable(Identity pick, const std::optional<std::pair<float, float>>
   return pick;
 }
 
-// ---- Memory ----
-
 bool CssTaskReadable(const GuestMemory& m)
 {
   if (ReadSceneName(m) != "scSelctCharacter" || !Pointer(m, SCENE_MANAGER))
@@ -323,8 +310,6 @@ View ReadView(const GuestMemory& m, const std::vector<Events::PortInfo>& ports)
   const Rules::Header h = Rules::ReadHeader(m);
   if (!h.Queue2() || !RegionMapped(m))
     return v;
-  // The ruleset's queue timers. A queue header is locked, so it names a builtin ruleset; none only
-  // in a build whose ruleset files don't load (OrcaRulesets.BuiltinsAreTheOldTables).
   const Ranked::Ruleset* rules = h.ruleset == Rules::Ruleset::Brawl ?
                                      &Rulesets::RulesFor(h.mode == Rules::Mode::Casual) :
                                      Rulesets::ByBlock(static_cast<u8>(h.ruleset));
@@ -445,8 +430,6 @@ int WriteState(GuestMemory& m, const State& s)
 
 int Latch(GuestMemory& m, const std::array<std::optional<GCPadStatus>, 4>& raw)
 {
-  // Runs under any header that locks the rules, since OnlineRules.h and CharOrder.h read RAW too,
-  // and with the character order's test knob on its character select.
   if (!RegionMapped(m) ||
       !(Rules::ReadHeader(m).Locked() ||
         (CharOrder::TestActive() && MatchBlock::Present(m) && CharOrder::ReadCss(m).on_css)))
@@ -463,26 +446,20 @@ int Latch(GuestMemory& m, const std::array<std::optional<GCPadStatus>, 4>& raw)
     w.U16(RAW_PREV + 2 * p, old);
     w.U16(RAW + 2 * p, now);
   }
-  // Port 2's hand at frame start; the steering's A waits for it to be still.
   const Rules::CssHand hand = Rules::ReadCssHand(m, 1);
   w.U32(HAND_PREV, std::bit_cast<u32>(hand.valid ? hand.x : 0.0f));
   w.U32(HAND_PREV + 4, std::bit_cast<u32>(hand.valid ? hand.y : 0.0f));
   return w.changed;
 }
 
-// ---- The app's side and the local lines ----
-
 namespace
 {
-// Local state updated on first runs only: what was printed, the skip hold, token positions.
 struct Local
 {
   bool printed_ready = false;
   Identity printed;
   SkipHold skip;
-  // Each character's place on the select, learned from the hands (PickPlaces).
   PickPlaces places;
-  // The one-time tip: loaded from the seen-file on first use; port 1's B held so far.
   bool tip_loaded = false;
   OnceTip tip;
   int tip_b_frames = 0;
@@ -510,7 +487,7 @@ std::string NameFor(const std::vector<Events::PortInfo>& ports, int port, int* r
   return fmt::format("Player {}", port + 1);
 }
 
-}  // namespace
+}
 
 Text TextFor(const View& v, const State& s, const std::vector<Events::PortInfo>& ports, int local,
              float skip_progress)
@@ -536,8 +513,6 @@ Text TextFor(const View& v, const State& s, const std::vector<Events::PortInfo>&
   }
   else if (v.queue2 && v.css)
   {
-    // Each player's name by their panel, with no rating. A locked-in player gets a LOCKED IN
-    // badge.
     for (int p = 0; p < 2; ++p)
     {
       if (!(v.plugged & (1 << p)))
@@ -566,7 +541,6 @@ Text TextFor(const View& v, const State& s, const std::vector<Events::PortInfo>&
     {
       const bool mine = (s.ready >> local) & 1;
       const bool theirs = (s.ready >> other) & 1;
-      // In game 1 the picks are already in, so only Start. Later games pick with A, then Start.
       const bool picks = !v.game1;
       const std::string clock = Timed(v) ? " · " + Clock(v.ready_frames - s.timer) : std::string();
       if (mine && theirs)
@@ -587,7 +561,6 @@ Text TextFor(const View& v, const State& s, const std::vector<Events::PortInfo>&
                         "Press Start to lock in") +
                clock;
       note = mine && picks ? "B to change" : "";
-      // Casual only. Ranked never offers the skip.
       if (MaySkip(v, s) && skip_progress > 0)
       {
         const int bars = std::clamp(static_cast<int>(skip_progress * 10), 0, 10);
@@ -605,8 +578,6 @@ Text TextFor(const View& v, const State& s, const std::vector<Events::PortInfo>&
 
 namespace
 {
-// The one-time tip, on a first run: `on_select` the queue's own select, alone. Whether it was seen,
-// and keeping it as seen, go through the engine's store (Orca/LocalStore.h): no file I/O here.
 void TipFrame(bool on_select, bool ready, bool b_held, int frame)
 {
   Local& l = L();
@@ -632,14 +603,13 @@ void TipFrame(bool on_select, bool ready, bool b_held, int frame)
   else
     NOTICE_LOG_FMT(ROLLBACK, "Queue: frame {}: the hold-B tip is kept as seen", frame);
 }
-}  // namespace
+}
 
 OnceTip::Step OnceTip::Frame(bool on_select, bool ready, int b_frames)
 {
   Step step;
   if (over || !on_select)
     return step;
-  // Readying (Start) or holding B ends it; holding B is the lesson learned, so it counts as seen.
   const bool held = b_frames >= TIP_HOLD_FRAMES;
   if (ready || held || shown >= TIP_FRAMES)
   {
@@ -666,7 +636,6 @@ void Frame(const Core::CPUThreadGuard& guard, int frame, bool resimulating,
   if (Rules::ProfileRuleset() == Rules::Ruleset::None)
     return;
   GuardMemory m(guard);
-  // After a room that should not keep this player ready, clear ready at a solo frame.
   std::string cleared;
   const bool replay_clear = Orca::Net::ReplayScope::Playing() &&
                             Orca::Net::ReplayScope::Current()->clear_ready;
@@ -677,7 +646,6 @@ void Frame(const Core::CPUThreadGuard& guard, int frame, bool resimulating,
     const Rules::Header h = Rules::ReadHeader(m);
     if (h.Solo() && RegionMapped(m))
     {
-      // A Start still held from the room's last screen must be released before it counts.
       m.Write8(FLAGS, static_cast<u8>(m.Read8(FLAGS) | FLAG_SWALLOW_START));
       if (m.Read8(READY) & 1)
       {
@@ -714,8 +682,6 @@ void Frame(const Core::CPUThreadGuard& guard, int frame, bool resimulating,
     }
   }
 
-  // Record the casual timeout for this frame until it is confirmed (QueueApp::NoteTimeout). A
-  // re-run replaces the first run's value.
   QueueApp::NoteTimeout(frame, (after.flags & FLAG_TIMED_OUT) && v.queue2 && !v.solo ?
                                    static_cast<u8>(0x80 | (after.timeout_who & 3)) :
                                    0);
@@ -760,7 +726,6 @@ void Frame(const Core::CPUThreadGuard& guard, int frame, bool resimulating,
     }
   }
   const bool solo_css = v.queue2 && v.solo && v.css;
-  // Only a solo frame can set this. A non-solo frame (a pending `host` or `join`) leaves it.
   if (!solo_css)
     QueueApp::SetOnSoloCss(false);
   else if (alone)
@@ -776,8 +741,6 @@ void Frame(const Core::CPUThreadGuard& guard, int frame, bool resimulating,
     if (ready && (!l.printed_ready || l.printed.character != pick.character ||
                   l.printed.costume != pick.costume))
     {
-      // Only a pick whose place is known is put back by steering; otherwise the player picks by
-      // hand in the room.
       const Identity published = Publishable(pick, l.places.Find(pick.character));
       QueueApp::SetPick(published);
       l.printed_ready = true;
@@ -807,7 +770,6 @@ void Frame(const Core::CPUThreadGuard& guard, int frame, bool resimulating,
   }
   else if (v.queue2 && !v.solo)
   {
-    // In a room. Ready is printed again once back on the player's own character select.
     l.printed_ready = false;
     QueueApp::SetSoloReady(false);
   }
@@ -817,8 +779,6 @@ void Frame(const Core::CPUThreadGuard& guard, int frame, bool resimulating,
     QueueApp::SetSoloReady(false);
   }
 
-  // Skip: B held 1.5 s on a casual room's character select, read from this player's own latched
-  // input for the frame that just ran. Its first frame does what any B does there.
   const bool may_skip = MaySkip(v, after) && local >= 0 && local < 2;
   if (l.skip.Step(may_skip, may_skip && (v.raw[local] & BUTTON_B) != 0, v.skip_frames))
   {
@@ -837,7 +797,6 @@ Masks GateFrame(const Core::CPUThreadGuard& guard)
   const Rules::Header h = Rules::ReadHeader(m);
   if (!h.Queue2())
     return {};
-  // The gate reads memory only. Port 2's pick comes from the region's copy (PICK).
   const View v = ReadView(m, {});
   return Gate(v, ReadState(m));
 }
@@ -857,4 +816,4 @@ void LatchFrame(const Core::CPUThreadGuard& guard,
   GuardMemory m(guard);
   Latch(m, raw);
 }
-}  // namespace Orca::UX::Queue
+}

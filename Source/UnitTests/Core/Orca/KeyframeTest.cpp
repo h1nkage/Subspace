@@ -91,7 +91,7 @@ void U32(std::vector<u8>& raw, size_t offset, u32 value)
 {
   std::memcpy(raw.data() + offset, &value, sizeof(value));
 }
-}  // namespace
+}
 
 TEST(OrcaKeyframe, ReplayRoundTripsInputsAndTypedEvents)
 {
@@ -135,9 +135,6 @@ TEST(OrcaKeyframe, RoomTeamEventsRejectIncompleteMaps)
   }
 }
 
-// A replay whose history writes another game's ruleset into the match block, even on frames in the
-// middle with the room's header back by its end, is refused before it plays: it would select the
-// other game's memory writes here.
 TEST(OrcaKeyframe, AReplayNeverSetsAnotherGamesRules)
 {
   constexpr u8 BRAWL = 1, PPLUS = 2;
@@ -147,21 +144,17 @@ TEST(OrcaKeyframe, AReplayNeverSetsAnotherGamesRules)
   replay.frames[5].header = ReplayHeader{2, BRAWL, 0, 0, 1234};
   replay.boundary.header = ReplayHeader{2, BRAWL, 0, 0, 1234};
   EXPECT_TRUE(HeadersFitRuleset(replay, BRAWL));
-  // A header that clears the block is fine anywhere.
   replay.frames[9].header = ReplayHeader{};
   EXPECT_TRUE(HeadersFitRuleset(replay, BRAWL));
-  // Project+ on frames 10-19 of a vanilla Brawl game, Brawl's again by the end.
   for (int f = 10; f < 20; ++f)
     replay.frames[static_cast<size_t>(f)].header = ReplayHeader{2, PPLUS, 0, 0, 1234};
   EXPECT_FALSE(HeadersFitRuleset(replay, BRAWL));
   EXPECT_FALSE(HeadersFitRuleset(replay, PPLUS));
-  // Only the boundary's.
   ReplayArchive boundary_only;
   boundary_only.first_frame = 100;
   boundary_only.boundary.header = ReplayHeader{1, PPLUS, 0, 0, 0};
   EXPECT_FALSE(HeadersFitRuleset(boundary_only, BRAWL));
   EXPECT_TRUE(HeadersFitRuleset(boundary_only, PPLUS));
-  // A game with no ruleset takes no ruleset's header.
   EXPECT_FALSE(HeadersFitRuleset(boundary_only, 0));
 }
 
@@ -192,8 +185,6 @@ TEST(OrcaKeyframe, BoundsCountsSeatsAndPayloadLengthsBeforeAllocation)
   const auto original = Raw(blob);
   int frame;
   ReplayArchive decoded;
-  // Archive count, first frame, port count, first seat, name length, controls length, second
-  // seat.
   for (const auto [offset, value] : std::vector<std::pair<size_t, u32>>{{4, 0xffffffff},
                                                                         {8, 2},
                                                                         {60, 0xffffffff},
@@ -217,7 +208,6 @@ TEST(OrcaKeyframe, BoundsDecompressionAndTypedHeaderValues)
   auto replay = Replay(0);
   replay.boundary.ports = std::make_shared<const std::vector<Orca::Events::PortInfo>>();
   const auto original = Raw(PackKeyframe(0, replay));
-  // Header presence, mode, ruleset, coin, flags, clear-ready presence, and the menu exit.
   for (const auto [offset, value] : std::vector<std::pair<size_t, u32>>{
            {64, 2}, {68, 3}, {72, 3}, {76, 2}, {80, 4}, {88, 2}, {92, 24}, {92, 26}, {92, 255}})
   {
@@ -249,8 +239,6 @@ TEST(OrcaKeyframe, ReplayRecordingRetainsWinningInputsAndEventsAcrossRollback)
 
 TEST(OrcaKeyframe, AReplayFromAFreshStartHoldsOnlyItsOwnFrames)
 {
-  // A host that fresh-started at its origin frame 1480 offers frame 1700: 220 frames travel,
-  // and the first one leaves the main menu for Casual.
   auto original = Replay(220, 1480);
   original.frames[0].menu_exit = MENU_EXIT_CASUAL;
   original.frames[17].header = ReplayHeader{1, 1, 0, 2, 9};
@@ -270,7 +258,6 @@ TEST(OrcaKeyframe, AReplayFromAFreshStartHoldsOnlyItsOwnFrames)
   EXPECT_EQ(decoded.At(1700), nullptr);
   for (size_t i = 0; i < decoded.frames.size(); ++i)
     EXPECT_EQ(decoded.frames[i].pads, original.frames[i].pads) << i;
-  // Each exit a fresh start may take.
   for (const u8 exit : {MENU_EXIT_FRIENDS, MENU_EXIT_CASUAL, MENU_EXIT_RANKED})
   {
     auto replay = Replay(3, 200);
@@ -278,7 +265,6 @@ TEST(OrcaKeyframe, AReplayFromAFreshStartHoldsOnlyItsOwnFrames)
     ASSERT_TRUE(UnpackKeyframe(PackKeyframe(203, replay), &frame, &decoded)) << int{exit};
     EXPECT_EQ(decoded.frames[0].menu_exit, exit);
   }
-  // A keyframe at the origin itself: the boundary is the first frame, so it may carry the exit.
   auto at_origin = Replay(0, 230);
   at_origin.boundary.menu_exit = MENU_EXIT_RANKED;
   ASSERT_TRUE(UnpackKeyframe(PackKeyframe(230, at_origin), &frame, &decoded));
@@ -289,7 +275,6 @@ TEST(OrcaKeyframe, AReplayFromAFreshStartHoldsOnlyItsOwnFrames)
 
 TEST(OrcaKeyframe, AHistorysSeedTravelsOnItsFirstFrameOnly)
 {
-  // A fresh start's first frame: the exit and the seed the host drew for this history.
   auto original = Replay(40, 230);
   original.frames[0].menu_exit = MENU_EXIT_RANKED;
   original.frames[0].seed = 0x9E3779B9;
@@ -301,18 +286,15 @@ TEST(OrcaKeyframe, AHistorysSeedTravelsOnItsFirstFrameOnly)
   for (size_t i = 1; i < decoded.frames.size(); ++i)
     EXPECT_EQ(decoded.frames[i].seed, 0u) << i;
   EXPECT_EQ(decoded.boundary.seed, 0u);
-  // A boot's own origin: a seed with no exit.
   auto boot = Replay(5, 230);
   boot.frames[0].seed = 1;
   ASSERT_TRUE(UnpackKeyframe(PackKeyframe(235, boot), &frame, &decoded));
   EXPECT_EQ(decoded.frames[0].seed, 1u);
   EXPECT_EQ(decoded.frames[0].menu_exit, 0);
-  // A keyframe at the origin itself: the boundary is the first frame, so it may carry the seed.
   auto at_origin = Replay(0, 230);
   at_origin.boundary.seed = 77;
   ASSERT_TRUE(UnpackKeyframe(PackKeyframe(230, at_origin), &frame, &decoded));
   EXPECT_EQ(decoded.boundary.seed, 77u);
-  // Anywhere else, never: a later frame's, or a later boundary's.
   auto late = Replay(10, 100);
   late.frames[3].seed = 5;
   EXPECT_TRUE(PackKeyframe(110, late).empty());
@@ -323,19 +305,16 @@ TEST(OrcaKeyframe, AHistorysSeedTravelsOnItsFirstFrameOnly)
 
 TEST(OrcaKeyframe, PackingRefusesAReplayThatDoesntFitItsOrigin)
 {
-  // No origin yet, a frame before the origin, too few frames held.
   EXPECT_TRUE(PackKeyframe(10, Replay(10, -1)).empty());
   EXPECT_TRUE(PackKeyframe(99, Replay(10, 100)).empty());
   EXPECT_TRUE(PackKeyframe(111, Replay(10, 100)).empty());
   EXPECT_FALSE(PackKeyframe(110, Replay(10, 100)).empty());
-  // The count limit is the frame's, not the number of frames held.
   EXPECT_FALSE(PackKeyframe(static_cast<int>(MAX_REPLAY_FRAMES),
                             Replay(10, static_cast<int>(MAX_REPLAY_FRAMES) - 10))
                    .empty());
   EXPECT_TRUE(PackKeyframe(static_cast<int>(MAX_REPLAY_FRAMES) + 1,
                            Replay(10, static_cast<int>(MAX_REPLAY_FRAMES) - 9))
                   .empty());
-  // A menu exit anywhere but the first frame, or one that isn't an exit a fresh start takes.
   auto late = Replay(10, 100);
   late.frames[1].menu_exit = MENU_EXIT_FRIENDS;
   EXPECT_TRUE(PackKeyframe(110, late).empty());
@@ -352,7 +331,6 @@ TEST(OrcaKeyframe, PackingRefusesAReplayThatDoesntFitItsOrigin)
 
 TEST(OrcaKeyframe, UnpackingRefusesAMenuExitOffTheFirstFrame)
 {
-  // Two frames whose records are the same size, so the second's exit is at a known offset.
   auto replay = Replay(2, 50);
   replay.boundary.header.reset();
   replay.boundary.clear_ready = false;
@@ -362,8 +340,6 @@ TEST(OrcaKeyframe, UnpackingRefusesAMenuExitOffTheFirstFrame)
   int frame = -1;
   ReplayArchive decoded;
   ASSERT_TRUE(UnpackKeyframe(Compressed(original), &frame, &decoded));
-  // Each record ends with the menu exit, then the seed.
-  // The first frame's exit is fine; the second's, or the boundary's, is refused.
   auto raw = original;
   U32(raw, 28 + record - 8, MENU_EXIT_CASUAL);
   EXPECT_TRUE(UnpackKeyframe(Compressed(raw), &frame, &decoded));
@@ -374,7 +350,6 @@ TEST(OrcaKeyframe, UnpackingRefusesAMenuExitOffTheFirstFrame)
     U32(raw, at, MENU_EXIT_FRIENDS);
     EXPECT_FALSE(UnpackKeyframe(Compressed(raw), &frame, &decoded)) << at;
   }
-  // The same for the seed: any value on the first frame, none anywhere else.
   raw = original;
   U32(raw, 28 + record - 4, 0xFFFFFFFF);
   EXPECT_TRUE(UnpackKeyframe(Compressed(raw), &frame, &decoded));
@@ -385,7 +360,6 @@ TEST(OrcaKeyframe, UnpackingRefusesAMenuExitOffTheFirstFrame)
     U32(raw, at, 1);
     EXPECT_FALSE(UnpackKeyframe(Compressed(raw), &frame, &decoded)) << at;
   }
-  // A first frame past the archive's frame.
   raw = original;
   U32(raw, 8, 53);
   EXPECT_FALSE(UnpackKeyframe(Compressed(raw), &frame, &decoded));
@@ -395,7 +369,6 @@ TEST(OrcaKeyframe, RecordingStartsAtTheOrigin)
 {
   ReplayArchive archive;
   ReplayRecordingScope recording(&archive);
-  // No origin yet: nothing is recorded.
   EXPECT_EQ(ReplayRecordingScope::Frame(0), nullptr);
   ReplayRecordingScope::RecordPads(5, Pads{});
   EXPECT_TRUE(archive.frames.empty());
@@ -424,7 +397,6 @@ TEST(OrcaKeyframe, ReplacingTheNandWritesOnlyWhatDiffers)
   write("title/extra.dat", "gone after");
   write("stray/inner/file", "gone after");
   write("kind", "a file where a folder belongs");
-  // The unchanged file keeps its old time, so a rewrite would show.
   const auto old_time = std::filesystem::file_time_type::clock::now() - std::chrono::hours(48);
   std::filesystem::last_write_time(std::filesystem::path(root + "/tmp/boot.bin"), old_time);
   std::vector<NandEntry> entries;
@@ -459,7 +431,6 @@ TEST(OrcaKeyframe, ReplacingTheNandWritesOnlyWhatDiffers)
   }
   EXPECT_TRUE(std::filesystem::last_write_time(std::filesystem::path(root + "/tmp/boot.bin")) ==
               old_time);
-  // An unsafe path changes nothing.
   NandEntry escape;
   escape.path = "../outside";
   EXPECT_FALSE(ReplaceNandTree(root, {escape}));
@@ -578,7 +549,6 @@ TEST(OrcaKeyframe, EncryptionRoundTripsAndRefusesTampering)
 
 namespace
 {
-// A sealed replay of `frames` frames as the host offers it: packed, encrypted and named.
 KeyframeInfo Sealed(int frames, std::vector<u8>* blob_out = nullptr)
 {
   std::vector<u8> blob = PackKeyframe(frames, Replay(static_cast<size_t>(frames)));
@@ -595,7 +565,6 @@ KeyframeInfo Sealed(int frames, std::vector<u8>* blob_out = nullptr)
   return info;
 }
 
-// The offer as the joiner's room reads it back off the wire.
 std::optional<KeyframeInfo> OverTheWire(const picojson::object& offer)
 {
   const std::string text = picojson::value(offer).serialize();
@@ -603,10 +572,8 @@ std::optional<KeyframeInfo> OverTheWire(const picojson::object& offer)
   EXPECT_TRUE(picojson::parse(parsed, text).empty());
   return KeyframeOfferFromJson(parsed.get<picojson::object>());
 }
-}  // namespace
+}
 
-// Base64 as the offer carries it: standard alphabet, padded, and only the canonical text of the
-// stated size decodes.
 TEST(OrcaKeyframe, InlineBase64IsStrict)
 {
   const std::string foobar = "foobar";
@@ -619,7 +586,6 @@ TEST(OrcaKeyframe, InlineBase64IsStrict)
     const auto decoded = DecodeInlineKeyframe(text, n);
     ASSERT_TRUE(decoded) << text;
     EXPECT_EQ(*decoded, bytes);
-    // The wrong size, even by one, decodes nothing.
     EXPECT_FALSE(DecodeInlineKeyframe(text, n + 1));
     if (n > 1)
       EXPECT_FALSE(DecodeInlineKeyframe(text, n - 1));
@@ -638,7 +604,6 @@ TEST(OrcaKeyframe, InlineBase64IsStrict)
     ASSERT_TRUE(decoded) << n;
     EXPECT_EQ(*decoded, bytes) << n;
   }
-  // Not base64, padding inside or misplaced, padding bits set, URL-safe letters, whitespace.
   for (const char* bad :
        {"Zm9v!g==", "Zg=v", "Z===", "Zh==", "Zm9=", "Zm-v", "Zm_v", "Zm9 ", "Zm9v\n"})
   {
@@ -648,8 +613,6 @@ TEST(OrcaKeyframe, InlineBase64IsStrict)
   EXPECT_FALSE(DecodeInlineKeyframe("", 0));
 }
 
-// The host sends a replay of at most INLINE_KEYFRAME_MAX bytes in the offer itself, and a larger
-// one through the store; the offer with it fits the rooms Worker's 64 KB Orca message cap.
 TEST(OrcaKeyframe, ASmallReplayTravelsInTheOffer)
 {
   EXPECT_FALSE(InlineKeyframe(0));
@@ -658,7 +621,6 @@ TEST(OrcaKeyframe, ASmallReplayTravelsInTheOffer)
   EXPECT_FALSE(InlineKeyframe(INLINE_KEYFRAME_MAX + 1));
   EXPECT_FALSE(InlineKeyframe(u64{128} << 20));
 
-  // A queue match's replay: a fresh start's ~140 frames are a few KB sealed.
   std::vector<u8> blob;
   KeyframeInfo info = Sealed(140, &blob);
   EXPECT_LT(blob.size(), INLINE_KEYFRAME_MAX / 2) << blob.size();
@@ -680,7 +642,6 @@ TEST(OrcaKeyframe, ASmallReplayTravelsInTheOffer)
   EXPECT_EQ(frame, 140);
   EXPECT_EQ(replay.frames.size(), 140u);
 
-  // Without `b` the offer is the store's, as before.
   info.inline_blob.clear();
   got = OverTheWire(KeyframeOfferToJson(info));
   ASSERT_TRUE(got);
@@ -688,7 +649,6 @@ TEST(OrcaKeyframe, ASmallReplayTravelsInTheOffer)
   EXPECT_EQ(picojson::value(KeyframeOfferToJson(info)).serialize().find("\"b\""),
             std::string::npos);
 
-  // The largest inline offer, with every port named, stays well under 64 KB.
   KeyframeInfo big = info;
   big.size = INLINE_KEYFRAME_MAX;
   big.inline_blob.assign(INLINE_KEYFRAME_MAX, 0xAB);
@@ -703,9 +663,6 @@ TEST(OrcaKeyframe, ASmallReplayTravelsInTheOffer)
   EXPECT_LT(picojson::value(wire).serialize().size(), 56u * 1024);
 }
 
-// The joiner refuses an inline replay before decoding it when it is longer than the cap allows or
-// than the size the offer states, and refuses the whole offer then (so it never joins on it); a
-// tampered one fails the same checks as a damaged download.
 TEST(OrcaKeyframe, AnInlineReplayIsBoundedAndChecked)
 {
   std::vector<u8> blob;
@@ -714,18 +671,15 @@ TEST(OrcaKeyframe, AnInlineReplayIsBoundedAndChecked)
   const picojson::object good = KeyframeOfferToJson(info);
   ASSERT_TRUE(OverTheWire(good));
 
-  // Longer than any inline replay may be, whatever `n` says: refused unread.
   picojson::object offer = good;
   offer["b"] = picojson::value(std::string(INLINE_KEYFRAME_MAX_TEXT + 4, 'A'));
   EXPECT_FALSE(OverTheWire(offer));
   offer["n"] = picojson::value(static_cast<double>(INLINE_KEYFRAME_MAX + 3));
   EXPECT_FALSE(OverTheWire(offer));
-  // `n` over the cap with `b`: refused, even with text of the right length for it.
   offer = good;
   offer["n"] = picojson::value(static_cast<double>(INLINE_KEYFRAME_MAX + 1));
   offer["b"] = picojson::value(std::string((INLINE_KEYFRAME_MAX + 1 + 2) / 3 * 4, 'A'));
   EXPECT_FALSE(OverTheWire(offer));
-  // Text that isn't the stated size, isn't base64, or isn't a string.
   offer = good;
   offer["b"] = picojson::value(EncodeInlineKeyframe(std::vector<u8>(blob.size() + 3, 1)));
   EXPECT_FALSE(OverTheWire(offer));
@@ -734,8 +688,6 @@ TEST(OrcaKeyframe, AnInlineReplayIsBoundedAndChecked)
   offer["b"] = picojson::value(1.0);
   EXPECT_FALSE(OverTheWire(offer));
 
-  // One flipped bit: the offer reads (it is well formed), and the joiner's checks refuse it as a
-  // damaged download.
   std::vector<u8> tampered = blob;
   tampered[tampered.size() / 2] ^= 1;
   offer = good;
@@ -747,7 +699,6 @@ TEST(OrcaKeyframe, AnInlineReplayIsBoundedAndChecked)
   std::string error;
   EXPECT_FALSE(OpenKeyframe(*got, got->inline_blob, &frame, &replay, &error));
   EXPECT_EQ(error, "the keyframe arrived damaged");
-  // The right bytes under another key or frame: refused too.
   got = OverTheWire(good);
   ASSERT_TRUE(got);
   got->key[0] = got->key[0] == 'a' ? 'b' : 'a';
@@ -759,9 +710,6 @@ TEST(OrcaKeyframe, AnInlineReplayIsBoundedAndChecked)
   EXPECT_TRUE(OpenKeyframe(*got, got->inline_blob, &frame, &replay, &error)) << error;
 }
 
-// The HTTP store against Tools/orca/fake_keyframes.py (set ORCA_TEST_KEYFRAME_SERVER to its URL):
-// put, get with progress, delete, retries past 503s. A stale ticket is replaced once, a second
-// refusal is final (LastRefusal names it), and a repeated PUT of the same id counts as done.
 TEST(OrcaKeyframe, HttpStoreAgainstAFakeServer)
 {
   const char* server = std::getenv("ORCA_TEST_KEYFRAME_SERVER");
@@ -772,7 +720,6 @@ TEST(OrcaKeyframe, HttpStoreAgainstAFakeServer)
                              const std::string& fresh_ticket) {
     return MakeHttpKeyframeStore(
         [=, &minted](bool fresh, std::string* t, std::string* url, std::string*) {
-          // Like RelayRoom::FreshTicket: a minted ticket is the cached one from then on.
           minted += fresh;
           *t = minted ? fresh_ticket : cached;
           *url = std::string(server) + "/api/orca/keyframes/" + room;
@@ -783,7 +730,6 @@ TEST(OrcaKeyframe, HttpStoreAgainstAFakeServer)
            {"room1", 300000}, {"room1", 3 << 20}, {"flaky", 200000}})
   {
     SCOPED_TRACE(room + " " + std::to_string(size));
-    // The cached ticket went stale: one refusal, then a new one.
     minted = 0;
     auto store = store_for(room, "stale", "good");
     std::vector<u8> blob(size);
@@ -815,14 +761,13 @@ TEST(OrcaKeyframe, HttpStoreAgainstAFakeServer)
     EXPECT_GT(calls, 0);
     EXPECT_EQ(last, info.size);
     good->Delete(info.id);
-    good.reset();  // waits for the delete
+    good.reset();
     auto again = store_for(room, "good", "good");
     EXPECT_FALSE(again->Get(info, [](u64, u64) { return true; }, &error));
     EXPECT_NE(error.find("404"), std::string::npos) << error;
     EXPECT_NE(error.find("gone"), std::string::npos) << "the store's sentence: " << error;
     EXPECT_EQ(LastRefusal(), "gone");
   }
-  // A GET with a stale ticket gets a new one too, and the refusal's body never counts as progress.
   {
     minted = 0;
     auto putter = store_for("room2", "good", "good");
@@ -842,7 +787,6 @@ TEST(OrcaKeyframe, HttpStoreAgainstAFakeServer)
     EXPECT_EQ(most, blob.size());
     getter->Delete(info.id);
   }
-  // Cancelled (emulation stopping): no more tries.
   {
     auto store = store_for("flaky", "good", "good");
     store->Cancel();
@@ -853,8 +797,6 @@ TEST(OrcaKeyframe, HttpStoreAgainstAFakeServer)
     EXPECT_EQ(error, "cancelled");
     EXPECT_EQ(LastRefusal(), "");
   }
-  // A ticket minted while signed out: one new ticket (the player may have signed in since), then
-  // the refusal is final.
   {
     const std::vector<u8> blob(2000, 4);
     const std::string hash = KeyframeHash(blob);
@@ -868,12 +810,10 @@ TEST(OrcaKeyframe, HttpStoreAgainstAFakeServer)
     EXPECT_EQ(minted, 1);
     EXPECT_NE(error.find("403"), std::string::npos) << error;
     EXPECT_EQ(LastRefusal(), "signed_out");
-    // A 4xx without the service's code (an edge page) fails this try but isn't a refusal.
     EXPECT_FALSE(store_for("room4", "edge", "edge")->Put(info, blob, &error));
     EXPECT_NE(error.find("403"), std::string::npos) << error;
     EXPECT_EQ(LastRefusal(), "");
   }
-  // A ticket the store refuses even when new: final.
   auto refused = store_for("room1", "bad", "bad");
   std::string error;
   const std::vector<u8> blob(1000, 1);
@@ -882,8 +822,6 @@ TEST(OrcaKeyframe, HttpStoreAgainstAFakeServer)
   EXPECT_NE(error.find("401"), std::string::npos) << error;
   EXPECT_EQ(LastRefusal(), "ticket");
 }
-
-// ---- Replay streams (Keyframe.h): saved matches and live watching ----
 
 namespace
 {
@@ -900,7 +838,6 @@ ReplayStreamInfo StreamInfo()
   return info;
 }
 
-// The whole replay, cut into chunks of `per_chunk` frames, each with a checksum every 60 frames.
 std::vector<u8> Stream(const ReplayArchive& replay, size_t per_chunk)
 {
   ReplayStreamInfo info = StreamInfo();
@@ -923,7 +860,7 @@ std::vector<u8> Stream(const ReplayArchive& replay, size_t per_chunk)
   }
   return out;
 }
-}  // namespace
+}
 
 namespace
 {
@@ -1083,7 +1020,7 @@ std::string WatchWithSegment(std::string_view segment)
              StreamHeaderJson(HeaderWithSegment(segment, Orca::Online::CompatibilityKey()))) +
          R"(","extra":)" + std::string(segment) + "}";
 }
-}  // namespace
+}
 
 TEST(OrcaSafeJson, PreservesFiniteControllerNumbers)
 {
@@ -1156,8 +1093,6 @@ TEST(OrcaReplayStream, ValidHeaderParsesByteIdentically)
   EXPECT_TRUE(reader.Archive().frames.empty());
 }
 
-// Changing this header also requires updating rooms/test/fixtures/subspace-stream-header.json;
-// its "about" field describes the refresh steps.
 TEST(OrcaReplayStream, HeaderBytesMatchRoomsGoldenFixture)
 {
   auto info = StreamInfo();
@@ -1172,8 +1107,6 @@ TEST(OrcaReplayStream, HeaderBytesMatchRoomsGoldenFixture)
             "3a226f726361323a74657374222c2266697273745f6672616d65223a3530302c2267616d65223a22525342453031222c"
             "226f726967696e5f68617368223a2231323334353637383961626364656630222c22726f6f6d223a2261626331323322"
             "2c22736561745f6c6162656c73223a747275652c227365676d656e74223a322c2276223a327d");
-  // A change here means updating rooms/test/fixtures/subspace-stream-header.json streams.chunked
-  // too. The XML report carries the sample used in notes/train-0348-replay-fixture.md.
   const auto chunked = Stream(Replay(30, 0), 10);
   EXPECT_EQ(chunked.size(), 1516u);
   EXPECT_EQ(Orca::Mod::Sha256Hex(
@@ -1182,8 +1115,6 @@ TEST(OrcaReplayStream, HeaderBytesMatchRoomsGoldenFixture)
   RecordProperty("chunked_fixture_hex", Common::BytesToHexString(chunked));
 }
 
-// A game's saved copy is the written live stream (small chunks, every checksum) read back and packed
-// compactly. The room's pieces can split a compressed chunk; joined, they read as the same match.
 TEST(OrcaReplayStream, RepackedPiecesKeepTheWholeHistory)
 {
   auto original = Replay(8200, 500);
@@ -1204,7 +1135,6 @@ TEST(OrcaReplayStream, RepackedPiecesKeepTheWholeHistory)
   ASSERT_TRUE(written.Feed(live.data(), live.size(), &error)) << error;
   const auto expected = PackReplayStream(*written.Info(), written.Archive(), written.Checksums());
   ASSERT_FALSE(expected.empty());
-  // Random test pads barely compress; real play packs ~20x smaller than its live stream.
   ASSERT_LT(expected.size(), live.size());
   for (const size_t max_piece : {size_t{13}, REPLAY_PACKED_PIECE_MAX, REPLAY_PACKED_MAX})
   {
@@ -1237,7 +1167,6 @@ TEST(OrcaReplayStream, RepackedPiecesKeepTheWholeHistory)
     EXPECT_EQ(reader.Chunks(), 3u);
     EXPECT_EQ(reader.Checksums(), written.Checksums());
     EXPECT_FALSE(reader.Checksums().empty());
-    // As the live stream reads (a stream marks every port remote: a viewer holds none).
     for (size_t i = 0; i < original.frames.size(); ++i)
     {
       const auto& got = reader.Archive().frames[i];
@@ -1255,8 +1184,6 @@ TEST(OrcaReplayStream, RepackedPiecesKeepTheWholeHistory)
   }
 }
 
-// Past 1 MiB packed, no copy at all (the room would refuse it); a shorter history of the same
-// play still gets one.
 TEST(OrcaReplayStream, RepackedPiecesRefuseCopiesOverOneMiB)
 {
   const auto original = Replay(40000, 500);
@@ -1282,7 +1209,6 @@ TEST(OrcaReplayStream, RepackedPiecesRefuseCopiesOverOneMiB)
   EXPECT_LE(bytes, REPLAY_PACKED_MAX);
 }
 
-// Nothing to send from bytes that aren't a history with frames; a cut tail is left out.
 TEST(OrcaReplayStream, RepackedPiecesRefuseBadBytes)
 {
   const auto original = Replay(300, 500);
@@ -1300,7 +1226,6 @@ TEST(OrcaReplayStream, RepackedPiecesRefuseBadBytes)
       Rollback::ReplayStream::RepackedPieces(damaged, &frames, REPLAY_PACKED_PIECE_MAX, &too_big)
           .empty());
   EXPECT_FALSE(too_big);
-  // Two whole chunks and part of the third: a copy of the two.
   const std::vector<u8> two = Stream(Replay(200, 500), 100);
   auto cut = live;
   cut.resize(two.size() + 10);
@@ -1310,8 +1235,6 @@ TEST(OrcaReplayStream, RepackedPiecesRefuseBadBytes)
   EXPECT_EQ(frames, 200);
 }
 
-// The emulation thread hands a copy over and goes on: a send that hangs (a slow room) never holds
-// up the next Submit, a copy overtaken while waiting is skipped, and the newest one still goes out.
 TEST(OrcaReplayStream, PackedSenderNeverBlocksTheCaller)
 {
   std::mutex mutex;
@@ -1332,7 +1255,6 @@ TEST(OrcaReplayStream, PackedSenderNeverBlocksTheCaller)
       std::unique_lock lock(mutex);
       ASSERT_TRUE(changed.wait_for(lock, std::chrono::seconds(10), [&] { return !sent.empty(); }));
     }
-    // The first send hangs; these return at once (a blocked caller would never reach the release).
     auto submits = std::async(std::launch::async, [&] {
       sender.Submit(Stream(Replay(240, 500), 30), 1, 1);
       sender.Submit(Stream(Replay(360, 500), 30), 2, 1);
@@ -1344,12 +1266,10 @@ TEST(OrcaReplayStream, PackedSenderNeverBlocksTheCaller)
     }
     changed.notify_all();
   }
-  // Destroyed: the copy in hand finished first.
   const std::vector<std::pair<int, u64>> expected{{120, 1}, {360, 2}};
   EXPECT_EQ(sent, expected);
 }
 
-// A copy that doesn't pack sends nothing, and the next one still goes.
 TEST(OrcaReplayStream, PackedSenderSendsNothingForABadCopy)
 {
   std::vector<int> sent;
@@ -1368,8 +1288,6 @@ TEST(OrcaReplayStream, PackedSenderSendsNothingForABadCopy)
   EXPECT_EQ(sent, std::vector<int>{90});
 }
 
-// A copy past 1 MiB marks its history, so the writer stops copying it; bad bytes or another
-// history don't.
 TEST(OrcaReplayStream, PackedSenderMarksAHistoryTooBig)
 {
   std::vector<int> sent;
@@ -1387,8 +1305,6 @@ TEST(OrcaReplayStream, PackedSenderMarksAHistoryTooBig)
   EXPECT_TRUE(sent.empty());
 }
 
-// A stream holds every frame's inputs and typed events and the checksums, and reads the same
-// whether it arrives whole or a few bytes at a time (a growing file, a network stream).
 TEST(OrcaReplayStream, RoundTripsWholeOrInPieces)
 {
   auto original = Replay(1000, 500);
@@ -1436,7 +1352,6 @@ TEST(OrcaReplayStream, RoundTripsWholeOrInPieces)
         EXPECT_EQ(got.queue, want.queue);
       }
     }
-    // Equal ports are shared, across chunks too.
     EXPECT_EQ(decoded.frames[6].ports, decoded.frames[7].ports);
     EXPECT_EQ(reader.Checksums().size(), 1000u / 60u + 1);
     EXPECT_EQ(reader.Checksums().at(540), 0xabc000u + 540);
@@ -1444,7 +1359,6 @@ TEST(OrcaReplayStream, RoundTripsWholeOrInPieces)
   }
 }
 
-// A live watcher reads a chunk only once all of it has arrived: a partial tail is held back.
 TEST(OrcaReplayStream, HoldsBackAPartialChunk)
 {
   const auto replay = Replay(20, 0);
@@ -1457,9 +1371,6 @@ TEST(OrcaReplayStream, HoldsBackAPartialChunk)
   EXPECT_EQ(reader.Archive().frames.size(), 20u);
 }
 
-// A reopened recorder repacks its small live chunks into a backlog with different boundaries.
-// Whole overlapping chunks and the overlap in a partly new chunk must agree, without replaying
-// or charging metadata for them again; an incomplete old tail is discarded at the reset.
 TEST(OrcaReplayStream, ResumesWithARepackedBacklog)
 {
   auto original = Replay(1407, 500);
@@ -1485,7 +1396,6 @@ TEST(OrcaReplayStream, ResumesWithARepackedBacklog)
     ASSERT_TRUE(reader.Feed(live.data(), live.size() - 5, &error)) << error;
     EXPECT_EQ(reader.Archive().frames.size(), 732u);
     reader.Resume();
-    // A second reset while the new header is incomplete still resumes this same history.
     ASSERT_TRUE(reader.Feed(backlog.data(), 5, &error)) << error;
     reader.Resume();
     for (size_t at = 0; at < backlog.size(); at += piece)
@@ -1510,7 +1420,6 @@ TEST(OrcaReplayStream, ResumesWithARepackedBacklog)
     }
     EXPECT_EQ(reader.Checksums(), expected.Checksums());
     EXPECT_EQ(reader.Archive().frames[731].ports, reader.Archive().frames[732].ports);
-    // Repeating an entirely overlapping segment must leave the archive and checksums intact.
     reader.Resume();
     ASSERT_TRUE(reader.Feed(backlog.data(), backlog.size(), &error)) << error;
     EXPECT_EQ(reader.Resumes(), 2u);
@@ -1534,7 +1443,6 @@ TEST(OrcaReplayStream, RefusesAnotherHeaderOnResume)
   std::vector<std::vector<u8>> headers;
   for (const auto& info : other)
     headers.push_back(PackReplayStreamHeader(info));
-  // A header that isn't valid JSON is another stream too.
   auto broken = PackReplayStreamHeader(StreamInfo());
   broken[broken.size() - 1] = '!';
   headers.push_back(std::move(broken));
@@ -1554,8 +1462,6 @@ TEST(OrcaReplayStream, RefusesAnotherHeaderOnResume)
 
 TEST(OrcaReplayStream, ResumesAcrossTheRecordersSegmentNumber)
 {
-  // A recorder that drops back into its match through a keyframe starts its own next segment of
-  // the same history: only the header's segment count differs, and the frames carry on.
   const auto replay = Replay(900, 500);
   auto prefix = replay;
   prefix.frames.resize(300);
@@ -1648,8 +1554,6 @@ TEST(OrcaReplayStream, RefusesAChangedOverlappingChecksum)
   EXPECT_EQ(reader.Checksums().at(60), 0xabc000u + 60);
 }
 
-// Damage anywhere is refused, never played: a flipped byte in a chunk, chunks out of order, a
-// seed after a history's first frame, another stream version, a header that isn't the stream's.
 TEST(OrcaReplayStream, RefusesDamageGapsAndOtherVersions)
 {
   const auto replay = Replay(30, 0);
@@ -1661,13 +1565,12 @@ TEST(OrcaReplayStream, RefusesDamageGapsAndOtherVersions)
     ReplayStreamReader reader;
     EXPECT_FALSE(reader.Feed(bad.data(), bad.size(), &error));
     EXPECT_NE(error.find("damaged"), std::string::npos) << error;
-    // A failed reader stays failed.
     EXPECT_FALSE(reader.Feed(good.data(), 1, &error));
   }
   {
     std::vector<u8> bytes = PackReplayStreamHeader(StreamInfo());
     ReplayChunk chunk;
-    chunk.first = 510;  // the stream starts at 500
+    chunk.first = 510;
     chunk.frames.assign(replay.frames.begin(), replay.frames.begin() + 5);
     const auto packed = PackReplayChunk(chunk, false);
     bytes.insert(bytes.end(), packed.begin(), packed.end());
@@ -1688,7 +1591,7 @@ TEST(OrcaReplayStream, RefusesDamageGapsAndOtherVersions)
   }
   {
     auto bad = good;
-    bad[4] = 3;  // Another stream version.
+    bad[4] = 3;
     ReplayStreamReader reader;
     EXPECT_FALSE(reader.Feed(bad.data(), bad.size(), &error));
   }
@@ -1700,9 +1603,6 @@ TEST(OrcaReplayStream, RefusesDamageGapsAndOtherVersions)
   }
 }
 
-// The servers parse the container and refuse any version but 1 (rooms/src/replay-stream.ts, the
-// site's api/replays/orca and tournament-replay-body.ts). 0.3.46 wrote 2 and no recording was
-// ever handed off; raise this only together with all three.
 TEST(OrcaReplayStream, ContainerVersionIsTheOneTheServersAccept)
 {
   const std::vector<u8> header = PackReplayStreamHeader(StreamInfo());
@@ -1711,7 +1611,6 @@ TEST(OrcaReplayStream, ContainerVersionIsTheOneTheServersAccept)
   EXPECT_EQ(header[4] | header[5] << 8 | header[6] << 16 | header[7] << 24, 1);
 }
 
-// The site rebuilds a tournament download's header with "v":1; the same build's stream still plays.
 TEST(OrcaReplayStream, ReadsAHeaderTheSiteRebuilt)
 {
   const auto replay = Replay(30, 0);
@@ -1726,8 +1625,6 @@ TEST(OrcaReplayStream, ReadsAHeaderTheSiteRebuilt)
   EXPECT_EQ(reader.Archive().frames.size(), 30u);
 }
 
-// A player only reads a stream of its own build: another build's is refused at the header, before
-// any frame of it is decoded.
 TEST(OrcaReplayStream, RefusesAnotherBuildBeforeItsFrames)
 {
   const auto replay = Replay(30, 0);
@@ -1742,8 +1639,6 @@ TEST(OrcaReplayStream, RefusesAnotherBuildBeforeItsFrames)
   EXPECT_TRUE(other.Archive().frames.empty());
 }
 
-// Bytes from another player are untrusted: random damage, cuts and splices never crash or hang the
-// reader, and whatever it accepts is a whole, in-order history.
 TEST(OrcaReplayStream, SurvivesRandomDamage)
 {
   const auto replay = Replay(200, 100);
@@ -1768,7 +1663,6 @@ TEST(OrcaReplayStream, SurvivesRandomDamage)
         bytes.insert(bytes.begin() + static_cast<std::ptrdiff_t>(at), static_cast<u8>(rng()));
         break;
       default:
-        // A large length where a chunk's fields are.
         if (at + 4 <= bytes.size())
           U32(bytes, at, 0xffffffffu - static_cast<u32>(rng() % 16));
         break;
@@ -1791,8 +1685,6 @@ TEST(OrcaReplayStream, SurvivesRandomDamage)
   }
 }
 
-// Every byte of a chunk is covered by its hash, the preamble's fields too: a damaged live frame
-// (which nothing else checks) is refused like a damaged payload.
 TEST(OrcaReplayStream, RefusesADamagedPreamble)
 {
   const auto replay = Replay(30, 0);
@@ -1800,7 +1692,6 @@ TEST(OrcaReplayStream, RefusesADamagedPreamble)
   ReplayStreamInfo info = StreamInfo();
   info.first_frame = 0;
   const size_t header = PackReplayStreamHeader(info).size();
-  // The first chunk's live frame: magic (4), first (4), count (4), then live.
   for (const size_t field : {size_t{12}, size_t{16}})
   {
     auto bad = good;
@@ -1842,7 +1733,6 @@ TEST(OrcaReplayStream, ViewTimeNamesReplaceEveryFrameWithoutChangingSourceMetada
     const auto fallback = Rollback::ReplayStream::ViewPorts(before, {});
     EXPECT_EQ(fallback[0].name, "Player 1");
   }
-  // A reconnect still compares the recording's names, even after views were made with new ones.
   reader.Resume();
   ASSERT_TRUE(reader.Feed(bytes.data(), bytes.size(), &error)) << error;
   EXPECT_EQ(reader.Archive().frames.size(), original.frames.size());
@@ -2015,7 +1905,6 @@ TEST(OrcaReplayStream, ProductWatchRefusalsEndOnTheFirstStep)
     set("ORCA_REPLAY_SOURCE", old_source);
     set("ORCA_REPLAY_ROOMS_ORIGIN", old_origin);
   });
-  // These are parsed and refused before any socket is created.
   set("ORCA_REPLAY_ROOMS_ORIGIN", "https://127.0.0.1:45678");
   for (const auto* source : {"wss://localhost:45678/watch/test",
                              "wss://user@127.0.0.1:45678/watch/test",
@@ -2094,7 +1983,6 @@ TEST(OrcaReplayStream, WriterStripsRealNamesAndPreservesTagDecisions)
   EXPECT_EQ(reader.Archive().frames[0].tag_assignments, replay.frames[0].tag_assignments);
   EXPECT_EQ(reader.Checksums().size(), 2u);
   EXPECT_EQ(real_ports->at(0).name, "Alice");
-  // The live join history keeps real names and all non-text decisions.
   ReplayArchive joined;
   int frame = -1;
   replay.boundary.ports = real_ports;
@@ -2135,7 +2023,7 @@ TEST(OrcaReplayStream, RecordingMetadataUsesSeatLabelsAcrossRenamesAndRepacking)
       for (const auto& port : *frame.ports)
       {
         EXPECT_EQ(port.name, "P" + std::to_string(port.port + 1));
-        EXPECT_TRUE(port.remote);  // Playback has no local player.
+        EXPECT_TRUE(port.remote);
         EXPECT_EQ(port.controls, live[port.port].controls);
         EXPECT_EQ(port.queue, live[port.port].queue);
       }

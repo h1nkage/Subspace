@@ -560,8 +560,6 @@ TryReadInstResult MMU::TryReadInstruction(u32 address)
   {
     hex = m_ppc_state.iCache.ReadInstruction(m_memory, m_ppc_state, address);
   }
-  // Orca: game code a loader rewrote that the session keeps running as the game's own (Profile.h
-  // kept_code). Every core fetches through here: the JITs' compiles and the interpreters.
   hex = Orca::KeptInstruction(address, hex);
   return TryReadInstResult{true, from_bat, hex, address};
 }
@@ -1229,7 +1227,6 @@ void MMU::GenerateDSIException(u32 effective_address, bool write)
   // DSI exceptions are only supported in MMU mode.
   if (!m_system.IsMMUMode())
   {
-    // Orca: the first one also dumps the state behind it to stderr (Orca/PanicDiag.h).
     Orca::PanicDiag::DumpOnce(m_system, effective_address, write);
     if (write)
     {

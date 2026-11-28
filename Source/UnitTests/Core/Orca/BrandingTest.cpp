@@ -32,7 +32,6 @@ TEST(OrcaBranding, ReplacesEveryWord)
 
 TEST(OrcaBranding, WordEdges)
 {
-  // Punctuation around a word, and the end of a sentence.
   EXPECT_EQ(BrandWords("Reset Orca's files"), "Reset Subspace's files");
   EXPECT_EQ(BrandWords("Please restart Orca."), "Please restart Subspace.");
   EXPECT_EQ(BrandWords("(Orca)"), "(Subspace)");
@@ -64,7 +63,6 @@ TEST(OrcaBranding, LeavesPathsAndFileNames)
   EXPECT_EQ(BrandWords("Sys/Orca/RSBE01.ini"), "Sys/Orca/RSBE01.ini");
   EXPECT_EQ(BrandWords("~/.Dolphin"), "~/.Dolphin");
   EXPECT_EQ(BrandWords("Orca can't write to /tmp/Orca/x"), "Subspace can't write to /tmp/Orca/x");
-  // Dolphin keeps its name, including beside a path.
   EXPECT_EQ(BrandWords("Dolphin can't write to /tmp/Dolphin/x"),
             "Dolphin can't write to /tmp/Dolphin/x");
 }

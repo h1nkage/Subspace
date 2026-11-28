@@ -24,8 +24,6 @@ void UnloadLibraries();
 // Returns a list of D3D device names.
 std::vector<std::string> GetAdapterNames();
 
-// Orca: the user-mode driver version of the adapter at `index` (EnumAdapters' order; the first one
-// when there is none at `index`), as Windows shows it ("32.0.15.6094"); empty when unknown.
 std::string GetAdapterDriverVersion(int index);
 
 // Helper function which creates a DXGI factory.

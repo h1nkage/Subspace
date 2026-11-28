@@ -1,9 +1,6 @@
 // Copyright 2026 YouGame
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Orca in the desktop app's sandbox (ORCA.md "The sandbox"): the stdio bridge's parsing and routing
-// (Orca/Bridge.h), and the switches a sandboxed launch turns on (Orca/Sandbox.h, --embed-adopted).
-
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -60,7 +57,6 @@ void SetEnv(const char* name, const char* value)
 #endif
 }
 
-// One variable set for a test, put back as it was afterwards.
 class ScopedEnv
 {
 public:
@@ -79,7 +75,6 @@ private:
   std::optional<std::string> m_old;
 };
 
-// Lines Orca wrote to the app, for the request tests.
 std::mutex s_written_mutex;
 std::vector<std::string> s_written;
 void Capture(const std::string& line)
@@ -93,7 +88,6 @@ std::vector<std::string> Written()
   return s_written;
 }
 
-// The bridge as each test finds it: on, nothing counted, no writer, no handlers.
 class OrcaBridge : public ::testing::Test
 {
 protected:
@@ -119,8 +113,6 @@ double NowMs()
       .count();
 }
 
-// A controller snapshot push as the app writes it: port 1 holds `buttons` (wire mask) and its main
-// stick's X.
 std::string PadLine(int sequence, int buttons, int stick_x)
 {
   std::string ports;
@@ -149,7 +141,6 @@ picojson::object Object(const char* type)
   return o;
 }
 
-// The id of the newest request written, or 0.
 u64 NewestId()
 {
   const auto lines = Written();
@@ -163,9 +154,7 @@ u64 NewestId()
   }
   return static_cast<u64>(v.get("id").get<double>());
 }
-}  // namespace
-
-// ---- Lines ----
+}
 
 TEST(OrcaBridgeLines, SplitsAcrossReadsAndDropsOverlongLinesWhole)
 {
@@ -176,8 +165,6 @@ TEST(OrcaBridgeLines, SplitsAcrossReadsAndDropsOverlongLinesWhole)
   EXPECT_EQ(lines[0], "rect 1 2 3 4");
   EXPECT_EQ(lines[1], "show");
   EXPECT_EQ(split.Pending(), 2u);
-  // "hi" grows past 16 bytes over two reads: dropped through its newline, and the next line is
-  // whole.
   EXPECT_TRUE(split.Feed("0123456789").empty());
   EXPECT_TRUE(split.Feed("abcdefgh").empty());
   EXPECT_EQ(split.Dropped(), 1u);
@@ -185,13 +172,11 @@ TEST(OrcaBridgeLines, SplitsAcrossReadsAndDropsOverlongLinesWhole)
   lines = split.Feed("still the long one\nquit\n");
   ASSERT_EQ(lines.size(), 1u);
   EXPECT_EQ(lines[0], "quit");
-  // Exactly the limit is kept; one more byte is not.
   lines = split.Feed(std::string(16, 'x') + "\n" + std::string(17, 'y') + "\nok\n");
   ASSERT_EQ(lines.size(), 2u);
   EXPECT_EQ(lines[0], std::string(16, 'x'));
   EXPECT_EQ(lines[1], "ok");
   EXPECT_EQ(split.Dropped(), 2u);
-  // Empty lines stay lines.
   lines = split.Feed("\n\n");
   EXPECT_EQ(lines.size(), 2u);
 }
@@ -204,10 +189,8 @@ TEST(OrcaBridgeLines, ParsesOnlyTheShapesTheAppSends)
   EXPECT_EQ(Bridge::Parse(R"(br {"re":3,"ok":false,"error":"no"})").re, 3u);
   EXPECT_EQ(kind(R"(br {"push":{"type":"controllers","snapshot":{}}})"), Kind::Controllers);
   EXPECT_EQ(kind(R"(br {"push":{"slug":"brawl","cmd":"leave"}})"), Kind::Push);
-  // A page's push that claims to be controllers but names a game is the page's, not the helper's.
   EXPECT_EQ(kind(R"(br {"push":{"type":"controllers","slug":"brawl"}})"), Kind::Push);
 
-  // Everything else is ignored: not bridge lines, bad ids, missing fields, unknown messages.
   for (const char* line : {"rect 1 2 3 4",
                            "br",
                            "br ",
@@ -234,14 +217,11 @@ TEST(OrcaBridgeLines, ParsesOnlyTheShapesTheAppSends)
   {
     EXPECT_EQ(kind(line), Kind::Ignored) << line;
   }
-  // Nested past the limit, and longer than the limit.
   EXPECT_EQ(kind("br {\"push\":" + std::string(20, '[') + std::string(20, ']') + "}"),
             Kind::Ignored);
   const std::string filler(Bridge::MAX_INBOUND, 'a');
   EXPECT_EQ(kind(R"(br {"push":{"slug":"s","cmd":")" + filler + "\"}}"), Kind::Ignored);
 }
-
-// ---- Routing ----
 
 TEST_F(OrcaBridge, PassesCommandsOnInOrderAndKeepsBridgeLinesOut)
 {
@@ -250,7 +230,7 @@ TEST_F(OrcaBridge, PassesCommandsOnInOrderAndKeepsBridgeLinesOut)
   EXPECT_EQ(rest, (std::vector<std::string>{"rect 0 0 640 480", "show", "quit"}));
   const Bridge::Stats s = Bridge::GetStats();
   EXPECT_EQ(s.ignored, 2u);
-  EXPECT_EQ(s.unmatched, 1u);  // nobody asked for 99
+  EXPECT_EQ(s.unmatched, 1u);
   EXPECT_EQ(s.replies, 0u);
 }
 
@@ -273,7 +253,6 @@ TEST_F(OrcaBridge, LobbyPushesGoToTheCurrentHandlerOnly)
   const u64 first = Bridge::SetPushHandler(
       [&](const picojson::object& e) { seen.push_back("first " + e.at("cmd").to_str()); });
   Bridge::Route({R"(br {"push":{"slug":"brawl","cmd":"leave"}})"});
-  // A newer room's handler replaces it; the old room clearing its token later changes nothing.
   const u64 second = Bridge::SetPushHandler(
       [&](const picojson::object& e) { seen.push_back("second " + e.at("cmd").to_str()); });
   Bridge::ClearPushHandler(first);
@@ -282,7 +261,7 @@ TEST_F(OrcaBridge, LobbyPushesGoToTheCurrentHandlerOnly)
   Bridge::Route({R"(br {"push":{"slug":"brawl","cmd":"leave"}})"});
   EXPECT_EQ(seen, (std::vector<std::string>{"first leave", "second kick"}));
   EXPECT_EQ(Bridge::GetStats().pushes, 2u);
-  EXPECT_EQ(Bridge::GetStats().ignored, 1u);  // no handler for the last one
+  EXPECT_EQ(Bridge::GetStats().ignored, 1u);
 }
 
 TEST_F(OrcaBridge, OnlyTheNewestControllerSnapshotOfAReadIsParsed)
@@ -297,7 +276,6 @@ TEST_F(OrcaBridge, OnlyTheNewestControllerSnapshotOfAReadIsParsed)
   EXPECT_EQ(sequences, std::vector<double>{7});
   EXPECT_EQ(Bridge::GetStats().coalesced, 2u);
   EXPECT_EQ(Bridge::GetStats().controllers, 1u);
-  // One per read: each read's newest arrives.
   Bridge::Route({PadLine(8, 1, 128)});
   Bridge::Route({PadLine(9, 1, 128)});
   EXPECT_EQ(sequences, (std::vector<double>{7, 8, 9}));
@@ -314,27 +292,21 @@ TEST_F(OrcaBridge, SnapshotsReachTheControllerCache)
   ASSERT_TRUE(pad.has_value());
   EXPECT_EQ(pad->button & PAD_BUTTON_A, PAD_BUTTON_A);
   EXPECT_EQ(pad->stickX, 170);
-  // Three in one read: the newest wins.
   Bridge::Route({PadLine(2, 0x02, 100), PadLine(3, 0x04, 90)});
   pad = LatestPad();
   ASSERT_TRUE(pad.has_value());
   EXPECT_EQ(pad->button & PAD_BUTTON_X, PAD_BUTTON_X);
   EXPECT_EQ(pad->stickX, 90);
-  // A malformed snapshot is refused and changes nothing.
   Bridge::Route({R"(br {"push":{"type":"controllers","snapshot":{"schema":9}}})"});
   EXPECT_EQ(GetControllerTiming().refused, 1u);
   EXPECT_EQ(LatestPad()->stickX, 90);
   StopControllerStream();
-  // After the stream stops, snapshots are dropped.
   Bridge::Route({PadLine(4, 0x01, 10)});
   EXPECT_FALSE(LatestPad().has_value());
 }
 
-// ---- Requests ----
-
 TEST_F(OrcaBridge, RequestsOnlyWhatOrcaAsksForAndOnlyWithAPipe)
 {
-  // No writer: refused at once, and online play is off (Online::Enabled).
   EXPECT_FALSE(Bridge::Ready());
   const auto start = std::chrono::steady_clock::now();
   EXPECT_FALSE(Bridge::Request(Object("hello"), 5s).has_value());
@@ -351,7 +323,6 @@ TEST_F(OrcaBridge, RequestsOnlyWhatOrcaAsksForAndOnlyWithAPipe)
   with_id["id"] = picojson::value(5.0);
   EXPECT_FALSE(Bridge::Request(with_id, 50ms).has_value());
   EXPECT_TRUE(Written().empty());
-  // Too long to send.
   picojson::object big = Object("mpRoom");
   big["participants"] = picojson::value(std::string(Bridge::MAX_OUTBOUND, 'p'));
   EXPECT_FALSE(Bridge::Request(big, 50ms).has_value());
@@ -365,7 +336,6 @@ TEST_F(OrcaBridge, ARequestGetsItsOwnReply)
 {
   Bridge::SetWriter(&Capture);
   std::atomic<bool> done{false};
-  // The app: answers each request it sees, a stale reply first.
   std::thread app([&] {
     u64 answered = 0;
     while (!done)
@@ -413,7 +383,6 @@ TEST_F(OrcaBridge, ARequestGivesUpOnTimeoutCancelAndAClosedStdin)
   auto start = std::chrono::steady_clock::now();
   EXPECT_FALSE(Bridge::Request(Object("hello"), 100ms).has_value());
   EXPECT_GE(std::chrono::steady_clock::now() - start, 100ms);
-  // A reply after giving up is nobody's.
   Bridge::Route({fmt::format(R"(br {{"re":{},"ok":true,"result":{{}}}})", NewestId())});
   EXPECT_EQ(Bridge::GetStats().unmatched, 1u);
 
@@ -435,18 +404,12 @@ TEST_F(OrcaBridge, ARequestGivesUpOnTimeoutCancelAndAClosedStdin)
   EXPECT_FALSE(Bridge::Request(Object("mpTicket"), 10s).has_value());
   EXPECT_LT(std::chrono::steady_clock::now() - start, 2s);
   closer.join();
-  // Closed: later requests fail at once, without writing.
   const size_t written = Written().size();
   EXPECT_FALSE(Bridge::Request(Object("hello"), 10s).has_value());
   EXPECT_EQ(Written().size(), written);
   EXPECT_EQ(Bridge::GetStats().unanswered, 3u);
 }
 
-// ---- The sandbox's switches ----
-
-// The stdio bridge's heartbeat (Bridge::Heartbeat, said by Platform::UpdateRunningFlag): due at
-// once, then once a period however often the main loop asks; a loop that stalled says it once when
-// it comes back, not once per period it missed.
 TEST(OrcaBridgeHeartbeat, DueAtOnceThenOncePerPeriod)
 {
   EXPECT_EQ(Bridge::HEARTBEAT_LINE, "orca alive");
@@ -471,7 +434,6 @@ TEST(OrcaSandbox, NetworkModes)
   EXPECT_TRUE(known);
   EXPECT_EQ(Sandbox::ParseNetMode("internet-lan", &known), Sandbox::NetMode::InternetLan);
   EXPECT_TRUE(known);
-  // An unknown word is the strictest mode.
   EXPECT_EQ(Sandbox::ParseNetMode("lan", &known), Sandbox::NetMode::Internet);
   EXPECT_FALSE(known);
   EXPECT_EQ(Sandbox::ParseNetMode("INTERNET", &known), Sandbox::NetMode::Internet);
@@ -569,7 +531,6 @@ TEST(OrcaSandbox, DirectLinksOfferOnlyCandidatesTheSandboxCanReach)
   for (const char* a : {"192.168.1.20", "2001:db8::20", "fe80::20", "203.0.113.7", "198.51.100.40"})
     EXPECT_TRUE(has(lan, a)) << a;
   EXPECT_FALSE(has(lan, "127.0.0.1"));
-  // The ICE credentials stay in every mode.
   for (const std::string* d : {&all, &internet, &lan})
   {
     EXPECT_NE(d->find("a=ice-ufrag:abcd"), std::string::npos);
@@ -583,7 +544,6 @@ TEST(OrcaSandbox, SessionsLeaveTheAdapterAndTheMacKeyboardToTheApp)
   EXPECT_TRUE(Sandbox::AdapterAllowed(false));
 
   using Os = Sandbox::Os;
-  // Only a Mac session on the stdio bridge, where the page sends the keyboard as a pad.
   EXPECT_FALSE(Sandbox::OsKeyboardAllowed(Os::MacOS, true, true));
   EXPECT_TRUE(Sandbox::OsKeyboardAllowed(Os::MacOS, true, false));
   EXPECT_TRUE(Sandbox::OsKeyboardAllowed(Os::MacOS, false, true));
@@ -604,7 +564,7 @@ TEST(OrcaSandbox, EmbedAdoptedNeedsEmbed)
   EXPECT_TRUE(options->adopted);
   EXPECT_EQ(options->parent, 1234u);
   EXPECT_EQ(options->rect.w, 640);
-  ASSERT_EQ(argv.size(), 3u);  // the regular parser sees only "-e disc.iso"
+  ASSERT_EQ(argv.size(), 3u);
   EXPECT_STREQ(argv[1], "-e");
 
   std::vector<char*> plain{arg0.data(), embed.data(), parent.data(), handle.data()};
@@ -617,22 +577,19 @@ TEST(OrcaSandbox, EmbedAdoptedNeedsEmbed)
   EXPECT_NE(error.find("--embed-adopted"), std::string::npos);
 }
 
-// The build declares its sandbox mode (Sys/Orca/features.json), which the release scripts copy into
-// the manifest entry: the app jails only an Orca that says "sandbox": 1.
 TEST(OrcaSandbox, TheBuildDeclaresItsSandboxMode)
 {
-  std::string path = File::GetSysDirectory() + "Orca/features.json";
+  std::string path = File::GetSysDirectory() + "Subspace/features.json";
   if (!File::Exists(path))
   {
-    // The source tree's copy, from this file's own path.
     const std::string here = __FILE__;
     const size_t at = here.rfind("Source/UnitTests/");
     if (at != std::string::npos)
-      path = here.substr(0, at) + "Data/Sys/Orca/features.json";
+      path = here.substr(0, at) + "Data/Sys/Subspace/features.json";
   }
   std::string text;
   if (!File::ReadFileToString(path, text))
-    GTEST_SKIP() << "no Sys/Orca/features.json here";
+    GTEST_SKIP() << "no Sys/Subspace/features.json here";
   picojson::value v;
   ASSERT_TRUE(picojson::parse(v, text).empty()) << text;
   ASSERT_TRUE(v.is<picojson::object>());
@@ -641,7 +598,6 @@ TEST(OrcaSandbox, TheBuildDeclaresItsSandboxMode)
 }
 
 #ifndef _WIN32
-// What a sandbox refusing a file looks like (EACCES), made with permissions. Skipped as root.
 TEST(OrcaSandbox, AFileTheSandboxDidNotGrantIsSaidSo)
 {
   if (geteuid() == 0)
@@ -659,7 +615,6 @@ TEST(OrcaSandbox, AFileTheSandboxDidNotGrantIsSaidSo)
   ASSERT_EQ(chmod(disc.c_str(), 0), 0);
   EXPECT_TRUE(Sandbox::ReadDenied(disc));
   {
-    // Outside the sandbox it's a disc Orca can't read; inside, the app's cue to move it.
     ScopedEnv net("ORCA_NET", nullptr);
     if (!Sandbox::Jailed())
       EXPECT_EQ(Orca::CheckBootFile(disc).code, "disc_unreadable");
@@ -670,25 +625,18 @@ TEST(OrcaSandbox, AFileTheSandboxDidNotGrantIsSaidSo)
     EXPECT_FALSE(check.ok);
     EXPECT_EQ(check.code, Sandbox::DISC_ERROR);
     EXPECT_EQ(check.sentence, Sandbox::DISC_SENTENCE);
-    // A disc that really is missing is still missing.
     EXPECT_EQ(Orca::CheckBootFile(dir + "/missing.iso").code, "disc_missing");
   }
   ASSERT_EQ(chmod(dir.c_str(), 0500), 0);
   EXPECT_TRUE(Sandbox::WriteDenied(dir));
   chmod(dir.c_str(), 0700);
   chmod(disc.c_str(), 0600);
-  // WriteDenied left nothing behind.
   const auto entries = File::ScanDirectoryTree(dir, false);
   EXPECT_EQ(entries.children.size(), 1u);
   File::DeleteDirRecursively(dir);
 }
 #endif
 
-// ---- Live: a room on the stdio bridge ----
-
-// The app's half of the stdio bridge, played by this test: it answers hello with the invite's room,
-// mints mpTicket as an anonymous dev ticket (as fake_bridge.py does), records each mpRoom, and
-// checks that Orca asks for nothing else and no more than the app's allowlist passes on.
 class FakeApp
 {
 public:
@@ -759,7 +707,6 @@ private:
     }
     else if (type == "mpTicket")
     {
-      // The app rebuilds a ticket request from these fields only; Orca sends nothing else.
       for (const auto& [key, value] : o)
       {
         if (key != "id" && key != "type" && key != "players" && key != "mode" && key != "ranked" &&
@@ -831,10 +778,6 @@ private:
   std::thread m_thread;
 };
 
-// Under the app on the stdio bridge (SUBSPACE_STDIO=1): the invite's room comes from hello, the
-// ticket from mpTicket, the room is mirrored to the page with mpRoom, and the page's Leave arrives
-// as a push. The friend joins with a dev ticket. ORCA_LIVE_TEST=1 (example.invalid's rooms; anonymous
-// dev tickets for the dev game orca-stdio-test, so no account and no real player is involved).
 TEST(OrcaLive, StdioBridgeMirrorsTheRoomAndTakesLeave)
 {
   const char* live = std::getenv("ORCA_LIVE_TEST");
@@ -849,8 +792,6 @@ TEST(OrcaLive, StdioBridgeMirrorsTheRoomAndTakesLeave)
   FakeApp app(room);
 
   RoomOptions options;
-  // The protocol's prefix: example.invalid refuses an Orca lobby without it since 0.3.32 went current
-  // (orca_outdated, web lib/orca-protocol.ts), dev games included.
   options.compatibility = "orca2:stdio-live-test";
   options.mode = "orca-test";
   RelayRoom a(options);
@@ -860,7 +801,6 @@ TEST(OrcaLive, StdioBridgeMirrorsTheRoomAndTakesLeave)
       << a.Status() << (app.Problems().empty() ? "" : "; " + app.Problems().front());
   EXPECT_EQ(a.Code(), room);
 
-  // The friend, without the app (its environment is read on its own thread, at its ticket).
   SetEnv("SUBSPACE_STDIO", nullptr);
   SetEnv("ORCA_TEST_DEV_GAME", "orca-stdio-test");
   options.room_code = room;
@@ -874,7 +814,6 @@ TEST(OrcaLive, StdioBridgeMirrorsTheRoomAndTakesLeave)
     std::this_thread::sleep_for(10ms);
   ASSERT_TRUE(a.Connected()) << a.Status();
   ASSERT_TRUE(b.Connected()) << b.Status();
-  // The page sees the friend arrive.
   const auto mirrored_ready = [&] {
     const auto rooms = app.Rooms();
     return !rooms.empty() && rooms.back().find("\"ready\":true") != std::string::npos;
@@ -883,7 +822,6 @@ TEST(OrcaLive, StdioBridgeMirrorsTheRoomAndTakesLeave)
     std::this_thread::sleep_for(10ms);
   EXPECT_TRUE(mirrored_ready());
 
-  // Another game's Leave is not this one's; this game's ends the room (no "caps leave" here).
   Bridge::Route({R"(br {"push":{"slug":"another-game","cmd":"leave"}})"});
   std::this_thread::sleep_for(300ms);
   EXPECT_NE(a.GetState(), RoomState::Ended);
@@ -893,11 +831,8 @@ TEST(OrcaLive, StdioBridgeMirrorsTheRoomAndTakesLeave)
   EXPECT_EQ(a.GetState(), RoomState::Ended);
   EXPECT_EQ(a.Status(), "You left the room");
   EXPECT_EQ(a.ErrorCode(), "");
-  // (The friend stays in the room, waiting: what a joiner does when its host leaves is the room's
-  // business, not the bridge's.)
   b.Leave();
 
-  // The page's last word is the room with nobody in it.
   a.Leave();
   const auto rooms = app.Rooms();
   ASSERT_FALSE(rooms.empty());
@@ -911,7 +846,6 @@ TEST(OrcaLive, StdioBridgeMirrorsTheRoomAndTakesLeave)
 #ifdef __APPLE__
 TEST(OrcaSandboxDeathTest, PackJailRecognizesAnAppliedProcessSandbox)
 {
-  // Apply a fixture profile only in the test's child; the parent's sandbox is unchanged.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
   EXPECT_EXIT(
@@ -1028,7 +962,7 @@ protected:
   bool online = false;
   std::vector<std::pair<int, bool>> connections;
 };
-}  // namespace
+}
 
 TEST_F(OrcaLinuxPackJail, AllChecksPassAndOnlyOwnPathSocketConnects)
 {
@@ -1167,7 +1101,6 @@ TEST_F(OrcaLinuxPackJail, EveryHomeEntryMustBeAPlaceholderOnTheRootDevice)
 TEST_F(OrcaLinuxPackJail, HomeEntrySymlinkRegularFileAndProbeErrorsRefuse)
 {
   probes.passwd_home = [] { return std::optional<std::string>(); };
-  // The OS directory probe returns nullopt for a symlink, regular file or stat/statfs error.
   for (const char* entry : {"deck-symlink", "regular-file", "unreadable-directory"})
   {
     SCOPED_TRACE(entry);

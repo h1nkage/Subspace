@@ -3,9 +3,14 @@
 
 #include "UICommon/AutoUpdate.h"
 
+#include <algorithm>
+#include <array>
 #include <atomic>
+#include <charconv>
 #include <cstdlib>
+#include <optional>
 #include <string>
+#include <string_view>
 
 #include <fmt/format.h>
 #include <picojson.h>
@@ -101,47 +106,50 @@ void CleanupFromPreviousUpdate()
 }
 #endif
 
-// This ignores i18n because most of the text in there (change descriptions) is only going to be
-// written in english anyway.
-std::string GenerateChangelog(const picojson::array& versions)
+constexpr std::string_view UPDATE_BASE_URL = "https://h1nkage.github.io/Subspace-Updates/";
+constexpr std::string_view RELEASE_PREFIX = "Subspace-";
+
+std::optional<std::array<u32, 3>> ReleaseNumbers(std::string_view version)
 {
-  std::string changelog;
-  for (const auto& ver : versions)
+  if (!version.starts_with(RELEASE_PREFIX))
+    return std::nullopt;
+  version.remove_prefix(RELEASE_PREFIX.size());
+  std::array<u32, 3> numbers{};
+  for (std::size_t i = 0; i < numbers.size(); ++i)
   {
-    if (!ver.is<picojson::object>())
-      continue;
-    picojson::object ver_obj = ver.get<picojson::object>();
-
-    if (ver_obj["changelog_html"].is<picojson::null>())
+    const std::size_t dot = version.find('.');
+    const bool last = i + 1 == numbers.size();
+    if (last == (dot != std::string_view::npos))
+      return std::nullopt;
+    const std::string_view part = last ? version : version.substr(0, dot);
+    if (part.empty() || part.size() > 6 ||
+        !std::ranges::all_of(part, [](char c) { return c >= '0' && c <= '9'; }))
     {
-      if (!changelog.empty())
-        changelog += "<div style=\"margin-top: 0.4em;\"></div>";  // Vertical spacing.
-
-      // Try to link to the PR if we have this info. Otherwise just show shortrev.
-      if (ver_obj["pr_url"].is<std::string>())
-      {
-        changelog += "<a href=\"" + ver_obj["pr_url"].get<std::string>() + "\">" +
-                     ver_obj["shortrev"].get<std::string>() + "</a>";
-      }
-      else
-      {
-        changelog += ver_obj["shortrev"].get<std::string>();
-      }
-      const std::string escaped_description =
-          Common::GetEscapedHtml(ver_obj["short_descr"].get<std::string>());
-      changelog += " by <a href = \"" + ver_obj["author_url"].get<std::string>() + "\">" +
-                   ver_obj["author"].get<std::string>() + "</a> &mdash; " + escaped_description;
+      return std::nullopt;
     }
-    else
-    {
-      if (!changelog.empty())
-        changelog += "<hr>";
-      changelog += "<b>Dolphin " + ver_obj["shortrev"].get<std::string>() + "</b>";
-      changelog += "<p>" + ver_obj["changelog_html"].get<std::string>() + "</p>";
-    }
+    const auto [end, ec] = std::from_chars(part.data(), part.data() + part.size(), numbers[i]);
+    if (ec != std::errc{} || end != part.data() + part.size())
+      return std::nullopt;
+    if (!last)
+      version.remove_prefix(dot + 1);
   }
-  return changelog;
+  return numbers;
 }
+
+std::optional<std::string> UpdateUrl(const picojson::value& path)
+{
+  if (!path.is<std::string>())
+    return std::nullopt;
+  const std::string& text = path.get<std::string>();
+  if (text.empty() || text.find("..") != std::string::npos)
+    return std::nullopt;
+  if (text.starts_with("https://"))
+    return text;
+  if (text.find(':') != std::string::npos || text.starts_with('/'))
+    return std::nullopt;
+  return std::string(UPDATE_BASE_URL) + text;
+}
+
 }  // namespace
 
 bool AutoUpdateChecker::SystemSupportsAutoUpdates()
@@ -151,33 +159,6 @@ bool AutoUpdateChecker::SystemSupportsAutoUpdates()
 #else
   return false;
 #endif
-}
-
-static std::string GetPlatformID()
-{
-#if defined(_WIN32)
-#if defined(_M_ARM_64)
-  return "win-arm64";
-#else
-  return "win";
-#endif
-#elif defined(__APPLE__)
-#if defined(MACOS_UNIVERSAL_BUILD)
-  return "macos-universal";
-#else
-  return "macos";
-#endif
-#else
-  return "unknown";
-#endif
-}
-
-static std::string GetUpdateServerUrl()
-{
-  auto server_url = std::getenv("DOLPHIN_UPDATE_SERVER_URL");
-  if (server_url)
-    return server_url;
-  return "https://dolphin-emu.org";
 }
 
 static u32 GetOwnProcessId()
@@ -201,30 +182,40 @@ void AutoUpdateChecker::CheckForUpdate(std::string_view update_track,
 
   Common::ScopeGuard guard([]() { s_check_in_progress.store(false); });
 
+  const bool is_manual_check = check_type == CheckType::Manual;
+
   if (s_update_triggered)
   {
-    if (check_type == CheckType::Manual)
-      SuccessAlertFmtT("A Dolphin update is already scheduled for the next time it closes.");
+    if (is_manual_check)
+      SuccessAlertFmtT("A Subspace update is already scheduled for the next time it closes.");
 
     return;
   }
 
-  // Don't bother checking if updates are not supported or not enabled.
-  if (!SystemSupportsAutoUpdates() || update_track.empty())
+  if (!SystemSupportsAutoUpdates() || (!is_manual_check && update_track.empty()))
     return;
 
 #ifdef OS_SUPPORTS_UPDATER
   CleanupFromPreviousUpdate();
 #endif
 
-  std::string_view version_hash = hash_override.empty() ? Common::GetScmRevGitStr() : hash_override;
-  std::string url = fmt::format("{}/update/check/v1/{}/{}/{}", GetUpdateServerUrl(), update_track,
-                                version_hash, GetPlatformID());
-
-  const bool is_manual_check = check_type == CheckType::Manual;
+  const std::string own_version =
+      hash_override.empty() ? Common::GetScmDescStr() : std::string(hash_override);
+  const std::optional<std::array<u32, 3>> own_numbers = ReleaseNumbers(own_version);
+  if (!own_numbers)
+  {
+    if (is_manual_check)
+    {
+      SuccessAlertFmtT("Updates are only available for release versions of Subspace. This is a "
+                       "development build ({0}).",
+                       own_version);
+    }
+    INFO_LOG_FMT(COMMON, "Auto-update: {} is not a release version, not checking.", own_version);
+    return;
+  }
 
   Common::HttpRequest req{std::chrono::seconds{10}};
-  auto resp = req.Get(url);
+  auto resp = req.Get(std::string(UPDATE_BASE_URL) + "latest.json");
   if (!resp)
   {
     if (is_manual_check)
@@ -236,40 +227,60 @@ void AutoUpdateChecker::CheckForUpdate(std::string_view update_track,
 
   picojson::value json;
   const std::string err = picojson::parse(json, contents);
-  if (!err.empty())
-  {
-    CriticalAlertFmtT("Invalid JSON received from auto-update service : {0}", err);
-    return;
-  }
-  picojson::object obj = json.get<picojson::object>();
-
-  if (obj["status"].get<std::string>() != "outdated")
+  if (!err.empty() || !json.is<picojson::object>())
   {
     if (is_manual_check)
-      SuccessAlertFmtT("You are running the latest version available on this update track.");
+      CriticalAlertFmtT("Invalid JSON received from auto-update service : {0}", err);
+    return;
+  }
+  const picojson::object& obj = json.get<picojson::object>();
+  const auto field = [&obj](const char* name) {
+    const auto it = obj.find(name);
+    return it == obj.end() ? picojson::value{} : it->second;
+  };
+
+  const picojson::value latest = field("version");
+  const std::optional<std::array<u32, 3>> latest_numbers =
+      latest.is<std::string>() ? ReleaseNumbers(latest.get<std::string>()) : std::nullopt;
+  const std::optional<std::string> next_manifest = UpdateUrl(field("manifest"));
+  const std::optional<std::string> content_store = UpdateUrl(field("content-store"));
+  if (!latest_numbers || !next_manifest || !content_store || !content_store->ends_with('/'))
+  {
+    if (is_manual_check)
+      CriticalAlertFmtT("The update information on the server is incomplete.");
+    return;
+  }
+
+  if (*latest_numbers <= *own_numbers)
+  {
+    if (is_manual_check)
+      SuccessAlertFmtT("You are running the latest version of Subspace.");
     INFO_LOG_FMT(COMMON, "Auto-update status: we are up to date.");
     return;
   }
 
+  const std::string this_manifest =
+      std::string(UPDATE_BASE_URL) + "manifests/" + own_version + ".manifest";
+  if (!req.Get(this_manifest))
+  {
+    if (is_manual_check)
+    {
+      CriticalAlertFmtT("{0} can't update itself because it was never published as an update. "
+                        "Download {1} instead.",
+                        own_version, latest.get<std::string>());
+    }
+    WARN_LOG_FMT(COMMON, "Auto-update: no manifest for {} at {}", own_version, this_manifest);
+    return;
+  }
+
   NewVersionInformation nvi;
-  nvi.this_manifest_url = obj["old"].get<picojson::object>()["manifest"].get<std::string>();
-  nvi.next_manifest_url = obj["new"].get<picojson::object>()["manifest"].get<std::string>();
-  nvi.content_store_url = obj["content-store"].get<std::string>();
-  nvi.new_shortrev = obj["new"].get<picojson::object>()["name"].get<std::string>();
-  nvi.new_hash = obj["new"].get<picojson::object>()["hash"].get<std::string>();
+  nvi.this_manifest_url = this_manifest;
+  nvi.next_manifest_url = *next_manifest;
+  nvi.content_store_url = *content_store;
+  nvi.new_shortrev = latest.get<std::string>();
+  nvi.new_hash = latest.get<std::string>();
 
-  // TODO: generate the HTML changelog from the JSON information.
-  nvi.changelog_html = GenerateChangelog(obj["changelog"].get<picojson::array>());
-
-  if (std::getenv("DOLPHIN_UPDATE_TEST_DONE"))
-  {
-    // We are at end of updater test flow, send a message to server, which will kill us.
-    req.Get(fmt::format("{}/update-test-done/{}", GetUpdateServerUrl(), GetOwnProcessId()));
-  }
-  else
-  {
-    OnUpdateAvailable(nvi);
-  }
+  OnUpdateAvailable(nvi, check_type);
 }
 
 void AutoUpdateChecker::TriggerUpdate(const AutoUpdateChecker::NewVersionInformation& info,

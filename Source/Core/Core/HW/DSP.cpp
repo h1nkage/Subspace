@@ -433,7 +433,6 @@ void DSPManager::UpdateAudioDMA()
     auto& memory = m_system.GetMemory();
     const u32 source = m_audio_dma.current_source_address;
     const void* address = memory.GetPointerForRange(source, 32);
-    // Orca's Music switch: the mixer's frame without the music, while RAM holds what it wrote.
     if (address && !Orca::Music::On())
     {
       if (const u8* quiet = Orca::Music::GetShadow().Find(source, static_cast<const u8*>(address)))

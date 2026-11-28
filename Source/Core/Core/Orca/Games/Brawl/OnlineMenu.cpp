@@ -44,7 +44,6 @@ bool Pointer(const GuestMemory& m, u32 p)
   return p % 4 == 0 && m.Valid(p);
 }
 
-// The name of the object (a scene or a sequence) the manager's field at `field` points to.
 std::string ReadManagerName(const GuestMemory& m, u32 field)
 {
   if (!Pointer(m, SCENE_MANAGER))
@@ -64,16 +63,14 @@ std::string ReadManagerName(const GuestMemory& m, u32 field)
       return out;
     out.push_back(c);
   }
-  return {};  // not a name
+  return {};
 }
 
-// Brawl rev 2, or a launcher profile that boots it (Project+), whose addresses hold (in mod mode,
-// while the builtin's guard words hold): the module's answer (BrawlGame.h).
 bool BrawlExecutable()
 {
   return Builtin().Active();
 }
-}  // namespace
+}
 
 std::string ReadSceneName(const GuestMemory& m)
 {
@@ -124,13 +121,11 @@ std::optional<OnlinePick> OnlineMenuReader::Boundary(const MenuState& state, boo
                                                      bool alone, u64 resyncs)
 {
   m_busy.reset();
-  // Re-runs repeat frames already read, or ones a rollback undid.
   if (resimulating)
     return std::nullopt;
   using Where = MenuState::Where;
   if (!m_started || resyncs != m_resyncs)
   {
-    // Starting over: the current state is where the game is, not a new event.
     m_started = true;
     m_resyncs = resyncs;
     m_from_menu = state.where == Where::Menu;
@@ -150,15 +145,12 @@ std::optional<OnlinePick> OnlineMenuReader::Boundary(const MenuState& state, boo
   case Where::Leaving:
     break;
   }
-  // The exit code shows from the first frame between scenes. Announce once per exit.
   if (!m_from_menu || m_seen || state.exit_code == 0)
     return std::nullopt;
   m_seen = true;
   const std::optional<OnlinePick> pick = PickForExitCode(state.exit_code);
   if (!pick)
     return std::nullopt;
-  // Made while friends play (or one is about to land): never announced, now or later; the session
-  // hears of it once (TakeBusyPick).
   if (!alone)
   {
     m_busy = pick;
@@ -174,13 +166,11 @@ std::optional<OnlinePick> OnlineMenuReader::TakeBusyPick()
 
 namespace
 {
-// The frame hook's last first-run reading (CPU thread: the hook and the session's boundary).
 bool s_on_menus = false;
-// The main menu's exit to Casual or Ranked, while the game is between that menu and its next scene.
 std::optional<OnlinePick> s_leaving_pick;
 std::optional<OnlinePick> s_css_pick;
 std::optional<OnlinePick> s_lobby_pick;
-}  // namespace
+}
 
 std::optional<OnlinePick> TakeLobbyPick()
 {
@@ -217,7 +207,6 @@ bool PickStands(OnlinePick pick)
 
 void ReadOnlineMenu(const Core::CPUThreadGuard& guard, bool resimulating, bool alone)
 {
-  // Whatever the session didn't take at the boundary it was seen is stale.
   s_lobby_pick.reset();
   if (resimulating || !BrawlExecutable())
     return;
@@ -238,15 +227,12 @@ void ReadOnlineMenu(const Core::CPUThreadGuard& guard, bool resimulating, bool a
     AnnounceOnlinePick(*pick);
     return;
   }
-  // Casual or Ranked picked with friends in this game (or one about to land): the session decides
-  // at this boundary, after the hook. With Friends while friends play stays theirs.
   if (const auto busy = s_reader.TakeBusyPick(); busy && *busy != OnlinePick::Friends)
   {
     NOTICE_LOG_FMT(ROLLBACK, "Online menu: exit code {} ({}) while this game isn't alone",
                    state.exit_code, MenuEventText(*busy, true));
     s_lobby_pick = busy;
   }
-  // Back on the main menu while searching, or while matched but still alone: the search is over.
   if (alone && state.where == MenuState::Where::Menu &&
       (Search::Current() != Search::State::None || QueueApp::Active()))
   {
@@ -262,18 +248,16 @@ std::atomic<bool> s_drop_in_held{false};
 FightHoldLatch s_fight_in_progress;
 std::atomic<bool> s_training{false};
 
-// Versus sequences: a friend who joins there is already where friends play.
 bool IsVersusSequence(std::string_view sequence)
 {
   constexpr std::array<std::string_view, 4> versus{"sqVsMelee", "sqSpMelee", "sqToMelee",
                                                     "sqQuMelee"};
   return std::ranges::find(versus, sequence) != versus.end();
 }
-}  // namespace
+}
 
 bool SequenceHoldsDropIn(std::string_view sequence)
 {
-  // Single-player modes, the Subspace Emissary and the Vault's screens (same names in Project+).
   constexpr std::array<std::string_view, 16> held{
       "sqSingleSimple", "sqSingleAllstar", "sqSingleBoss",  "sqEvent",
       "sqTraining",     "sqHomerun",       "sqTargetBreak", "sqKumite",
@@ -284,7 +268,6 @@ bool SequenceHoldsDropIn(std::string_view sequence)
 
 bool FightHoldsDropIn(std::string_view scene, std::string_view sequence, bool held)
 {
-  // Between-fight bracket/rotation scenes are not established: keep their immediate joins.
   if (sequence == "sqToMelee" || sequence == "sqQuMelee" || MenusScene(scene, sequence))
     return false;
   return held || (IsVersusSequence(sequence) && (scene == "scMelee" || scene == "scVsResult"));
@@ -329,15 +312,13 @@ bool IsKeypadTask(const GuestMemory& m, u32 task)
   }
   return true;
 }
-}  // namespace
+}
 
 bool KeypadOpen(const GuestMemory& m, u32 menu)
 {
   if (!Pointer(m, menu + MENU_TASK))
     return false;
   const u32 own = m.Read32(menu + MENU_TASK);
-  // Both ways from the menu's own task: the keypad is linked after it, but nothing here relies on
-  // that.
   for (const u32 link : {TASK_NEXT, TASK_PREV})
   {
     u32 task = own;
@@ -360,32 +341,23 @@ int FirstFriendFrame()
 Outputs Decide(const Inputs& in)
 {
   namespace B = MatchBlock;
-  // Every port but the host's is a friend's (the host's is port 1 unless the host picked another:
-  // Online::SeatPort, the same on every machine and in the lobby key).
   const u8 FRIEND_PORTS = static_cast<u8>(0x0F & ~(1u << Orca::Online::SeatPort(0)));
   Outputs out;
-  // Nothing kept yet and no friend plugged in: write nothing. Solo play never touches these bytes.
   const bool kept = in.tag == B::FRIENDS_TAG_VALUE;
   if (!kept && !(in.plugged & FRIEND_PORTS))
     return out;
   out.keep = true;
-  // First write: mark only the host's port as seen, so a friend plugged in now counts as new.
-  // Ports plugged in before FIRST_FRIEND_FRAME are test ports, never friends.
   const u8 seen = kept                          ? in.seen :
                   in.frame < FirstFriendFrame() ? in.plugged :
                                                   static_cast<u8>(in.plugged & ~FRIEND_PORTS);
   bool pending = kept && in.pending != 0;
   if (in.plugged & ~seen & FRIEND_PORTS)
     pending = true;
-  // No friend, a queue match, or already in Versus: nothing to do.
   if (!(in.plugged & FRIEND_PORTS) || in.queue || IsVersusSequence(in.sequence))
     pending = false;
-  // Only a built main menu (MENU_BUILT) without Options > Controls open (KEYPAD_TASK) can be left
-  // safely.
   const bool menu = in.scene == "muMenuMain" && in.step == STEP_RUNNING && in.menu_built &&
                     !in.keypad && in.exit_code == 0 && in.frame >= 0;
   const u32 since = kept ? in.menu_since : 0;
-  // When the built main menu started running with a friend waiting.
   out.menu_since = pending && menu ? (since != 0 ? since : static_cast<u32>(in.frame) + 1) : 0;
   if (out.menu_since != 0 &&
       static_cast<u32>(in.frame) + 1 - out.menu_since >= MENU_SETTLE_FRAMES)
@@ -408,8 +380,6 @@ bool Frame(const Core::CPUThreadGuard& guard, int frame, bool resimulating,
   GuardMemory m(guard);
   Inputs in;
   in.sequence = ReadSequenceName(m);
-  // Read by the session's drop-in logic; first runs only, since a re-run shows an older frame.
-  // Test override ORCA_TEST_HOLD=<from>-<to> holds drop-ins over those frames.
   static const std::pair<int, int> s_test_hold = [] {
     const char* v = std::getenv("ORCA_TEST_HOLD");
     int from = -1, to = -1;
@@ -419,8 +389,6 @@ bool Frame(const Core::CPUThreadGuard& guard, int frame, bool resimulating,
   }();
   if (!resimulating)
   {
-    // Once over, the test hold stays over: a fresh start (Rollback/OnlineMatch.cpp) runs frame
-    // numbers from the origin's again.
     static bool s_test_hold_over = false;
     if (frame >= s_test_hold.second)
       s_test_hold_over = true;
@@ -430,8 +398,6 @@ bool Frame(const Core::CPUThreadGuard& guard, int frame, bool resimulating,
     s_fight_in_progress.Observe(ReadSceneName(m), in.sequence);
     s_training.store(in.sequence == "sqTraining", std::memory_order_relaxed);
   }
-  // The friends bytes are the match block's, in sora_scene's free space: not in a game whose free
-  // space may be its own code (brawl-rev2-results), which keeps nothing and never moves.
   if (!BrawlGame::UsesFreeSpace(Builtin().Describe()))
     return false;
   in.present = B::Present(m) && m.Valid(B::FRIENDS) && m.Valid(B::FRIENDS_END - 1);
@@ -452,7 +418,6 @@ bool Frame(const Core::CPUThreadGuard& guard, int frame, bool resimulating,
   in.exit_code = m.Read32(manager + MANAGER_EXIT_CODE);
   if (in.scene == "muMenuMain")
   {
-    // ReadSceneName already validated this pointer.
     const u32 menu = m.Read32(manager + MANAGER_SCENE);
     in.menu_built = m.Valid(menu + MENU_BUILT) && m.Read8(menu + MENU_BUILT) != 0;
     in.keypad = in.menu_built && KeypadOpen(m, menu);
@@ -465,7 +430,6 @@ bool Frame(const Core::CPUThreadGuard& guard, int frame, bool resimulating,
   const Outputs out = Decide(in);
   if (!out.keep)
     return false;
-  // Write only bytes that differ.
   const auto put8 = [&](u32 address, u8 value) {
     if (m.Read8(address) != value)
       m.Write8(address, value);
@@ -477,7 +441,6 @@ bool Frame(const Core::CPUThreadGuard& guard, int frame, bool resimulating,
   put8(B::FRIENDS_TAG, B::FRIENDS_TAG_VALUE);
   if (!out.move)
     return false;
-  // Same as the menu's own exit (muMenuMain, 0x81176828): the code, then the step.
   m.Write32(manager + MANAGER_EXIT_CODE, EXIT_WITH_FRIENDS);
   m.Write32(manager + MANAGER_STEP, STEP_EXIT);
   if (!resimulating)
@@ -489,14 +452,14 @@ bool Frame(const Core::CPUThreadGuard& guard, int frame, bool resimulating,
   }
   return true;
 }
-}  // namespace FriendsMove
+}
 
 namespace FreshMove
 {
 namespace
 {
 Seen s_seen;
-}  // namespace
+}
 
 Seen Read(const GuestMemory& m)
 {
@@ -514,7 +477,6 @@ Seen Read(const GuestMemory& m)
   const u32 manager = m.Read32(SCENE_MANAGER);
   if (!Pointer(m, manager + MANAGER_EXIT_CODE) || !Pointer(m, manager + MANAGER_STEP))
     return seen;
-  // ReadSceneName already validated the scene pointer.
   const u32 menu = m.Read32(manager + MANAGER_SCENE);
   seen.menu_built = m.Read32(manager + MANAGER_STEP) == FriendsMove::STEP_RUNNING &&
                     m.Read32(manager + MANAGER_EXIT_CODE) == 0 &&
@@ -527,8 +489,6 @@ bool Apply(GuestMemory& m, u32 exit)
 {
   if (!Orca::Net::ValidMenuExit(exit) || !Read(m).menu_built)
     return false;
-  // Same as the menu's own exit (muMenuMain, 0x81176828), and FriendsMove's: the code, then the
-  // step.
   const u32 manager = m.Read32(SCENE_MANAGER);
   m.Write32(manager + MANAGER_EXIT_CODE, exit);
   m.Write32(manager + MANAGER_STEP, FriendsMove::STEP_EXIT);
@@ -537,7 +497,6 @@ bool Apply(GuestMemory& m, u32 exit)
 
 u32 RngSeed(u32 seed, u32 rng)
 {
-  // murmur3's finalizer over the seed and the generator's address.
   u32 h = seed ^ (rng * 0x9E3779B9u);
   h ^= h >> 16;
   h *= 0x85EBCA6Bu;
@@ -570,7 +529,6 @@ void Frame(const Core::CPUThreadGuard& guard, int frame)
   }
   GuardMemory m(guard);
   const Orca::Net::ReplayFrame* const record = Orca::Net::ReplayScope::Current();
-  // The history's seed first: before the exit, and before the frame draws anything.
   if (record && record->seed != 0)
   {
     if (ApplySeed(m, record->seed))
@@ -613,11 +571,7 @@ Seen LastSeen()
 
 bool Supported()
 {
-  // Asked once, as the match is set up (Rollback/OnlineMatch.cpp), before a mod's guard words are
-  // first read (Project+'s codes land in frame 1): in mod mode, the builtin mod.json declares. The
-  // menu is still read only while the guards hold (Frame), so a mod that moved what the builtin
-  // relies on never finds a built menu, gets no origin and takes no players, on every machine alike.
   return !Builtin().Describe().id.empty();
 }
-}  // namespace FreshMove
-}  // namespace Orca::UX
+}
+}

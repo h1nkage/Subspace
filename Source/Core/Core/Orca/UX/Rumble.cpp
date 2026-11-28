@@ -35,12 +35,10 @@ Target LocalTarget()
     return {};
   return {device->source == PadSource::Adapter ? Device::Adapter : Device::Pad, device->index};
 }
-}  // namespace
+}
 
 bool MotorOn(u32 channel_out)
 {
-  // The direct command (0x40) a GameCube controller polls with: mode in OUTPUT0, the motor in
-  // OUTPUT1 (0 stop, 1 on, 2 hard stop).
   return ((channel_out >> 16) & 0xff) == 0x40 && (channel_out & 0xff) == 1;
 }
 
@@ -52,15 +50,12 @@ std::optional<State> Tracker::Boundary(bool motor, bool live, int port, Target t
   {
     m_off_run = 0;
     const State want{true, port, target};
-    // A new buzz, another port or device, or a renewal of the same: never closer than the gap.
     if (m_since_on < MIN_GAP_FRAMES || (want == m_sent && m_since_on < RESEND_FRAMES))
       return std::nullopt;
     m_sent = want;
     m_since_on = 0;
     return m_sent;
   }
-  // Off once it has been off OFF_FRAMES boundaries in a row, whatever the gap: an off only follows
-  // an on line, so offs are no more frequent than ons. Off is off, whatever port or device.
   if (!m_sent.on || ++m_off_run < OFF_FRAMES)
     return std::nullopt;
   m_sent.on = false;
@@ -88,14 +83,12 @@ std::string FormatLine(const State& state)
 
 void Frame(const Core::CPUThreadGuard& guard, int local_port)
 {
-  // Rollback::IsResimulating also covers a joiner's catch-up, which the caller's flag may not.
   if (local_port < 0 || local_port >= SerialInterface::MAX_SI_CHANNELS ||
       Rollback::IsResimulating() || !Status::Cap(Status::RUMBLE_CAP))
   {
     return;
   }
   const u32 out = guard.GetSystem().GetSerialInterface().GetChannelOut(local_port);
-  // The same focus rule as the pad: no rumble while the game gets no input.
   const bool live = ControlReference::GetInputGate();
   std::optional<State> state;
   {
@@ -120,4 +113,4 @@ void Halt()
   }
   Print(state);
 }
-}  // namespace Orca::UX::Rumble
+}

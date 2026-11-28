@@ -27,6 +27,7 @@
 #include "DolphinQt/Settings/GameCubePane.h"
 #include "DolphinQt/Settings/GeneralPane.h"
 #include "DolphinQt/Settings/InterfacePane.h"
+#include "DolphinQt/Settings/NetPlayPane.h"
 #include "DolphinQt/Settings/OnScreenDisplayPane.h"
 #include "DolphinQt/Settings/PathPane.h"
 #include "DolphinQt/Settings/TriforcePane.h"
@@ -201,6 +202,7 @@ SettingsWindow::SettingsWindow(MainWindow* parent) : StackedSettingsWindow{paren
   AddWrappedPane(new GameCubePane{parent}, tr("GameCube"));
   AddWrappedPane(new WiiPane, tr("Wii"));
   AddWrappedPane(new TriforcePane, tr("Triforce"));
+  AddWrappedPane(new NetPlayPane, tr("NetPlay"));
   AddWrappedPane(new AdvancedPane, tr("Advanced"));
 
   OnDoneCreatingPanes();

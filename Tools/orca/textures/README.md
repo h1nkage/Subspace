@@ -1,6 +1,6 @@
 # Orca's texture pack
 
-`Data/Sys/Orca/Textures/RSBE01/` holds the labels of the Online menu (ORCA.md "Online menu"):
+`Data/Sys/Subspace/Textures/RSBE01/` holds the labels of the Online menu (ORCA.md "Online menu"):
 Dolphin hires textures that Orca loads in every session, so the game's own buttons read PLAY
 ONLINE, CASUAL and RANKED and Brawl's page title reads ONLINE. Brawl and Project+ both load their
 textures as `RSBE01`; their labels hash differently, so one folder serves both.
@@ -22,6 +22,18 @@ textures as `RSBE01`; their labels hash differently, so one folder serves both.
 
 Project+'s own button already reads PLAY ONLINE and its title ONLINE.
 
+**Subspace:** the fight HUD's blanks are two packs of their own, beside this one, loaded in an
+online session only as the player's NetPlay settings say (`VideoCommon/HiresTextures.cpp`):
+`Data/Sys/Subspace/HudNames/RSBE01` (47 fighter names, `MenSelchrChrNmS.*`, when player names replace
+them) and `Data/Sys/Subspace/HudBar/RSBE01` (the bar under them, `InfFaceLine00`, when the
+port-coloured stroke replaces it). They are blank (fully transparent) images written by
+`sd-make-blank.py` from the player's own disc file, with Dolphin's texture hash; nothing
+from the game's art is kept:
+
+```bash
+python3 Tools/orca/textures/sd-make-blank.py <disc>/DATA/files/info2/info_en.pac
+```
+
 The relabels (`Core/Orca/UX/Relabel.h`, ORCA.md "On-screen UI") add 38 more names, listed with
 their words in `RELABELS` in the script. They replace READY TO FIGHT! (with PRESS START TO LOCK IN!
 and similar), the STAGE SELECT title (with each strike or pick step, right-aligned so the overlay's
@@ -33,7 +45,7 @@ never draws into the game's texture. Instead, in an online room it nudges the bl
 transparent background colour by one to three steps, one per mode (`Core/Orca/UX/CssTitle.h`), so
 each mode's palette hashes to a different name above. The names use Dolphin's own texture hash.
 
-The art is original, drawn by `make-labels.py` (needs Pillow) in each game's style with
+The art is original, drawn by `sd-make-labels.py` (needs Pillow) in each game's style with
 open-licence fonts. Nothing comes from the game's art; the script only uses the positions of the
 game's letters so ours sit in the same place. Each label is 4x the game's size, with mip levels down
 to 1x (`_mip1.png` at 2x, `_mip2.png` at 1x). Dolphin samples a custom texture's mips even when the
@@ -41,8 +53,8 @@ game's texture has none, so at 1x internal resolution thin strokes stay clean.
 Regenerate with:
 
 ```bash
-python3 Tools/orca/textures/make-labels.py            # writes Data/Sys/Orca/Textures/RSBE01
-python3 Tools/orca/textures/make-labels.py --out /tmp/x --sheet /tmp/sheet.png   # a preview
+python3 Tools/orca/textures/sd-make-labels.py            # writes Data/Sys/Subspace/Textures/RSBE01
+python3 Tools/orca/textures/sd-make-labels.py --out /tmp/x --sheet /tmp/sheet.png   # a preview
 ```
 
 The output is byte-identical for the same Pillow (11.3.0 made the committed files).

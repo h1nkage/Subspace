@@ -193,8 +193,6 @@ void HiresTexture::Update()
       mod_session ? std::set<std::string>{} :
                     GetTextureDirectoriesForFirstMatchingGameId(
                         File::GetUserPath(D_HIRESTEXTURES_IDX), game_ids);
-  // Orca: in a session, also load Orca's own pack (Data/Sys/Orca/Textures/<game ID>), which
-  // replaces the Online menu's labels.
   std::set<std::string> orca_directories;
   if (const Orca::Profile* profile = Orca::ActiveProfile();
       profile && profile->mod && !profile->mod->EngineTextures())
@@ -208,7 +206,16 @@ void HiresTexture::Update()
   {
     // A requested mod waits for its profile before choosing any texture source.
     orca_directories = GetTextureDirectoriesForFirstMatchingGameId(
-        File::GetSysDirectory() + "Orca/Textures/", game_ids);
+        File::GetSysDirectory() + "Subspace/Textures/", game_ids);
+    const auto add = [&](const char* pack) {
+      orca_directories.merge(GetTextureDirectoriesForFirstMatchingGameId(
+          File::GetSysDirectory() + "Subspace/" + pack + "/", game_ids));
+    };
+    const std::string names = Orca::GetEnv("ORCA_SUBSPACE_HUD_NAMES");
+    if (names == "0" || names == "1")
+      add("HudNames");
+    if (names == "1")
+      add("HudBar");
   }
 
   // Watch these directories for any texture reloads
@@ -232,8 +239,6 @@ void HiresTexture::Update()
     s_file_library->SetAssetIDMapData(file.id, std::map<std::string, std::filesystem::path>{
                                                    {"texture", StringToPath(file.path)}});
 
-    // Orca's pack (a few small labels) is always preloaded so the game's own label never flashes
-    // while ours loads. Player packs follow the cache setting.
     if (g_ActiveConfig.bCacheHiresTextures || file.orca_pack)
     {
       auto hires_texture =
@@ -261,8 +266,6 @@ void HiresTexture::Update()
     message = fmt::format("Found '{}' custom textures for '{}'",
                           s_hires_texture_id_to_arbmipmap.size(), game_id_display);
   }
-  // Orca: in a session the top left belongs to the online overlay, and Orca's pack is always
-  // loaded, so only log the count.
   if (Orca::SessionActive())
     INFO_LOG_FMT(VIDEO, "{}", message);
   else

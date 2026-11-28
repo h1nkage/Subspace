@@ -23,7 +23,6 @@ ImU32 Rgba(int r, int g, int b, float a)
   return IM_COL32(r, g, b, static_cast<int>(std::lround(std::clamp(a, 0.0f, 1.0f) * 255)));
 }
 
-// Matches the app's button: half opacity at rest, 0.85 with unread lines, full when lit.
 float ButtonAlpha(const Place& p)
 {
   return p.lit ? 1.0f : p.badge > 0 ? 0.85f : 0.5f;
@@ -34,8 +33,6 @@ std::string BadgeText(int badge)
   return badge > 9 ? "9+" : std::to_string(badge);
 }
 
-// The badge: 19 high, at least 19 wide, 6 above the top and 7 past the right, on the button's
-// 40-unit grid scaled by `k`.
 Kit::Box BadgeBox(const Place& p, float k)
 {
   const float px = 11.5f * k;
@@ -43,7 +40,7 @@ Kit::Box BadgeBox(const Place& p, float k)
   const float right = p.x + p.size + 7.0f * k, top = p.y - 6.0f * k;
   return Kit::Box{ImVec2(right - w, top), ImVec2(right, top + 19.0f * k)};
 }
-}  // namespace
+}
 
 Kit::Box ButtonBox(const Model::View& view)
 {
@@ -80,8 +77,6 @@ void DrawButton(ImDrawList* dl, const Model::View& view)
   const float k = p.size / 40, alpha = ButtonAlpha(p);
   const ImVec2 c(p.x + p.size / 2, p.y + p.size / 2);
   AppCard::RoundLogo(dl, ImVec2(p.x, p.y), p.size, alpha);
-  // Blink: a white ring grows from the disc's edge to 2.1x its size and fades. Listening: the same
-  // ring in voice green, over and over.
   if (view.ring >= 0)
   {
     const float scale = 1 + 1.1f * view.ring;
@@ -90,14 +85,12 @@ void DrawButton(ImDrawList* dl, const Model::View& view)
                   view.listening ? Rgba(43, 166, 64, fade) : Rgba(255, 255, 255, fade), 48,
                   2 * k * scale);
   }
-  // Held seat: an amber dot at the bottom right.
   if (p.away)
   {
     const ImVec2 dot(p.x + p.size - 3.5f * k, p.y + p.size - 3.5f * k);
     dl->AddCircleFilled(dot, 8.5f * k, Rgba(0, 0, 0, alpha), 24);
     dl->AddCircleFilled(dot, 6.5f * k, Rgba(242, 161, 20, alpha), 24);
   }
-  // Unread count badge at the top right.
   if (p.badge > 0)
   {
     const Kit::Box b = BadgeBox(p, k);
@@ -123,8 +116,6 @@ void DrawHostControls(ImDrawList* dl, const Model::View& view)
   const float alpha = view.feedback.hovered || view.feedback.pressed ? 1.0f : 0.6f;
   const ImVec2 centre(p.x + 68 * k, p.y + p.size / 2);
   dl->AddCircleFilled(centre, p.size / 2 * scale, Rgba(255, 0, 0, alpha), 64);
-  // The site's 24-unit SVG: M12 3.6 21.2 19.6H2.8Z, stroke 2.4, round joins,
-  // no fill. Flat-ended segments plus round vertex caps give the same rounded outline.
   const float unit = k * scale;
   const std::array<ImVec2, 3> triangle = {ImVec2(centre.x, centre.y - 8.4f * unit),
                                           ImVec2(centre.x + 9.2f * unit, centre.y + 7.6f * unit),
@@ -139,7 +130,6 @@ void DrawHostControls(ImDrawList* dl, const Model::View& view)
 
 namespace
 {
-// Notices as last copied out by Model::Lines. Video thread only.
 struct NoticeCache
 {
   std::uint64_t generation = 0;
@@ -147,7 +137,6 @@ struct NoticeCache
 };
 NoticeCache s_notices;
 
-// Hold-to-talk's row as last copied out by Model::TalkRow. Video thread only.
 struct TalkCache
 {
   std::uint64_t generation = 0;
@@ -155,8 +144,6 @@ struct TalkCache
 };
 TalkCache s_talk;
 
-// Small cache of avatar colours and initials, so names aren't converted every frame. Video thread
-// only.
 struct AvatarMemo
 {
   std::string name;
@@ -184,8 +171,6 @@ void DrawAvatar(ImDrawList* dl, ImVec2 c, float r, std::string_view name, float 
   AppCard::AvatarOf(dl, c, r, a.colour, a.initial, alpha);
 }
 
-// Pill metrics matching the app's own pill, on the button's 40-unit grid scaled by `k`. Text starts
-// 54 in, clearing the button.
 struct Pill
 {
   float k, pad_left, pad_right, pad_y, gap, avatar, avatar_gap, name_px, text_px, line, hint_gap,
@@ -216,7 +201,6 @@ Pill PillFor(float k)
 
 constexpr std::string_view ELLIPSIS = "…";
 
-// Fits `text` on one line. Returns the kept prefix and whether it was cut (draw "…" after it).
 std::pair<std::string_view, bool> OneLine(std::string_view text, float px, float width)
 {
   const auto measure = [px](std::string_view t) { return AppCard::TextWidth(t, px); };
@@ -229,8 +213,6 @@ std::pair<std::string_view, bool> OneLine(std::string_view text, float px, float
   return {head, true};
 }
 
-// Fits `text` on one line keeping its end (live words: the newest). Returns the kept suffix and
-// whether it was cut (draw "…" before it).
 std::pair<std::string_view, bool> TailLine(std::string_view text, float px, float width)
 {
   const auto measure = [px](std::string_view t) { return AppCard::TextWidth(t, px); };
@@ -243,7 +225,6 @@ std::pair<std::string_view, bool> TailLine(std::string_view text, float px, floa
   return {tail, true};
 }
 
-// A chat message wrapped to at most two lines.
 struct TwoLines
 {
   std::string_view first, second;
@@ -254,7 +235,6 @@ TwoLines Wrap2(std::string_view text, float px, float width)
   const auto measure = [px](std::string_view t) { return AppCard::TextWidth(t, px); };
   TwoLines out;
   std::size_t n = FitPrefix(text, width, measure);
-  // If nothing fits, take one whole UTF-8 character anyway.
   if (n == 0 && !text.empty())
   {
     n = 1;
@@ -289,33 +269,29 @@ float TextWithEllipsis(ImDrawList* dl, ImVec2 pos, float px, ImU32 colour, std::
   return w;
 }
 
-// Rows drawn as name over message: chat lines and direct-message notices, so the message is shown.
 bool Worded(const PillRow& r)
 {
   return r.type == PillRow::Type::Chat || (r.type == PillRow::Type::Notice && r.kind == Kind::Dm);
 }
 
-// One laid-out row. String views point into the caller's rows and the notice cache.
 struct RowLayout
 {
   const PillRow* row = nullptr;
   float height = 0;
-  float width = 0;  // avatar, gap and text
-  // `a` is the name (empty for toasts), `b` the text.
+  float width = 0;
   std::string_view a, b;
   bool cut = false;
-  bool head_cut = false;  // "…" before `b`: live words keep their end
+  bool head_cut = false;
   bool name_cut = false;
-  TwoLines body;  // chat text
+  TwoLines body;
 };
 
-// Talk rows that keep the end of their text: the mic is open, or the words are being sent.
 bool LiveWords(const PillRow& r)
 {
   return r.type == PillRow::Type::Talk &&
          (r.talk == Talk::Phase::Listen || r.talk == Talk::Phase::Send);
 }
-}  // namespace
+}
 
 Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillRow> rows,
                   double now_ms, float right_limit)
@@ -337,7 +313,6 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
                          TalkAlpha(talk, s_talk.entry.at, now_ms),
                          s_talk.entry.at,
                          talk.phase};
-  // Gather visible rows: the caller's, then the notices.
   std::array<PillRow, 16> all;
   std::size_t n = 0;
   for (const PillRow& r : rows)
@@ -355,13 +330,11 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
   }
   if (n == 0 && talk_row.alpha <= 0)
     return none;
-  // Stable insertion sort by arrival time; there are only a few rows.
   for (std::size_t i = 1; i < n; ++i)
   {
     for (std::size_t j = i; j > 0 && all[j - 1].at > all[j].at; --j)
       std::swap(all[j - 1], all[j]);
   }
-  // The newest PILL_ROWS, then the talk row, which keeps its place below them.
   std::array<const PillRow*, PILL_ROWS + 1> shown;
   std::size_t shown_n = 0;
   for (std::size_t i = n > PILL_ROWS ? n - PILL_ROWS : 0; i < n; ++i)
@@ -376,7 +349,6 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
       m.pad_left + 120 * m.k,
       std::min({m.max_width, display_w - p.x - 24 * m.k, right_limit - p.x}));
 
-  // Only the newest row with an action shows its hint.
   const PillRow* hint = nullptr;
   for (std::size_t i = 0; i < shown_n; ++i)
   {
@@ -416,7 +388,6 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
     }
     else
     {
-      // A notice or talk row is "<name> <text>" on one line; a toast is text only.
       const bool named = r.type != PillRow::Type::Toast;
       const auto [nm, nm_cut] =
           named ? OneLine(r.name, m.name_px, words_room / 2) : std::pair<std::string_view, bool>{};
@@ -437,7 +408,6 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
               (cut ? AppCard::TextWidth(ELLIPSIS, m.text_px) : 0);
       l.height = std::max(m.avatar, m.text_px * m.line);
     }
-    // Subspace: a toast is text only (no logo), so it takes no avatar room.
     l.width = (r.type == PillRow::Type::Toast ? 0.0f : m.avatar + m.avatar_gap) + words;
     content_w = std::max(content_w, l.width);
     content_h += l.height + (count ? m.gap : 0);
@@ -448,7 +418,6 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
   const float w = std::min(max_w, m.pad_left + content_w + hint_w + m.pad_right);
   const float h = std::max(p.size, content_h + 2 * m.pad_y);
   const ImVec2 min(p.x, p.y), max(p.x + w, p.y + h);
-  // Background: shadow, slate fill, hairline edge, as in AppCard.
   dl->AddRectFilled(ImVec2(min.x, min.y + 3 * m.k), ImVec2(max.x, max.y + 6 * m.k),
                     Rgba(0, 0, 0, 0.35f * alpha), m.radius);
   dl->AddRectFilled(min, max, Rgba(15, 23, 42, 0.95f * alpha), m.radius);
@@ -486,12 +455,9 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
       const ImVec2 c(x0 + r_av, y + l.height / 2);
       if (r.type == PillRow::Type::Toast)
       {
-        // Subspace: no logo; the text starts at the row's left edge.
       }
       else if (r.type == PillRow::Type::Talk)
       {
-        // Who it goes to: a green ring while the mic is open or the words go, a green tick once
-        // sent, greyed when nothing was sent.
         if (LiveWords(r))
           dl->AddCircle(c, r_av + 3 * m.k, Rgba(43, 166, 64, a), 32, 2 * m.k);
         DrawAvatar(dl, c, r_av, r.name, r.talk == Talk::Phase::Error ? 0.45f * a : a);
@@ -509,8 +475,6 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
       }
       else
       {
-        // Avatar marks: green ring for voice or call, amber ring for away, greyed for leave,
-        // green dot for back, green plus for join.
         if (r.kind == Kind::Voice || r.kind == Kind::Call)
           dl->AddCircle(c, r_av + 3 * m.k, Rgba(43, 166, 64, a), 32, 2 * m.k);
         if (r.kind == Kind::Away)
@@ -529,7 +493,6 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
           }
         }
       }
-      // Name in bright ink, text softer, on the row's centre line.
       const float ty = c.y - m.text_px * m.line / 2 + (m.text_px * (m.line - 1)) / 2;
       float x = r.type == PillRow::Type::Toast ? x0 : tx;
       if (!l.a.empty())
@@ -545,7 +508,6 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
       }
       TextWithEllipsis(dl, ImVec2(x, ty), m.text_px, AppCard::Ink2(a), l.b, l.cut);
     }
-    // The hint at the pill's right end: the key in a keycap, then the verb.
     if (hint == &r)
     {
       const float cy = y + l.height / 2;
@@ -561,4 +523,4 @@ Kit::Box DrawPill(ImDrawList* dl, const Model::View& view, std::span<const PillR
   }
   return Kit::Box{min, max};
 }
-}  // namespace Orca::UX::AppOrb
+}

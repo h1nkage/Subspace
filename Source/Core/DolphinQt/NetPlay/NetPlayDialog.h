@@ -102,6 +102,9 @@ public:
   void SetHostWiiSyncData(std::vector<u64> titles, std::string redirect_folder) override;
 
   void LaunchOrca(const NetPlay::OrcaLaunch& launch) override;
+  void OrcaDelay(u32 frames, s32 at) override;
+  void SendOrcaVolume(bool force);
+  void SendOrcaShowPing(bool force);
 
 signals:
   void Stop();
@@ -191,6 +194,13 @@ private:
 
   StartGameCallback m_start_game_callback;
   QProcess* m_orca_process = nullptr;
+  int m_orca_volume_sent = -1;
+  int m_orca_ping_sent = -1;
+  int m_orca_names_sent = -1;
+  int m_orca_corner_sprite_sent = -1;
+  int m_orca_corner_fps_sent = -1;
+  int m_orca_corner_ping_sent = -1;
+  int m_orca_frame_ms_sent = -1;
   // The engine's output: copied to Logs/orca-engine.log, and scanned for its error line so the
   // lobby can say why a game closed.
   std::unique_ptr<QFile> m_orca_log;

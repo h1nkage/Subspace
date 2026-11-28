@@ -41,10 +41,6 @@ private:
   ConfigBool* m_input_display;
   ConfigBool* m_system_clock;
 
-  // Netplay
-  ConfigBool* m_show_ping;
-  ConfigBool* m_show_chat;
-
   // Debug
   ConfigBool* m_show_statistics;
   ConfigBool* m_show_proj_statistics;

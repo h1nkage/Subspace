@@ -9,7 +9,6 @@ namespace Orca::UX::SetBlock
 {
 namespace
 {
-// Writes only bytes that differ, counting them.
 class Writer
 {
 public:
@@ -47,7 +46,7 @@ u32 R32(const GuestMemory& m, u32 offset)
 {
   return u32(R16(m, offset)) << 16 | R16(m, offset + 2);
 }
-}  // namespace
+}
 
 u64 SetState::StagesWonBy(int port) const
 {
@@ -191,4 +190,4 @@ int WriteSet(GuestMemory& memory, const SetState& s)
   }
   return w.changed;
 }
-}  // namespace Orca::UX::SetBlock
+}

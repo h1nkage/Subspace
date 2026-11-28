@@ -50,6 +50,7 @@ enum class Op : u8
   KfDelete = 8,
   KfResult = 9,
   Launch = 10,
+  Delay = 11,
 };
 
 constexpr u64 KF_PART_BYTES = 1 << 20;
@@ -72,8 +73,6 @@ struct LaunchInfo
   bool joining = false;
   // NetPlay ids of everyone launched into the room so far (for the link estimate in pongs).
   std::vector<u8> room_pids;
-  // Subspace: the GameCube port (0-3) the host (seat 0) plays on. Seats map to ports by swapping
-  // seat 0 with this port; every other seat is its own port (Orca::Online::SeatPort).
   u8 host_port = 0;
 };
 

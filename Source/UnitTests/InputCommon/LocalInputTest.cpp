@@ -52,7 +52,7 @@ public:
   }
 };
 #endif
-}  // namespace IOS::HLE
+}
 
 namespace
 {
@@ -111,7 +111,6 @@ protected:
     Core::InitializeWiiRoot(false);
     m_wii_root = true;
     Config::SetBase(Config::MAIN_BLUETOOTH_PASSTHROUGH_ENABLED, true);
-    // IOS4 has no background network service; no device is opened by construction.
     m_ios = std::make_unique<IOS::HLE::EmulationKernel>(m_system, 0x0000000100000004);
   }
   void TearDown() override
@@ -132,7 +131,6 @@ protected:
   {
     const LocalInputEnv allowed(nullptr);
     IOS::HLE::OpenRequest open(m_system, 0x1000);
-    // Activate the emulated device state without opening a physical adapter.
     bluetooth.Device::Open(open);
     auto& memory = m_system.GetMemory();
     memory.Write_U32(IOS::HLE::IPC_CMD_IOCTLV, 0x1000);
@@ -181,7 +179,7 @@ private:
     return false;
   }
 };
-}  // namespace
+}
 
 TEST_F(LocalInputDevices, GuestKeyboardSkipsPollingAndQueuedDelivery)
 {
@@ -227,7 +225,6 @@ TEST_F(LocalInputDevices, PassthroughStateCannotActivateWithoutLocalInput)
   IOS::HLE::OpenRequest open(m_system, 0x1000);
   ASSERT_EQ(bluetooth.Open(open)->return_value, IOS::HLE::IPC_ENOENT);
 
-  // The serialized device is active and has an outstanding HCI interrupt request.
   auto state = ActivePassthroughState(bluetooth);
   u8* cursor = state.data();
   PointerWrap read(&cursor, state.size(), PointerWrap::Mode::Read);
@@ -299,7 +296,6 @@ TEST(LocalInput, AdapterInitSkipsNativeContextAndConfigCallbacks)
 {
   const LocalInputEnv env("1");
   ASSERT_FALSE(GCAdapter::IsInitialized());
-  // No Config/System initialization: disabled Init must return before either is consulted.
   GCAdapter::Init();
   GCAdapter::Init();
   EXPECT_FALSE(GCAdapter::IsInitialized());
@@ -310,7 +306,6 @@ TEST(LocalInput, AdapterInitSkipsNativeContextAndConfigCallbacks)
 TEST(LocalInput, WiimoteInitializationSkipsScanningAndWait)
 {
   const LocalInputEnv env("1");
-  // Even the state-load path must return without reading config or starting a scanner.
   WiimoteReal::Initialize(Wiimote::InitializeMode::DO_WAIT_FOR_WIIMOTES);
   WiimoteReal::Initialize(Wiimote::InitializeMode::DO_NOT_WAIT_FOR_WIIMOTES);
 }

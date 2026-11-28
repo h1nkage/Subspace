@@ -62,7 +62,7 @@ protected:
   int old_ux = 0;
   std::optional<Orca::Profile> old, next;
 };
-}  // namespace
+}
 
 TEST_F(OrcaPPlus321, ReleasePinsAndForcedMachine)
 {
@@ -121,7 +121,6 @@ TEST_F(OrcaPPlus321, CompatibilityKeysSeparateReleasesAndPreserve320)
   EXPECT_EQ(before, key(*old));
   RecordProperty("PPLUS32", before);
   RecordProperty("PPLUS321", updated);
-  // Even a mislabelled card cannot merge the two launcher identities.
   auto same_card = *next;
   same_card.sd_image_hash = old->sd_image_hash;
   EXPECT_NE(before, key(same_card));
@@ -129,16 +128,16 @@ TEST_F(OrcaPPlus321, CompatibilityKeysSeparateReleasesAndPreserve320)
 
 TEST_F(OrcaPPlus321, LegacyFilesAreByteIdenticalTo647d1aa6c7)
 {
-  EXPECT_EQ(Orca::HashFile(SYS + "Orca/PPLUS32.ini"), "ea7ba547b132f2957e109c4620160f97");
-  EXPECT_EQ(Orca::HashFile(SYS + "Orca/PPLUS32.patches"), "342cc4c7634a2122a098b3f7db0eac1b");
-  EXPECT_EQ(Orca::HashFile(SYS + "Orca/PPLUS32.jitwarm"), "8878e3439e5b4db1e44b4e81c28a2dc1");
+  EXPECT_EQ(Orca::HashFile(SYS + "Subspace/PPLUS32.ini"), "ea7ba547b132f2957e109c4620160f97");
+  EXPECT_EQ(Orca::HashFile(SYS + "Subspace/PPLUS32.patches"), "342cc4c7634a2122a098b3f7db0eac1b");
+  EXPECT_EQ(Orca::HashFile(SYS + "Subspace/PPLUS32.jitwarm"), "8878e3439e5b4db1e44b4e81c28a2dc1");
 }
 
 TEST_F(OrcaPPlus321, OnlyBootToCssBodyMovesInGuardedPatches)
 {
   std::string a, b;
-  ASSERT_TRUE(File::ReadFileToString(SYS + "Orca/PPLUS32.patches", a));
-  ASSERT_TRUE(File::ReadFileToString(SYS + "Orca/PPLUS321.patches", b));
+  ASSERT_TRUE(File::ReadFileToString(SYS + "Subspace/PPLUS32.patches", a));
+  ASSERT_TRUE(File::ReadFileToString(SYS + "Subspace/PPLUS321.patches", b));
   const auto original = Orca::UX::ParseGamePatches(a, &error);
   const auto updated = Orca::UX::ParseGamePatches(b, &error);
   ASSERT_TRUE(original) << error;
@@ -173,7 +172,7 @@ TEST(OrcaPPlus321Launch, EightCharacterProfileName)
 TEST(OrcaPPlus321Seed, RecordedForTheNewCard)
 {
   std::string bytes;
-  ASSERT_TRUE(File::ReadFileToString(SYS + "Orca/PPLUS321.jitwarm", bytes));
+  ASSERT_TRUE(File::ReadFileToString(SYS + "Subspace/PPLUS321.jitwarm", bytes));
   const auto blocks = Orca::JitWarm::Decode(
       std::span(reinterpret_cast<const u8*>(bytes.data()), bytes.size()));
   ASSERT_TRUE(blocks);
@@ -183,6 +182,6 @@ TEST(OrcaPPlus321Seed, RecordedForTheNewCard)
   for (const auto& block : *blocks)
     early = early || block.when < 30;
   EXPECT_TRUE(early);
-  EXPECT_NE(Orca::HashFile(SYS + "Orca/PPLUS321.jitwarm"),
-            Orca::HashFile(SYS + "Orca/PPLUS32.jitwarm"));
+  EXPECT_NE(Orca::HashFile(SYS + "Subspace/PPLUS321.jitwarm"),
+            Orca::HashFile(SYS + "Subspace/PPLUS32.jitwarm"));
 }

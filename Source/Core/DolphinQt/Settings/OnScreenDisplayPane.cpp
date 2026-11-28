@@ -42,7 +42,7 @@ void OnScreenDisplayPane::CreateLayout()
   auto* performance_layout = new QGridLayout();
   performance_box->setLayout(performance_layout);
 
-  m_show_fps = new ConfigBool(tr("Show FPS"), Config::GFX_SHOW_FPS);
+  m_show_fps = new ConfigBool(tr("Show FPS (offline only)"), Config::GFX_SHOW_FPS);
   m_show_ftimes = new ConfigBool(tr("Show Frame Times"), Config::GFX_SHOW_FTIMES);
   m_show_vps = new ConfigBool(tr("Show VPS"), Config::GFX_SHOW_VPS);
   m_show_vtimes = new ConfigBool(tr("Show VBlank Times"), Config::GFX_SHOW_VTIMES);
@@ -82,17 +82,6 @@ void OnScreenDisplayPane::CreateLayout()
   movie_layout->addWidget(m_input_display, 2, 1);
   movie_layout->addWidget(m_system_clock, 3, 0);
 
-  // NetPlay
-  auto* netplay_box = new QGroupBox(tr("Netplay"));
-  auto* netplay_layout = new QGridLayout();
-  netplay_box->setLayout(netplay_layout);
-
-  m_show_ping = new ConfigBool(tr("Show NetPlay Ping"), Config::GFX_SHOW_NETPLAY_PING);
-  m_show_chat = new ConfigBool(tr("Show NetPlay Chat"), Config::GFX_SHOW_NETPLAY_MESSAGES);
-
-  netplay_layout->addWidget(m_show_ping, 0, 0);
-  netplay_layout->addWidget(m_show_chat, 0, 1);
-
   // Debug
   auto* debug_box = new QGroupBox(tr("Debug"));
   auto* debug_layout = new QGridLayout();
@@ -113,7 +102,6 @@ void OnScreenDisplayPane::CreateLayout()
   main_layout->addWidget(general_box);
   main_layout->addWidget(performance_box);
   main_layout->addWidget(movie_box);
-  main_layout->addWidget(netplay_box);
   main_layout->addWidget(debug_box);
   main_layout->addStretch();
   setLayout(main_layout);
@@ -184,13 +172,6 @@ void OnScreenDisplayPane::AddDescriptions()
                  "<br><br><dolphin_emphasis>If unsure, leave this "
                  "at 1000ms.</dolphin_emphasis>");
 
-  static const char TR_SHOW_NETPLAY_PING_DESCRIPTION[] = QT_TR_NOOP(
-      "Shows the player's maximum ping while playing on "
-      "NetPlay.<br><br><dolphin_emphasis>If unsure, leave this unchecked.</dolphin_emphasis>");
-  static const char TR_SHOW_NETPLAY_MESSAGES_DESCRIPTION[] =
-      QT_TR_NOOP("Shows chat messages, buffer changes, and desync alerts "
-                 "while playing NetPlay.<br><br><dolphin_emphasis>If unsure, leave "
-                 "this unchecked.</dolphin_emphasis>");
 
   static const char TR_MOVIE_WINDOW_DESCRIPTION[] =
       QT_TR_NOOP("Shows a window that can be filled with information related to movie recordings. "
@@ -237,8 +218,6 @@ void OnScreenDisplayPane::AddDescriptions()
   m_perf_sample_window->SetDescription(tr(TR_PERF_SAMP_WINDOW_DESCRIPTION));
   m_speed_colors->SetDescription(tr(TR_SHOW_SPEED_COLORS_DESCRIPTION));
 
-  m_show_ping->SetDescription(tr(TR_SHOW_NETPLAY_PING_DESCRIPTION));
-  m_show_chat->SetDescription(tr(TR_SHOW_NETPLAY_MESSAGES_DESCRIPTION));
 
   m_movie_window->SetDescription(tr(TR_MOVIE_WINDOW_DESCRIPTION));
   m_rerecord_counter->SetDescription(tr(TR_RERECORD_COUNTER_DESCRIPTION));

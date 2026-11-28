@@ -11,13 +11,6 @@
 #include "Common/CommonTypes.h"
 #include "Common/Crypto/SHA1.h"
 
-// Orca: a cache of FXC output that survives across builds.
-//
-// Dolphin's D3D shader caches are tied to the build, so every update recompiled every shader, and
-// FXC is most of that time. FXC is a pure function of its input, so its output is keyed by exactly
-// that input: the HLSL, entry point, target, flags, macros and a SHA-1 of the compiler DLL. Any
-// change to these gives a different key, so bytecode is only ever reused for an identical compile.
-// One file (Cache/Shaders/D3D-fxc.cache) for all games, used whenever the shader cache is on.
 namespace D3DCommon::FxcCache
 {
 using Key = Common::SHA1::Digest;

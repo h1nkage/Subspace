@@ -73,7 +73,6 @@ namespace
 {
 ElfReader::CopyObserver s_copy_observer;
 
-// Orca: the reader's own copy of the file's bytes, which only the copy's parse rewrites.
 std::vector<u8> CopyToParse(const std::vector<u8>& file)
 {
   std::vector<u8> copy = file;

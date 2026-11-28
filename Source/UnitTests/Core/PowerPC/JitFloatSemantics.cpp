@@ -1,22 +1,6 @@
 // Copyright 2026 YouGame
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Orca: the host's JIT (JitArm64 or Jit64) against the interpreter with an Orca session's float
-// setup: accurate NaNs, the guest's non-IEEE mode (FPSCR.NI) and the session's guards for a CPU
-// that flushes denormal inputs (JitArm64::DenormalInputsFlushed). Every FPR, CR and stored word
-// must match the interpreter bit for bit (but where a case says otherwise), and some results are
-// pinned to PowerPC's answer whatever the host:
-// - a NaN an operation makes from no NaN input (inf * 0, inf - inf, 0 / 0) is positive,
-//   0x7FF8000000000000; x86-64 and an ARM CPU with FPCR.AH (Apple M4 and later) make it negative;
-// - the first NaN input in PowerPC's order (a, b, c) wins, made quiet, and is never negated;
-// - a denormal single that was loaded (lfs, psq_l) counts as itself in arithmetic, compares and
-//   conversions, where an ARM CPU without FEAT_AFP (Apple M1 to M3) flushes it as an input;
-// - fctiw(z) of a NaN is 0x80000000; frsqrte of a negative number is the default NaN.
-// The FPSCR bits the JITs write themselves (ZX and VXSQRT, with FX) must match too: mffs and an OS
-// context save carry them into RAM. Address translation is on (a BAT maps the first 256 MB as
-// itself), as in games, so Jit64 compiles psq_l and psq_st instead of falling back.
-// On an Apple M4 or later, run it a second time with ORCA_TEST_NO_AFP=1 to cover an M1 to M3.
-
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -61,11 +45,9 @@ constexpr bool ARM_JIT = true;
 #endif
 
 constexpr u32 BRANCH_TO_SELF = 0x48000000;
-// Each program gets its own address across the whole suite, so neither core reuses a block or a
-// cache line.
 constexpr u32 CODE_BASE = 0x00010000;
 constexpr u32 CODE_STRIDE = 0x40;
-constexpr u32 DATA_BASE = 0x00100000;  // r5
+constexpr u32 DATA_BASE = 0x00100000;
 constexpr u32 DATA_WORDS = 20;
 
 constexpr u32 A_FORM(u32 op, u32 xo, u32 d, u32 a, u32 b, u32 c)
@@ -96,7 +78,6 @@ constexpr u32 FMR(u32 d, u32 b)
 {
   return (63u << 26) | (d << 21) | (b << 11) | (72u << 1);
 }
-// GQR0 is zero: float pairs, no scale.
 constexpr u32 PSQ_L(u32 d, u32 offset)
 {
   return (56u << 26) | (d << 21) | (5u << 16) | (offset & 0xFFF);
@@ -105,7 +86,6 @@ constexpr u32 PSQ_ST(u32 s, u32 offset, u32 w = 0)
 {
   return (60u << 26) | (s << 21) | (5u << 16) | (w << 15) | (offset & 0xFFF);
 }
-// psq_lx/psq_stx with rA = 0: the address is r5 alone.
 constexpr u32 PSQ_LX_RA0(u32 d)
 {
   return (4u << 26) | (d << 21) | (5u << 11) | (6u << 1);
@@ -115,7 +95,6 @@ constexpr u32 PSQ_STX_RA0(u32 s)
   return (4u << 26) | (s << 21) | (5u << 11) | (7u << 1);
 }
 
-// Opcodes and extended opcodes
 constexpr u32 OP_DOUBLE = 63, OP_SINGLE = 59, OP_PAIRED = 4;
 constexpr u32 XO_DIV = 18, XO_SUB = 20, XO_ADD = 21, XO_SEL = 23, XO_RES = 24, XO_MUL = 25,
               XO_RSQRTE = 26, XO_MSUB = 28, XO_MADD = 29, XO_NMSUB = 30, XO_NMADD = 31;
@@ -130,22 +109,20 @@ constexpr u64 MINUS_ONE = 0xBFF0'0000'0000'0000;
 constexpr u64 INF = 0x7FF0'0000'0000'0000;
 constexpr u64 NINF = 0xFFF0'0000'0000'0000;
 constexpr u64 PPC_NAN = 0x7FF8'0000'0000'0000;
-// NaNs whose payloads survive rounding to single, so single and paired ops keep them whole.
 constexpr u64 QNAN_A = 0x7FF8'1000'0000'0000;
-constexpr u64 QNAN_B = 0xFFF8'2000'0000'0000;  // negative
+constexpr u64 QNAN_B = 0xFFF8'2000'0000'0000;
 constexpr u64 QNAN_C = 0x7FF8'4000'0000'0000;
-constexpr u64 SNAN_C = 0x7FF0'8000'0000'0000;  // quiet: 0x7FF8'8000'0000'0000
+constexpr u64 SNAN_C = 0x7FF0'8000'0000'0000;
 constexpr u64 SNAN_C_QUIET = 0x7FF8'8000'0000'0000;
 
-// Singles in memory
-constexpr u32 S_DENORMAL = 0x0040'0000;      // 2^-127
-constexpr u32 S_NEG_DENORMAL = 0x8040'0000;  // -2^-127
-constexpr u32 S_2_100 = 0x7180'0000;         // 2^100
+constexpr u32 S_DENORMAL = 0x0040'0000;
+constexpr u32 S_NEG_DENORMAL = 0x8040'0000;
+constexpr u32 S_2_100 = 0x7180'0000;
 constexpr u32 S_ONE = 0x3F80'0000;
 constexpr u32 S_SNAN = 0x7F80'0001;
 constexpr u32 S_INF = 0x7F80'0000;
-constexpr u64 D_2_M27 = 0x3E40'0000'0000'0000;   // 2^-127 * 2^100
-constexpr u64 D_M2_M27 = 0xBE40'0000'0000'0000;  // -2^-127 * 2^100
+constexpr u64 D_2_M27 = 0x3E40'0000'0000'0000;
+constexpr u64 D_M2_M27 = 0xBE40'0000'0000'0000;
 
 void SetEnv(const char* name, const char* value)
 {
@@ -182,27 +159,16 @@ struct Case
 {
   std::string name;
   std::vector<u32> code;
-  // Registers set before the run as {reg, ps0, ps1}; the others hold Fill(reg) in both halves.
   std::vector<std::array<u64, 3>> fprs;
-  // Words at DATA_BASE (r5)
   std::vector<std::pair<u32, u32>> data;
-  u32 rounding_mode = 0;  // FPSCR.RN
-  u32 gqr0 = 0;           // GQR0: float pairs, no scale, unless a case says
-  // Pinned results, checked on the JIT's run.
+  u32 rounding_mode = 0;
+  u32 gqr0 = 0;
   std::function<void(const Result&, const std::string&)> expect;
-  // Stored words (by index) the JIT may store differently from the interpreter.
   std::vector<u32> data_differs_from_interpreter;
-  // Registers the JIT may hold differently from the interpreter (both halves).
   std::vector<int> fprs_differ_from_interpreter;
-  // The interpreter's own answer depends on the host here: on a CPU that flushes denormal inputs
-  // (DenormalInputsFlushed) its C++ compares read a double denormal as zero, where the JIT, Jit64
-  // and the interpreter elsewhere don't. The pinned expectation still holds.
   bool interpreter_flushes_here = false;
 };
 
-// The FPSCR exception bits a JIT sets itself in an Orca session (fres, frsqrte and their paired
-// forms). The JITs leave the others (VXISI, VXIMZ, VXSNAN, ZX of fdiv...) alone with float
-// exceptions off, where the interpreter sets them, so only these are compared.
 constexpr u32 JIT_FPSCR_BITS = FPSCR_ZX | FPSCR_VXSQRT;
 
 class JitFloatSemantics : public testing::Test
@@ -210,7 +176,6 @@ class JitFloatSemantics : public testing::Test
 protected:
   static void SetUpTestSuite()
   {
-    // The JIT reads it (JitBase::RefreshConfig): an Orca session's JIT output.
     s_had_session = std::getenv("ORCA_SESSION") != nullptr;
     if (!s_had_session)
       SetEnv("ORCA_SESSION", "1");
@@ -271,7 +236,6 @@ protected:
     ppc.fpscr.NI = 1;
     ppc.fpscr.RN = static_cast<Common::FPU::RoundMode>(c.rounding_mode);
     PowerPC::RoundingModeUpdated(ppc);
-    // DBAT0: effective 0x00000000-0x0FFFFFFF to the same physical addresses, read/write.
     ppc.spr[SPR_DBAT0U] = 0x0000'1FFF;
     ppc.spr[SPR_DBAT0L] = 0x0000'0002;
     system.GetMMU().DBATUpdated();
@@ -373,7 +337,6 @@ protected:
   static inline bool s_had_session = false;
 };
 
-// d = 1, a = 2, b = 3, c = 4
 std::function<void(const Result&, const std::string&)> ExpectF1(u64 ps0, u64 ps1)
 {
   return [ps0, ps1](const Result& r, const std::string& where) {
@@ -387,10 +350,8 @@ std::function<void(const Result&, const std::string&)> ExpectF1Ps0(u64 ps0)
     EXPECT_EQ(ps0, r.ps0[1]) << where << fmt::format(": f1 ps0 {:016x}", r.ps0[1]);
   };
 }
-}  // namespace
+}
 
-// A NaN made from no NaN input is PowerPC's positive default, in every scalar form, and fnmadd and
-// fnmsub never negate a NaN (Project+ runs fnmsubs with inf * 0 as a match starts).
 TEST_F(JitFloatSemantics, GeneratedNaNIsPositive)
 {
   struct Op
@@ -417,7 +378,6 @@ TEST_F(JitFloatSemantics, GeneratedNaNIsPositive)
     for (const u32 opcode : {OP_DOUBLE, OP_SINGLE})
     {
       const bool single = opcode == OP_SINGLE;
-      // Each register aliasing: d apart, d == a, d == b (where there is a b), d == c.
       for (const u32 d : {1u, 2u, 3u, 4u})
       {
         Case c;
@@ -439,8 +399,6 @@ TEST_F(JitFloatSemantics, GeneratedNaNIsPositive)
   }
 }
 
-// The same from singles: loaded (lfs, psq_l), which an AFP CPU computes in single precision, and
-// made by single-precision arithmetic (store-safe), which every ARM CPU does.
 TEST_F(JitFloatSemantics, GeneratedNaNFromSingles)
 {
   const std::vector<std::pair<u32, u32>> data = {{0, S_INF}, {1, S_ONE}, {2, 0}, {3, S_ONE}};
@@ -449,7 +407,6 @@ TEST_F(JitFloatSemantics, GeneratedNaNFromSingles)
     const char* name;
     u32 xo;
   };
-  // a = inf, b = 1, c = 0: inf * 0 makes the NaN in every op with c.
   for (const Op& op : {Op{"madds", XO_MADD}, Op{"msubs", XO_MSUB}, Op{"nmadds", XO_NMADD},
                        Op{"nmsubs", XO_NMSUB}, Op{"muls", XO_MUL}})
   {
@@ -461,7 +418,6 @@ TEST_F(JitFloatSemantics, GeneratedNaNFromSingles)
     loaded.expect = ExpectF1(PPC_NAN, PPC_NAN);
     Check(loaded);
 
-    // f2 = inf * 1, f4 = 0 * 1, f3 = 1 * 1, all single-precision results.
     Case computed;
     computed.name = fmt::format("f{} of single results", op.name);
     computed.code = {A_FORM(OP_SINGLE, XO_MUL, 2, 5, 0, 6), A_FORM(OP_SINGLE, XO_MUL, 4, 7, 0, 6),
@@ -472,7 +428,6 @@ TEST_F(JitFloatSemantics, GeneratedNaNFromSingles)
 
     Case paired;
     paired.name = fmt::format("ps_{} of psq_l inputs, NaN in ps0", op.name);
-    // a = {inf, 1}, b = {1, 1}... from words 0-1 and 1-2 and 2-3: a {inf, 1}, b {1, 0}, c {0, 1}
     paired.code = {PSQ_L(2, 0), PSQ_L(3, 4), PSQ_L(4, 8),
                    A_FORM(OP_PAIRED, op.xo == XO_MUL ? XO_MUL : op.xo, 1, 2, b, 4)};
     paired.data = data;
@@ -484,8 +439,6 @@ TEST_F(JitFloatSemantics, GeneratedNaNFromSingles)
   }
 }
 
-// The first NaN input in PowerPC's order (a, b, c, though fmadd computes a * c + b), made quiet,
-// never negated.
 TEST_F(JitFloatSemantics, NaNPropagationOrder)
 {
   struct Inputs
@@ -513,7 +466,6 @@ TEST_F(JitFloatSemantics, NaNPropagationOrder)
       }
     }
   }
-  // fmul: a then c; fadd, fsub, fdiv: a then b.
   for (const u32 opcode : {OP_DOUBLE, OP_SINGLE})
   {
     Case mul;
@@ -542,8 +494,6 @@ TEST_F(JitFloatSemantics, NaNPropagationOrder)
   }
 }
 
-// Paired ops, lane by lane: a NaN made in ps0 alone, in ps1 alone, in both, and NaN inputs; the
-// lanes that stay numbers are still computed (and negated for ps_nmadd/ps_nmsub).
 TEST_F(JitFloatSemantics, PairedNaNs)
 {
   struct Op
@@ -562,8 +512,6 @@ TEST_F(JitFloatSemantics, PairedNaNs)
   };
   for (const Op& op : ops)
   {
-    // Inputs that make a NaN: add (inf, -inf), sub (inf, inf), div (inf, inf), anything with c:
-    // a = inf, c = 0, b = 1. muls0/madds0 take c.ps0 for both lanes, muls1/madds1 c.ps1.
     const auto lane_inputs = [&](bool nan) -> std::array<u64, 3> {
       if (!nan)
         return {TWO, ONE, ONE};
@@ -583,7 +531,6 @@ TEST_F(JitFloatSemantics, PairedNaNs)
     {
       std::array<u64, 3> l0 = lane_inputs(nan0);
       std::array<u64, 3> l1 = lane_inputs(nan1);
-      // A shared c lane can only make one of the two lanes NaN through a: zero c everywhere then.
       if (op.xo == XO_MULS0 || op.xo == XO_MADDS0 || op.xo == XO_MULS1 || op.xo == XO_MADDS1)
       {
         l0[2] = ZERO;
@@ -611,7 +558,6 @@ TEST_F(JitFloatSemantics, PairedNaNs)
         Check(c);
       }
     }
-    // NaN inputs: a's lane 0, b's lane 1 (c's where there is no b).
     Case in;
     in.name = fmt::format("{} NaN inputs", op.name);
     in.code = {A_FORM(OP_PAIRED, op.xo, 1, 2, op.uses_b ? 3 : 0, op.uses_c ? 4 : 0)};
@@ -620,7 +566,6 @@ TEST_F(JitFloatSemantics, PairedNaNs)
   }
 }
 
-// ps_sum0/1: a.ps0 + b.ps1 by PowerPC's rules, the other lane from c, whatever d aliases.
 TEST_F(JitFloatSemantics, PairedSum)
 {
   struct Inputs
@@ -656,11 +601,8 @@ TEST_F(JitFloatSemantics, PairedSum)
   }
 }
 
-// frsqrte of a negative number, fctiw(z) of a NaN.
 TEST_F(JitFloatSemantics, EstimatesAndConversions)
 {
-  // Negative numbers below and above -2 (JitArm64's routine took those apart), -inf: the default
-  // NaN, and FPSCR.VXSQRT set as Jit64 and the interpreter set it.
   for (const u64 b : {MINUS_ONE, std::bit_cast<u64>(-5.0), std::bit_cast<u64>(-1e300), NINF,
                       std::bit_cast<u64>(-1e-300), u64{0x8000'0000'0000'0001}})
   {
@@ -681,7 +623,6 @@ TEST_F(JitFloatSemantics, EstimatesAndConversions)
     c.interpreter_flushes_here = (b & 0x7FF0'0000'0000'0000) == 0;
     Check(c);
   }
-  // frsqrte of a double denormal: an M1 to M3 reads it as zero in FRSQRTE.
   for (const u64 b : {u64{1}, u64{0x0000'0000'0100'0000}, u64{0x000F'FFFF'FFFF'FFFF}})
   {
     Case c;
@@ -710,9 +651,6 @@ TEST_F(JitFloatSemantics, EstimatesAndConversions)
   }
 }
 
-// Loaded denormal singles count as themselves (PowerPC never flushes inputs; Jit64 computes them
-// in double precision, where they are normal), and results below the smallest normal flush to zero
-// in the non-IEEE mode.
 TEST_F(JitFloatSemantics, DenormalSingles)
 {
   const std::vector<std::pair<u32, u32>> data = {
@@ -726,7 +664,6 @@ TEST_F(JitFloatSemantics, DenormalSingles)
     return c;
   };
 
-  // denormal * 2^100 = 2^-27, scalar and paired (a flushed input would give 0)
   Case muls = make("fmuls lfs denormal * 2^100",
                    {LFS(2, 0), LFS(4, 8), A_FORM(OP_SINGLE, XO_MUL, 1, 2, 0, 4)});
   muls.expect = ExpectF1(D_2_M27, D_2_M27);
@@ -753,20 +690,18 @@ TEST_F(JitFloatSemantics, DenormalSingles)
   ps_muls1.expect = ExpectF1(D_M2_M27, D_M2_M27);
   Check(ps_muls1);
 
-  // ps_sum0: d.ps1 is c.ps1 rounded to single, which flushes a denormal in the non-IEEE mode.
   Case sum = make("ps_sum0 c lane denormal",
                   {PSQ_L(2, 8), PSQ_L(3, 24), PSQ_L(4, 0), A_FORM(OP_PAIRED, XO_SUM0, 1, 2, 3, 4)});
-  sum.expect = ExpectF1(0x4630'0000'0000'0000, 0x8000'0000'0000'0000);  // 2^100, -0
+  sum.expect = ExpectF1(0x4630'0000'0000'0000, 0x8000'0000'0000'0000);
   Check(sum);
 
-  // Compares and selects: -2^-127 is less than zero.
   Case fsel = make("fsel lfs -denormal",
                    {LFS(2, 4), LFS(3, 24), LFS(4, 8), A_FORM(OP_DOUBLE, XO_SEL, 1, 2, 3, 4)});
   fsel.expect = ExpectF1Ps0(ONE);
   Check(fsel);
   Case ps_sel = make("ps_sel psq_l {-denormal, denormal}", {PSQ_L(2, 4), PSQ_L(3, 24), PSQ_L(4, 8),
                                                             A_FORM(OP_PAIRED, XO_SEL, 1, 2, 3, 4)});
-  ps_sel.expect = ExpectF1(ONE, 0x4630'0000'0000'0000);  // b.ps0 = 1, c.ps1 = 2^100
+  ps_sel.expect = ExpectF1(ONE, 0x4630'0000'0000'0000);
   Check(ps_sel);
   Case fcmpu =
       make("fcmpu lfs denormal, 0", {LFS(2, 0), LFS(3, 16), X_FORM(OP_DOUBLE, 0, 0, 2, 3)});
@@ -779,7 +714,6 @@ TEST_F(JitFloatSemantics, DenormalSingles)
   ps_cmpu1.expect = fcmpu.expect;
   Check(ps_cmpu1);
 
-  // fctiw of 2^-127 rounding toward +inf is 1.
   Case fctiw = make("fctiw lfs denormal toward +inf", {LFS(3, 0), X_FORM(OP_DOUBLE, 14, 1, 0, 3)});
   fctiw.rounding_mode = 2;
   fctiw.expect = [](const Result& r, const std::string& where) {
@@ -787,7 +721,6 @@ TEST_F(JitFloatSemantics, DenormalSingles)
   };
   Check(fctiw);
 
-  // Stores: psq_st rounds to single (a denormal flushes); stfs of an lfs'd single is bit exact.
   Case psq_st = make("psq_st of psq_l denormals", {PSQ_L(2, 0), PSQ_ST(2, 40)});
   psq_st.expect = [](const Result& r, const std::string& where) {
     EXPECT_EQ(0u, r.data[10]) << where;
@@ -799,8 +732,6 @@ TEST_F(JitFloatSemantics, DenormalSingles)
     EXPECT_EQ(S_DENORMAL, r.data[12]) << where;
   };
   Check(stfs);
-  // An SNaN that psq_l loads goes quiet, as Jit64 loads it (CVTPS2PD), whatever stores it next:
-  // psq_st, stfs, stfd, or stfs after fmr. The interpreter keeps it signalling.
   {
     Case snan = make("psq_l SNaN, then psq_st, stfs, stfd, fmr + stfs",
                      {PSQ_L(2, 32), PSQ_ST(2, 40), STFS(2, 48), STFD(2, 56), FMR(6, 2),
@@ -819,15 +750,13 @@ TEST_F(JitFloatSemantics, DenormalSingles)
     Check(snan);
   }
 
-  // A NaN stored as an integer: Jit64's answer (the interpreter casts a NaN to an integer, which
-  // has none). A pair saturates as 65535 does, a single becomes the type's minimum.
   {
     struct Quantized
     {
       const char* name;
       u32 type;
-      u32 pair_word;    // word 10 after storing {NaN, 2.0} at byte 40
-      u32 single_word;  // word 12 after storing NaN at byte 48
+      u32 pair_word;
+      u32 single_word;
     };
     for (const Quantized& q : {Quantized{"u8", 4, 0xFF02'000A, 0x00AD'000C},
                                Quantized{"u16", 5, 0xFFFF'0002, 0x0000'000C},
@@ -849,7 +778,6 @@ TEST_F(JitFloatSemantics, DenormalSingles)
     }
   }
 
-  // Outputs below the smallest normal flush: 2^-70 * 2^-70 (single), 2^-600 * 2^-600 (double).
   Case tiny_single;
   tiny_single.name = "fmuls tiny";
   tiny_single.code = {A_FORM(OP_SINGLE, XO_MUL, 1, 2, 0, 4)};
@@ -862,9 +790,6 @@ TEST_F(JitFloatSemantics, DenormalSingles)
   tiny_double.fprs = {{2, std::bit_cast<u64>(0x1p-600), 0}, {4, std::bit_cast<u64>(0x1p-600), 0}};
   tiny_double.expect = ExpectF1Ps0(0);
   Check(tiny_double);
-  // A double denormal input: the JIT and the interpreter agree on one host, but this is where
-  // hosts still differ (the residual risk): an ARM CPU without FEAT_AFP flushes it (0), x86-64 and
-  // an AFP CPU don't (2^-74).
   Case double_denormal;
   double_denormal.name = "fmul double denormal * 2^1000";
   double_denormal.code = {A_FORM(OP_DOUBLE, XO_MUL, 1, 2, 0, 4)};
@@ -875,8 +800,6 @@ TEST_F(JitFloatSemantics, DenormalSingles)
   Check(double_denormal);
 }
 
-// fres, ps_res, frsqrte and ps_rsqrte of +0 and -0: the infinity of the input's sign, and
-// FPSCR.ZX with FX. -0.0 counts as zero here; a missed bit would reach RAM via an OS context save.
 TEST_F(JitFloatSemantics, EstimatesOfZero)
 {
   for (const u64 zero : {ZERO, NEG_ZERO})
@@ -901,10 +824,6 @@ TEST_F(JitFloatSemantics, EstimatesOfZero)
   }
 }
 
-// fmadds and ps_madd of loaded singles whose exact product lies on a tie between two singles, which
-// b, far smaller, decides (Mario Strikers Charged): 50 * c + b is 0xBF55BF17. An AFP CPU runs a
-// single-precision FMADD on these; an M1 to M3 (they could be denormals there) and Jit64 the
-// double-precision error-free transformation. Both must round once.
 TEST_F(JitFloatSemantics, FmaddsTie)
 {
   const std::vector<std::pair<u32, u32>> data = {{0, 0x4248'0000}, {1, 0x4248'0000},
@@ -931,13 +850,8 @@ TEST_F(JitFloatSemantics, FmaddsTie)
   Check(ps_madd);
 }
 
-// The interpreter, which the JITs fall back to (Rc = 1 forms, among others), runs under the
-// guest's host float mode too. On an ARM CPU with FEAT_AFP that sets FPCR.AH, where the host's
-// FABS and FNEG leave a NaN's sign alone and Clang's std::copysign of a double (a mask built with
-// FNEG) loses the sign. The interpreter's fabs, fres and fctiw must not depend on it.
 TEST_F(JitFloatSemantics, InterpreterSignsUnderHostMode)
 {
-  // fabs, fnabs, fneg of a negative NaN, an SNaN and -0.
   for (const u64 b : {QNAN_B, SNAN_C, NEG_ZERO, MINUS_ONE})
   {
     for (const auto& [name, xo, result] :
@@ -952,7 +866,6 @@ TEST_F(JitFloatSemantics, InterpreterSignsUnderHostMode)
       Check(c);
     }
   }
-  // fres of a negative number too small, too large, or infinite for the table.
   for (const auto& [b, result] :
        {std::pair{std::bit_cast<u64>(-1e-300), std::bit_cast<u64>(-double(3.4028234663852886e38))},
         std::pair{std::bit_cast<u64>(-1e300), NEG_ZERO}, std::pair{NINF, NEG_ZERO}})
@@ -964,14 +877,10 @@ TEST_F(JitFloatSemantics, InterpreterSignsUnderHostMode)
     c.expect = ExpectF1(result, result);
     Check(c);
   }
-  // fctiw of negative numbers in every rounding mode (the interpreter's round-to-nearest adds
-  // 2^52 with the input's sign). A result of -0 is the one place the JITs and the interpreter
-  // still differ, alike on every host: PowerPC (and the interpreter) set the upper word to
-  // 0xFFF80001 there, both JITs to 0xFFF80000.
   struct Conversion
   {
     double b;
-    std::array<s32, 4> by_mode;  // nearest, toward zero, toward +inf, toward -inf
+    std::array<s32, 4> by_mode;
   };
   for (const Conversion& conversion :
        {Conversion{-1.5, {-2, -1, -1, -2}}, Conversion{-3.5, {-4, -3, -3, -4}},
@@ -995,9 +904,6 @@ TEST_F(JitFloatSemantics, InterpreterSignsUnderHostMode)
   }
 }
 
-// psq_lx and psq_stx with rA = 0, which Project+'s codes use: both JITs leave them to the
-// interpreter in a session, so every host stores the same truncated single (the interpreter's
-// psq_st truncates; the JITs round). Also covers JitArm64's register cache across the fallback.
 TEST_F(JitFloatSemantics, PairedRa0FallsBack)
 {
   Case store;

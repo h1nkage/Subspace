@@ -48,7 +48,7 @@ TEST(BroadcastRing, AudioIndependentAndPartialWriteRejected)
   EXPECT_EQ(packet.bytes, audio);
   Broadcast::Store(memory, Broadcast::Slot(true, ticket), ticket * 2 + 1);
   EXPECT_FALSE(Broadcast::Read(memory, true, ticket, &packet));
-  EXPECT_EQ(packet.bytes, audio);  // Failure never exposes a partial packet.
+  EXPECT_EQ(packet.bytes, audio);
 }
 
 TEST(BroadcastRing, ConcurrentOverwriteNeverAcceptsMixedPayload)

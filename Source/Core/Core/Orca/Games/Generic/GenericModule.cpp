@@ -46,4 +46,4 @@ bool GenericModule::FreshSupported()
                                                        Mod::GuardsFailed()) ==
                     Rollback::OnlineMatch::OriginRule::Declared;
 }
-}  // namespace Orca::UX
+}

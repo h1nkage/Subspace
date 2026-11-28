@@ -220,7 +220,6 @@ std::size_t Mixer::MixSurround(float* samples, std::size_t num_samples)
 
 void Mixer::PushSamples(const s16* samples, std::size_t num_samples)
 {
-  // Orca rollback: frames re-run after a load already played their sound the first time.
   if (Rollback::IsResimulating())
     return;
   if (IsOutputSampleRateValid())

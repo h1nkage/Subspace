@@ -18,7 +18,6 @@ namespace Ranked = UX::Ranked;
 using Object = picojson::object;
 using Array = picojson::array;
 
-// Tools/orca/mods/ruleset.schema.json, as bytes (CMake writes the list).
 constexpr char SCHEMA_TEXT[] = {
 #include "ruleset.schema.json.inc"
 };
@@ -56,15 +55,10 @@ const Compiled& Schema()
   return compiled;
 }
 
-// After the schema check every value below has its type and bounds, and every key read is one
-// the schema requires (At() throws on a missing key: a schema edit that makes one optional must
-// read it with Find()).
 int Int(const picojson::value& v)
 {
   return static_cast<int>(v.get<double>());
 }
-// A number before the schema's bounds are relied on: StrictJson keeps every number an exact
-// integer of magnitude at most 2^53 - 1, so this never overflows, whatever the bounds say.
 s64 Wide(const picojson::value& v)
 {
   return static_cast<s64>(v.get<double>());
@@ -86,7 +80,7 @@ std::optional<Ranked::Ruleset> Fail(std::string* error, std::string why)
     *error = std::move(why);
   return std::nullopt;
 }
-}  // namespace
+}
 
 std::string_view RulesetSchemaText()
 {
@@ -110,9 +104,6 @@ std::optional<Ranked::Ruleset> ReadRuleset(std::string_view json, std::string* e
   if (auto p = SchemaMismatch(compiled.schema, *doc))
     return Fail(error, *p);
 
-  // Timers in frames fit the 16-bit counters the stage flows and the match block keep, checked on
-  // the file's numbers before anything is narrowed (the schema's bounds already see to it; this
-  // holds if they are ever widened). The site checks the same.
   {
     const picojson::value& st = At(*doc, "steps");
     const s64 grace = std::max(Wide(At(st, "graceFrames")), Wide(At(st, "casualGraceFrames")));
@@ -134,7 +125,6 @@ std::optional<Ranked::Ruleset> ReadRuleset(std::string_view json, std::string* e
     }
   }
 
-  // The x-orca-rules a schema can't state.
   Ranked::Ruleset r;
   r.id = static_cast<u8>(Int(At(*doc, "block")));
   r.slug = At(*doc, "id").get<std::string>();
@@ -227,4 +217,4 @@ std::optional<Ranked::Ruleset> ReadRuleset(std::string_view json, std::string* e
   r.order_pick_seconds = static_cast<u16>(Int(At(At(*doc, "characterOrder"), "pickSeconds")));
   return r;
 }
-}  // namespace Orca::Engine
+}

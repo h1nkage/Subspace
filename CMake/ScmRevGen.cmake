@@ -60,7 +60,7 @@ if(NOT DOLPHIN_WC_REVISION)
 endif()
 
 # Subspace: the name the NetPlay window's Revision column (and the title bar) shows, set by
-# build-netplay.bat. Every player in a lobby needs the same one: Dolphin refuses a different version.
+# build-subspace.bat. Every player in a lobby needs the same one: Dolphin refuses a different version.
 if(DEFINED ENV{SUBSPACE_VERSION_NAME} AND NOT "$ENV{SUBSPACE_VERSION_NAME}" STREQUAL "")
   set(DOLPHIN_WC_DESCRIBE "$ENV{SUBSPACE_VERSION_NAME}")
 endif()

@@ -63,7 +63,6 @@ constexpr std::array<Hook, 24> os_patches{{
     {"GeckoHandlerReturnTrampoline", HLE_Misc::GeckoReturnTrampoline,       HookType::Replace, HookFlag::Fixed},
     {"AppLoaderReport",              HLE_OS::HLE_GeneralDebugPrint,         HookType::Start,   HookFlag::Fixed}, // apploader needs OSReport-like function
 
-    // Orca rollback: once per game frame, at the address the game's profile names (Core/Rollback)
     {"OrcaFrameBoundary",            HLE_Misc::OrcaFrameBoundary,           HookType::Start,   HookFlag::Fixed},
 }};
 // clang-format on
@@ -111,8 +110,6 @@ void PatchFixedFunctions(Core::System& system)
   // loading a savestate where PC is inside the code handler while cheats are disabled.
   Patch(system, Gecko::HLE_TRAMPOLINE_ADDRESS, "GeckoHandlerReturnTrampoline");
 
-  // Orca rollback frame boundary, in a session whose profile names one, after checking the
-  // instruction there.
   if (const Orca::Profile* profile = Orca::ActiveProfile(); profile && profile->frame_hook)
   {
     const u32 hook = *profile->frame_hook;

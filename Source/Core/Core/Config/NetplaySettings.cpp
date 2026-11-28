@@ -16,7 +16,7 @@ const Info<std::string> NETPLAY_TRAVERSAL_SERVER{{System::Main, "NetPlay", "Trav
 const Info<u16> NETPLAY_TRAVERSAL_PORT{{System::Main, "NetPlay", "TraversalPort"}, 6262};
 const Info<u16> NETPLAY_TRAVERSAL_PORT_ALT{{System::Main, "NetPlay", "TraversalPortAlt"}, 6226};
 const Info<std::string> NETPLAY_TRAVERSAL_CHOICE{{System::Main, "NetPlay", "TraversalChoice"},
-                                                 "direct"};
+                                                 "traversal"};
 const Info<std::string> NETPLAY_INDEX_URL{{System::Main, "NetPlay", "IndexServer"},
                                           "https://lobby.dolphin-emu.org"};
 
@@ -26,6 +26,18 @@ const Info<std::string> NETPLAY_INDEX_REGION{{System::Main, "NetPlay", "IndexReg
 const Info<std::string> NETPLAY_INDEX_PASSWORD{{System::Main, "NetPlay", "IndexPassword"}, ""};
 
 const Info<std::string> NETPLAY_HOST_CODE{{System::Main, "NetPlay", "HostCode"}, "00000000"};
+
+const Info<int> NETPLAY_SUBSPACE_PING_DISPLAY{{System::Main, "NetPlay", "SubspacePingDisplay"},
+                                              0};
+const Info<int> NETPLAY_SUBSPACE_HUD_NAMES{{System::Main, "NetPlay", "SubspaceHudNames"}, 3};
+const Info<bool> NETPLAY_SUBSPACE_CORNER_SPRITE{{System::Main, "NetPlay", "SubspaceCornerSprite"},
+                                                true};
+const Info<bool> NETPLAY_SUBSPACE_CORNER_FPS{{System::Main, "NetPlay", "SubspaceCornerFps"}, true};
+const Info<bool> NETPLAY_SUBSPACE_CORNER_PING{{System::Main, "NetPlay", "SubspaceCornerPing"},
+                                              true};
+const Info<bool> NETPLAY_SUBSPACE_DIRECT_LINKS{{System::Main, "NetPlay", "SubspaceDirectLinks"},
+                                               true};
+const Info<bool> NETPLAY_SUBSPACE_FRAME_MS{{System::Main, "NetPlay", "SubspaceFrameMs"}, false};
 
 const Info<u16> NETPLAY_HOST_PORT{{System::Main, "NetPlay", "HostPort"}, DEFAULT_LISTEN_PORT};
 const Info<std::string> NETPLAY_ADDRESS{{System::Main, "NetPlay", "Address"}, "127.0.0.1"};

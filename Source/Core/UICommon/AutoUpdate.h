@@ -49,5 +49,5 @@ public:
   void TriggerUpdate(const NewVersionInformation& info, RestartMode restart_mode);
 
 protected:
-  virtual void OnUpdateAvailable(const NewVersionInformation& info) = 0;
+  virtual void OnUpdateAvailable(const NewVersionInformation& info, CheckType check_type) = 0;
 };

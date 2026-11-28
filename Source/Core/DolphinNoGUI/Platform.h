@@ -67,8 +67,6 @@ public:
 #ifdef __APPLE__
   static std::unique_ptr<Platform> CreateMacOSPlatform();
 
-  // Orca.app: native dialogs shown before the game window opens. ChooseFileMacOS returns nullopt
-  // if the player cancels.
   static std::optional<std::string> ChooseFileMacOS(const std::string& message);
   static void ShowErrorMacOS(const std::string& title, const std::string& message);
 #endif

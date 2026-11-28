@@ -28,16 +28,6 @@
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
 
-// Research tool for reverse-engineering Brawl's menus. Never active in a real session.
-// ORCA_UX_PROBE=<file> runs one command per line, at a frame counted from entry into a scene:
-//   @<scene> <frame> write <addr> <hex bytes>      e.g. @muMenuMain 20 write 90180c10 0000
-//   @<scene> <frame> utf16 <addr> <text>           UTF-16BE text with a 0 terminator
-//   @<scene> <frame> dump <addr> <length> <name>   writes <user dir>/probe-<name>.bin
-//   @* 0 watch <addr> <name>                       logs the u32 there whenever it changes
-//   @* 0 fighters - -                              logs both fighters' status kinds on change
-//   @<scene> <frame> stall <ms> 0                  blocks the CPU thread like a session stall
-// @<scene>:<n> runs only on the n-th entry into the scene. <addr> is hex, or [hex]+hex for one
-// pointer hop (e.g. [805a00e0]+28).
 namespace Orca::UX
 {
 namespace
@@ -45,7 +35,7 @@ namespace
 struct Command
 {
   std::string scene;
-  int visit = 0;  // nonzero: only on that entry into the scene (1 is the first)
+  int visit = 0;
   int frame = 0;
   std::string verb;
   std::string addr;
@@ -112,7 +102,6 @@ std::string SceneName(const Core::CPUThreadGuard& guard)
   return name;
 }
 
-// expr := hex | '[' expr ']' [ '+' hex ]  (each [..] reads the u32 there).
 u32 Address(const Core::CPUThreadGuard& guard, std::string_view expr)
 {
   if (expr.starts_with("["))
@@ -130,7 +119,7 @@ u32 Address(const Core::CPUThreadGuard& guard, std::string_view expr)
       }
     }
     if (close == 0)
-      return 0;  // unbalanced brackets: no address
+      return 0;
     const u32 at = Address(guard, expr.substr(1, close - 1));
     u32 offset = 0;
     if (close + 1 < expr.size() && expr[close + 1] == '+')
@@ -139,7 +128,7 @@ u32 Address(const Core::CPUThreadGuard& guard, std::string_view expr)
   }
   return static_cast<u32>(std::strtoul(std::string(expr).c_str(), nullptr, 16));
 }
-}  // namespace
+}
 
 bool TestKnobsAllowed()
 {
@@ -149,8 +138,6 @@ bool TestKnobsAllowed()
 
 void ProbeFrame(const Core::CPUThreadGuard& guard, int frame)
 {
-  // ORCA_UX_PROBE_WATCHDOG=1: if no frame arrives for 2 s, log the guest's pc and lr from a host
-  // thread. The reads are racy and only show roughly where the game is waiting.
   static std::atomic<int> s_last_frame{0};
   s_last_frame = frame;
   static const bool s_dog = [] {
@@ -174,12 +161,11 @@ void ProbeFrame(const Core::CPUThreadGuard& guard, int frame)
   }();
   (void)s_dog;
   static std::vector<Command> commands = Load();
-  // Checked every frame because a solo host can be joined by a real player later.
   if (commands.empty() || !TestKnobsAllowed())
     return;
   static std::string scene;
   static int scene_start = 0;
-  static std::map<std::string, int> visits;  // entries per scene, rollback re-runs included
+  static std::map<std::string, int> visits;
   const std::string now = SceneName(guard);
   if (now != scene)
   {
@@ -273,4 +259,4 @@ void ProbeFrame(const Core::CPUThreadGuard& guard, int frame)
                    c.arg2);
   }
 }
-}  // namespace Orca::UX
+}

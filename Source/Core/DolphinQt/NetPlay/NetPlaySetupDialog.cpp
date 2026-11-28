@@ -195,7 +195,7 @@ void NetPlaySetupDialog::CreateMainLayout()
   m_main_layout->addWidget(new QLabel(tr("Connection Type:")), 0, 0);
   m_main_layout->addWidget(m_connection_type, 0, 1);
   m_main_layout->addWidget(m_reset_traversal_button, 0, 2);
-  m_main_layout->addWidget(new QLabel(tr("Nickname:")), 1, 0);
+  m_main_layout->addWidget(new QLabel(tr("Display Name:")), 1, 0);
   m_main_layout->addWidget(m_nickname_edit, 1, 1);
   m_main_layout->addWidget(m_tab_widget, 2, 0, 1, -1);
   m_main_layout->addWidget(m_button_box, 3, 0, 1, -1);

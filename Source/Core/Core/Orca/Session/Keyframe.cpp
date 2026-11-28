@@ -39,14 +39,11 @@ namespace Orca::Net
 {
 namespace
 {
-// ORP3 adds name-free tag assignment events. Legacy machine images are rejected.
 constexpr char MAGIC[4] = {'O', 'R', 'P', '3'};
 constexpr int WINDOW_LOG = 26;
 constexpr int LEVEL = 3;
-// Sanity limit per section (MEM2 is 64 MB; a Wii NAND is at most 512 MB).
 constexpr u64 MAX_SECTION = 512ull << 20;
 constexpr u64 MAX_RAW = 64ull << 20;
-// The site accepts at most 128 MB.
 constexpr u64 MAX_KEYFRAME_BYTES = 128ull << 20;
 
 class Writer
@@ -116,8 +113,6 @@ void Collect(const File::FSTEntry& entry, const std::string& prefix,
     out.directory = child->isDirectory;
     if (!out.directory)
     {
-      // GetSize() seeks to EOF and back; those seeks can stall the frame capturing the origin.
-      // Query the opened descriptor instead: unlike the scan's size, this also sees later growth.
       std::string data;
       {
         File::IOFile file(child->physicalName, "rb");
@@ -161,7 +156,7 @@ bool SafeRelative(const std::string& path)
   }
   return true;
 }
-}  // namespace
+}
 
 bool ReadNandTree(const std::string& root, std::vector<NandEntry>* entries)
 {
@@ -175,7 +170,6 @@ bool ReadNandTree(const std::string& root, std::vector<NandEntry>* entries)
 
 namespace
 {
-// The OS's error text, for logging a failed NAND replacement step.
 std::string LastOsError()
 {
 #ifdef _WIN32
@@ -184,11 +178,10 @@ std::string LastOsError()
   return Common::LastStrerrorString();
 #endif
 }
-}  // namespace
+}
 
 namespace
 {
-// Whether the file at `path` already holds exactly `data`.
 bool SameFile(const std::string& path, const std::vector<u8>& data)
 {
   if (!File::IsFile(path) || File::GetSize(path) != data.size())
@@ -198,9 +191,6 @@ bool SameFile(const std::string& path, const std::vector<u8>& data)
   return file && file.ReadBytes(have.data(), have.size()) && have == data;
 }
 
-// Removes what `entries` doesn't hold under `tree`, and anything held there as the other kind (a
-// file where a folder belongs). A name differing only in case is removed too, before the right one
-// is written, so a case-insensitive disk ends with the replacement's spelling.
 bool RemoveExtras(const File::FSTEntry& tree, const std::string& prefix,
                   const std::map<std::string, bool>& wanted)
 {
@@ -225,7 +215,7 @@ bool RemoveExtras(const File::FSTEntry& tree, const std::string& prefix,
   }
   return true;
 }
-}  // namespace
+}
 
 bool ReplaceNandTree(const std::string& root, const std::vector<NandEntry>& entries)
 {
@@ -246,8 +236,6 @@ bool ReplaceNandTree(const std::string& root, const std::vector<NandEntry>& entr
     ERROR_LOG_FMT(ROLLBACK, "Drop-in: couldn't create {}: {}", root, LastOsError());
     return false;
   }
-  // Only what differs is written. A restore usually changes a few save files of a tree that holds
-  // Brawl's 39 MB of boot files, and on Windows every file written is scanned again.
   if (!RemoveExtras(File::ScanDirectoryTree(root, true), "", wanted))
     return false;
   for (const NandEntry& entry : entries)
@@ -437,18 +425,14 @@ bool ReadReplayFrame(Reader& r, ReplayFrame* frame)
   return true;
 }
 
-// The smallest a frame's record can be: pads, a port count, the header and clear-ready flags, the
-// menu exit, the seed.
 constexpr size_t MIN_FRAME_BYTES = sizeof(Pads) + 6 * 4;
-// Magic, the frame count, the first frame, the origin and target hashes.
 constexpr size_t PREAMBLE_BYTES = 4 + 4 + 4 + 8 + 8;
-}  // namespace
+}
 
 std::vector<u8> PackKeyframe(int frame, const ReplayArchive& replay)
 {
   try
   {
-    // The replay holds frames [first_frame, frame); only its first frame may leave the main menu.
     const int first = replay.first_frame;
     if (first < 0 || frame < first || static_cast<size_t>(frame) > MAX_REPLAY_FRAMES ||
         replay.frames.size() < static_cast<size_t>(frame - first))
@@ -553,22 +537,11 @@ namespace
 {
 constexpr char STREAM_MAGIC[4] = {'S', 'S', 'R', 'S'};
 constexpr char CHUNK_MAGIC[4] = {'S', 'S', 'R', 'C'};
-// The container's version: the preamble, the header and the chunk framing. The rooms Worker
-// (rooms/src/replay-stream.ts) and the site (api/replays/orca, tournament-replay-body.ts) refuse
-// any other, so it changes only together with them. 0.3.46 raised it with the frame layout and no
-// recording reached a server.
 constexpr u32 STREAM_VERSION = 1;
-// The layout of the frames inside the chunks, written as the header's "v" for tools: 2 is ORP3,
-// with typed events (including the optional room-team presence bit). Frames without room-team
-// events retain their byte layout. The reader doesn't check it: the site rebuilds a tournament download's
-// header with "v":1, and the compat key (it carries the git revision) already keeps builds apart.
 constexpr u32 FRAME_LAYOUT = 2;
 constexpr u32 MAX_STREAM_HEADER = 16u << 10;
-// A chunk holds at most a minute of frames and 8 MB compressed.
 constexpr u32 MAX_CHUNK_FRAMES = 3600;
 constexpr u32 MAX_CHUNK_BYTES = 8u << 20;
-// Magic, first frame, frame count, live frame, checksum count, payload size, then the XXH3 of all
-// of those and the payload: every byte of a chunk is covered.
 constexpr size_t CHUNK_FIELDS = 4 + 4 + 4 + 4 + 4 + 4;
 constexpr size_t CHUNK_PREAMBLE = CHUNK_FIELDS + 8;
 
@@ -608,7 +581,7 @@ u64 GetU64(const u8* p)
   std::memcpy(&v, p, sizeof(v));
   return v;
 }
-}  // namespace
+}
 
 std::vector<u8> PackReplayStreamHeader(const ReplayStreamInfo& info)
 {
@@ -641,7 +614,6 @@ std::vector<u8> PackReplayChunk(const ReplayChunk& chunk, bool history_start)
     for (size_t i = 0; i < chunk.frames.size(); ++i)
     {
       const ReplayFrame& frame = chunk.frames[i];
-      // A seed or a menu exit belongs only to a history's first frame (as in PackKeyframe).
       if (!(history_start && i == 0) && (frame.menu_exit != 0 || frame.seed != 0))
         return {};
       if (!WriteReplayFrame(w, frame))
@@ -768,7 +740,6 @@ bool ReplayStreamReader::Parse(std::string* error)
           return std::nullopt;
         return it->second.get<double>();
       };
-      // Another build's stream is refused before anything else of it is read.
       if (!m_info && !m_compat.empty() && text("compat") != m_compat)
         return fail("the replay was recorded by another build");
       ReplayStreamInfo info;
@@ -796,9 +767,6 @@ bool ReplayStreamReader::Parse(std::string* error)
       info.segment = static_cast<u32>(*segment);
       if (m_info)
       {
-        // The same history: everything but the writer's own segment count, which moves on when
-        // a recorder drops back into its match through a keyframe (its history rebuilt from the
-        // host's). That it is the same match is then proven frame by frame on the overlap.
         if (info.compat != m_info->compat || info.build != m_info->build ||
             info.game_id != m_info->game_id || info.origin_hash != m_info->origin_hash ||
             info.first_frame != m_info->first_frame || info.room != m_info->room ||
@@ -832,7 +800,7 @@ bool ReplayStreamReader::Parse(std::string* error)
       if (static_cast<int>(first) != m_segment_end)
         return fail("the replay's frames don't follow on");
       if (m_pending.size() - pos - CHUNK_PREAMBLE < size)
-        break;  // the rest of this chunk hasn't arrived yet
+        break;
       const u8* payload = p + CHUNK_PREAMBLE;
       if (ChunkHash(p, payload, size) != hash)
         return fail("the replay has a damaged chunk");
@@ -902,7 +870,6 @@ bool ReplayStreamReader::Parse(std::string* error)
   return true;
 }
 
-
 namespace
 {
 constexpr size_t GCM_IV = 12;
@@ -949,7 +916,7 @@ bool KeyFromHex(const std::string& hex, u8 key[32])
   }
   return true;
 }
-}  // namespace
+}
 
 bool EncryptKeyframe(int frame, std::vector<u8>* blob, std::string* key_hex)
 {
@@ -1067,11 +1034,8 @@ bool OpenKeyframe(const KeyframeInfo& info, std::vector<u8> blob, int* frame, Re
 
 namespace
 {
-// LastRefusal, per thread: the job and the download threads each read their own.
 thread_local std::string t_last_refusal;
 
-// A folder shared by two Orcas on one machine (tests): the host writes <id>.okf, the joiner reads
-// it.
 class LocalKeyframeStore final : public KeyframeStore
 {
 public:
@@ -1142,10 +1106,6 @@ private:
   std::string m_dir;
 };
 
-// The service's keyframe endpoint: PUT, GET and DELETE on <store_url>/<id> with "Authorization: Ticket
-// <room ticket>". A 401 with code "ticket", or a 403 "signed_out" (the player may have signed in
-// since), retries with a new ticket; network errors, 429 and 5xx retry with backoff; other refusals
-// are final. A 409 "exists" on PUT means an earlier attempt landed but its reply was lost.
 class HttpKeyframeStore final : public KeyframeStore
 {
 public:
@@ -1207,9 +1167,6 @@ public:
   {
     if (Common::OfflineReplay() || !ValidReplayId(id))
       return;
-    // Best effort, off the caller's thread (the CPU thread calls this right after a load); the
-    // site's cleanup catches anything missed. Copy the ticket now, since the room may be gone when
-    // the thread runs.
     std::string ticket, base, error;
     if (!m_tickets || !m_tickets(false, &ticket, &base, &error))
     {
@@ -1239,10 +1196,10 @@ private:
 
   struct Result
   {
-    long status = 0;  // 0: no HTTP response
+    long status = 0;
     std::string error;
-    std::string code;  // The service's {"code"} in a refusal
-    bool final = false;  // not worth retrying
+    std::string code;
+    bool final = false;
   };
 
   static constexpr int ATTEMPTS = 4;
@@ -1287,8 +1244,6 @@ private:
       *error = result.status ? fmt::format("HTTP {}{}{}", result.status,
                                            result.error.empty() ? "" : ": ", result.error) :
                                result.error;
-      // Expired or unknown ticket, or one minted before the player signed in: retry once with a
-      // new one.
       if (((result.status == 401 && result.code == "ticket") ||
            (result.status == 403 && result.code == "signed_out")) &&
           !fresh)
@@ -1297,13 +1252,10 @@ private:
         continue;
       }
       fresh = false;
-      // Refusals (wrong room, too large, gone, room full) are final; 429, 5xx and network errors
-      // retry.
       const bool retry = !result.final && (result.status == 0 || result.status == 429 ||
                                            result.status >= 500);
       if (!retry)
       {
-        // Only the service's own refusals carry a code; a bare 4xx (an edge page) may pass next time.
         if (result.status >= 400)
           t_last_refusal = result.code;
         return false;
@@ -1346,7 +1298,6 @@ private:
     {
       auto* t = static_cast<Transfer*>(user);
       const size_t n = size * count;
-      // A refusal's body is the service's {error, code}, not the keyframe.
       long status = 0;
       curl_easy_getinfo(t->curl, CURLINFO_RESPONSE_CODE, &status);
       if (status < 200 || status >= 300 || !t->download)
@@ -1357,7 +1308,7 @@ private:
         return n;
     }
     if (t->download->size() + n > t->limit)
-      return 0;  // abort: larger than any keyframe
+      return 0;
     t->download->insert(t->download->end(), data, data + n);
     if (t->progress && !t->progress(t->download->size(), 0))
       return 0;
@@ -1415,7 +1366,6 @@ private:
     curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 10000L);
-    // A transfer may take minutes on a slow link, but must not stall for 20 s.
     curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1024L);
     curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 20L);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &OnWrite);
@@ -1439,7 +1389,6 @@ private:
     if (code != CURLE_OK)
     {
       result.error = curl_easy_strerror(code);
-      // Aborts (the player gave up, emulation stopping, an oversized body) are not worth retrying.
       result.final = code == CURLE_WRITE_ERROR || code == CURLE_ABORTED_BY_CALLBACK ||
                      (cancel && cancel->load());
       if (result.status >= 200 && result.status < 300)
@@ -1447,7 +1396,6 @@ private:
     }
     else if (!(result.status >= 200 && result.status < 300) && !error_body.empty())
     {
-      // The service's refusals are {"error": "...", "code": "..."}.
       picojson::value json;
       const std::string text(error_body.begin(), error_body.end());
       if (Json::ParseJson(text, &json) && json.is<picojson::object>())
@@ -1467,7 +1415,7 @@ private:
   std::mutex m_deletes_mutex;
   std::vector<std::thread> m_deletes;
 };
-}  // namespace
+}
 
 std::unique_ptr<KeyframeStore> MakeHttpKeyframeStore(TicketSource tickets)
 {
@@ -1486,4 +1434,4 @@ std::string LastRefusal()
 {
   return t_last_refusal;
 }
-}  // namespace Orca::Net
+}

@@ -15,24 +15,9 @@
 
 #include "Common/CommonTypes.h"
 
-// Broadcast file v1, little endian, fixed size SIZE. Main creates and initializes it before
-// launch; Dolphin maps the existing file RW, never creates/resizes it. All offsets are bytes.
-// Header (256): u32 magic/version/width/height/fps/rate/channels/video_slots/audio_slots/
-// video_bytes/audio_frames/size at 0..44; video_latest/audio_latest/video_drops/audio_drops/state
-// at 64/68/72/76/80. State: 0 waiting, 1 replay sink active, 2 stopped. Remaining words are zero.
-// Video: 3 slots at 256, each 64 + 1280*720*4 bytes, RGBA8, top row first.
-// Audio: 64 slots after video, each 64 + 480*2*2 bytes, interleaved LE s16 L/R, 48 kHz.
-// Slot prefix: u32 guard/bytes/timestamp_us_low/timestamp_us_high/count at 0/4/8/12/16.
-// count is 1 for video, 480 for audio. Timestamp is monotonic host time at capture (audio's first
-// sample); both producers use the same clock. Each ring has exactly one producer, no reader ACK.
-// Tickets are nonzero u31, wrap 0x7fffff80 -> 1; slot=(ticket-1)%slots. Writer publishes odd
-// guard=ticket*2+1 BEFORE any metadata/payload, then even guard=ticket*2, then latest=ticket.
-// Reader copies only a matching even guard and checks it again AFTER copying. Video reads newest
-// only, audio reads retained tickets in order; overflow drops oldest. No waits or disk flushes.
-// Payload words use relaxed atomics too, making the C++ reader safe even in same-process tests.
 namespace Broadcast
 {
-constexpr u32 MAGIC = 0x31425353;  // "SSB1"
+constexpr u32 MAGIC = 0x31425353;
 constexpr u32 VERSION = 1;
 constexpr u32 WIDTH = 1280, HEIGHT = 720, FPS = 30, RATE = 48000, CHANNELS = 2;
 constexpr u32 VIDEO_SLOTS = 3, AUDIO_SLOTS = 64, VIDEO_BYTES = WIDTH * HEIGHT * 4;
@@ -42,7 +27,7 @@ constexpr size_t VIDEO_STRIDE = SLOT_HEADER + VIDEO_BYTES;
 constexpr size_t AUDIO_STRIDE = SLOT_HEADER + AUDIO_BYTES;
 constexpr size_t AUDIO_OFFSET = HEADER_BYTES + VIDEO_SLOTS * VIDEO_STRIDE;
 constexpr size_t SIZE = AUDIO_OFFSET + AUDIO_SLOTS * AUDIO_STRIDE;
-constexpr u32 MAX_TICKET = 0x7fffff80;  // Multiple of 3 and 64: slot order survives rollover.
+constexpr u32 MAX_TICKET = 0x7fffff80;
 static_assert(MAX_TICKET % VIDEO_SLOTS == 0 && MAX_TICKET % AUDIO_SLOTS == 0);
 static_assert(std::atomic_ref<u32>::is_always_lock_free);
 
@@ -91,14 +76,11 @@ inline u32 Write(std::span<u32> memory, bool audio, std::span<const u8> bytes, u
   const u32 ticket = Next(Load(memory, latest));
   const size_t slot = Slot(audio, ticket);
   std::atomic_ref<u32>(memory[slot / 4]).exchange(ticket * 2 + 1, std::memory_order_acq_rel);
-  // If a reader observes any new relaxed payload word, its acquire fence must also observe
-  // this invalidation. This fence supplies that synchronization on weakly ordered CPUs.
   std::atomic_thread_fence(std::memory_order_release);
   Store(memory, slot + 4, static_cast<u32>(payload_size));
   Store(memory, slot + 8, static_cast<u32>(timestamp));
   Store(memory, slot + 12, static_cast<u32>(timestamp >> 32));
   Store(memory, slot + 16, audio ? AUDIO_FRAMES : 1);
-  // The worker reads the mapped GPU rows straight into the ring, including padded strides.
   const size_t row_bytes = audio ? AUDIO_BYTES : WIDTH * 4;
   const size_t rows = audio ? 1 : HEIGHT;
   const size_t source_stride = row_stride ? row_stride : row_bytes;
@@ -147,4 +129,4 @@ inline bool Read(std::span<u32> memory, bool audio, u32 ticket, Packet* packet)
   *packet = {timestamp, std::move(bytes)};
   return true;
 }
-}  // namespace Broadcast
+}

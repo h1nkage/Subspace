@@ -23,7 +23,6 @@ namespace Orca::UX::AppOrb
 {
 namespace
 {
-// Splits at single spaces. Empty fields are kept, so the caller rejects "a  b".
 std::vector<std::string_view> Fields(std::string_view line)
 {
   std::vector<std::string_view> out;
@@ -40,7 +39,6 @@ std::vector<std::string_view> Fields(std::string_view line)
   return out;
 }
 
-// A whole decimal number in [lo, hi], digits only.
 std::optional<int> Number(std::string_view field, int lo, int hi)
 {
   if (field.empty() || field.size() > 5 ||
@@ -80,7 +78,7 @@ std::size_t CodePoints(std::string_view text)
     return (static_cast<unsigned char>(c) & 0xC0) != 0x80;
   }));
 }
-}  // namespace
+}
 
 std::optional<Command> ParseOrb(std::string_view line)
 {
@@ -227,7 +225,6 @@ double DwellMs(const Notice& notice)
   case Kind::Invite:
     break;
   }
-  // Messages: 4 s plus 60 ms per character, up to 9 s.
   return std::min(9000.0, 4000.0 + 60.0 * static_cast<double>(CodePoints(notice.text)));
 }
 
@@ -237,7 +234,6 @@ void Model::Apply(const Command& command, double now_ms)
   switch (command.type)
   {
   case Command::Type::Off:
-    // The lines hide with the button.
     m_on = false;
     m_blink_at = -1;
     m_hovered = m_pressed = -1;
@@ -305,7 +301,6 @@ Model::View Model::At(double now_ms) const
       v.ring = static_cast<float>(std::fmod(age, RING_MS) / RING_MS);
   }
   const bool talking = TalkAlpha(m_talk.talk, m_talk.at, now_ms) > 0;
-  // A blink comes first; otherwise the listening pulse, from the line that opened the mic.
   if (m_on && v.ring < 0 && talking && m_talk.talk.phase == Talk::Phase::Listen)
   {
     const double age = std::max(0.0, now_ms - m_listen_at);
@@ -435,16 +430,12 @@ Model::View HostView(double now_ms)
       view.on = true;
       view.place = {16, 16, 40, false, false, 0};
     }
-    // The page's lit bit includes DOM hover, which can be stale while the native window
-    // intercepts either control. Hostui owns pointer feedback; notices and pulses still light
-    // the orb independently of the feedback button.
     view.place.lit =
         view.orb.hovered || view.orb.pressed || view.ring >= 0 || view.showing;
   }
   return view;
 }
 
-// Input hit boxes use view pixels; drawing applies the same Retina scale as the orb.
 int ControlAt(const Place& p, float x, float y)
 {
   if (p.size <= 0)
@@ -452,7 +443,7 @@ int ControlAt(const Place& p, float x, float y)
   const float k = p.size / 40;
   const float fx = x - (p.x + 68 * k), fy = y - (p.y + p.size / 2);
   if (fx * fx + fy * fy <= p.size * p.size / 4)
-    return 1;  // feedback
+    return 1;
   const float dx = x - p.x - p.size / 2, dy = y - p.y - p.size / 2;
   return dx * dx + dy * dy <= p.size * p.size / 4 ? 0 : -1;
 }
@@ -552,4 +543,4 @@ void ActivateHost(HostAction action)
     FeedbackRequests().FeedbackFinished(NowMs());
 }
 
-}  // namespace Orca::UX::AppOrb
+}

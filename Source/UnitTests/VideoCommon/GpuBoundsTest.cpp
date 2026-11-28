@@ -17,20 +17,14 @@
 #include "VideoCommon/VertexLoaderBase.h"
 #include "VideoCommon/VertexLoaderManager.h"
 
-// Orca: the GPU's guest-chosen writes and reads into guest RAM stay inside it, and a copy or draw
-// that fits is checked exactly as before.
-
 TEST(OrcaEfbCopyBounds, AStrideUnderARowCoversTheLastRow)
 {
-  // A normal copy: rows `stride` apart, the stride at least a row.
   EXPECT_EQ(EFBCopyCheckedRange(640, 120, 640), 640u * 120);
   EXPECT_EQ(EFBCopyCheckedRange(640, 120, 1024), 1024u * 120);
-  // A smaller stride: the last row starts at 119 * stride and is a full row long.
   EXPECT_EQ(EFBCopyCheckedRange(640, 120, 32), 119u * 32 + 640);
   EXPECT_EQ(EFBCopyCheckedRange(16384, 256, 0), 16384u);
   EXPECT_EQ(EFBCopyCheckedRange(640, 1, 0), 640u);
   EXPECT_EQ(EFBCopyCheckedRange(640, 0, 32), 0u);
-  // The largest the registers allow: no overflow.
   EXPECT_EQ(EFBCopyCheckedRange(0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF),
             u64{0xFFFFFFFF} * 0xFFFFFFFF);
 }
@@ -56,7 +50,7 @@ bool Fit(std::span<const IndexedRead> reads, const std::vector<u8>& vertices, u3
                                               vertex_size, arrays.strides, arrays.room,
                                               arrays.before);
 }
-}  // namespace
+}
 
 TEST(OrcaVertexBounds, ReadsFollowTheVertexLayout)
 {
@@ -82,8 +76,6 @@ TEST(OrcaVertexBounds, ReadsFollowTheVertexLayout)
 
   std::array<IndexedRead, MAX_INDEXED_READS> reads{};
   ASSERT_EQ(VertexLoaderManager::GetIndexedReads(desc, vat, &reads).value_or(99), 4u);
-  // Position matrix index (1), position index (2), normal index (1), color 0 (4), color 1 index
-  // (2), coordinate 0 index (1), coordinate 1 (1): 12 bytes, as the loader counts them.
   EXPECT_EQ(VertexLoaderBase::GetVertexSize(desc, vat), 12u);
   EXPECT_EQ(reads[0].array, CPArray::Position);
   EXPECT_EQ(reads[0].src_offset, 1);
@@ -102,7 +94,6 @@ TEST(OrcaVertexBounds, ReadsFollowTheVertexLayout)
   EXPECT_EQ(reads[3].src_offset, 10);
   EXPECT_EQ(reads[3].extent, 8);
 
-  // A loader made for this layout carries the same reads.
   const std::unique_ptr<VertexLoaderBase> loader = VertexLoaderBase::CreateVertexLoader(desc, vat);
   ASSERT_TRUE(loader->m_indexed_reads_known);
   ASSERT_EQ(loader->m_num_indexed_reads, 4u);
@@ -130,14 +121,12 @@ TEST(OrcaVertexBounds, ThreeNormalIndicesReadThreeVectors)
     EXPECT_EQ(reads[k].extent, 12 * (k + 1));
   }
 
-  // One index, all nine floats.
   vat.g0.NormalIndex3 = false;
   ASSERT_EQ(VertexLoaderManager::GetIndexedReads(desc, vat, &reads).value_or(99), 1u);
   EXPECT_EQ(reads[0].extent, 36);
   EXPECT_EQ(VertexLoaderBase::GetVertexSize(desc, vat), 12u + 2);
 }
 
-// The reads' offsets add up to the raw vertex size the loaders use, for any description.
 TEST(OrcaVertexBounds, OffsetsMatchTheVertexSizeForEveryLayout)
 {
   std::mt19937 rng(0x0BCA);
@@ -166,7 +155,6 @@ TEST(OrcaVertexBounds, OffsetsMatchTheVertexSizeForEveryLayout)
       continue;
     }
     ASSERT_TRUE(count.has_value());
-    // GetVertexSize raises a panic alert for an invalid format even when its color is absent.
     if (invalid_format)
       continue;
     ASSERT_EQ(bytes, VertexLoaderBase::GetVertexSize(desc, vat))
@@ -177,8 +165,6 @@ TEST(OrcaVertexBounds, OffsetsMatchTheVertexSizeForEveryLayout)
   }
 }
 
-// A color in an invalid format (6 or 7): the loaders and the vertex size disagree on where later
-// attributes are, so its draws can't be checked and are dropped.
 TEST(OrcaVertexBounds, AnInvalidColorFormatCantBeChecked)
 {
   TVtxDesc desc{};
@@ -191,7 +177,6 @@ TEST(OrcaVertexBounds, AnInvalidColorFormatCantBeChecked)
   desc.low.Color0 = VertexComponentFormat::Direct;
   vat.g0.Color0Comp = static_cast<ColorFormat>(7);
   EXPECT_FALSE(VertexLoaderManager::GetIndexedReads(desc, vat, &reads).has_value());
-  // Not present: its format field is ignored.
   desc.low.Color0 = VertexComponentFormat::NotPresent;
   EXPECT_TRUE(VertexLoaderManager::GetIndexedReads(desc, vat, &reads).has_value());
 }
@@ -218,21 +203,16 @@ TEST(OrcaVertexBounds, AnElementPastTheRoomDropsTheDraw)
     }
     return bytes;
   };
-  // The last whole element (and the loaders' word over-read) ends at the room's end.
   const u16 last = (1000 - 12 - INDEXED_OVERREAD) / 12;
   EXPECT_TRUE(Fit(reads, vertices({0, 5, last}), 2, arrays));
   EXPECT_FALSE(Fit(reads, vertices({0, static_cast<u16>(last + 1), 5}), 2, arrays));
   EXPECT_FALSE(Fit(reads, vertices({0xFFFE}), 2, arrays));
-  // The largest index skips the vertex and reads nothing.
   EXPECT_TRUE(Fit(reads, vertices({0xFFFF, 3}), 2, arrays));
-  // A base with room for every index never looks at the indices.
   arrays.room[CPArray::Position] = 0xFFFF * 12 + 12 + INDEXED_OVERREAD;
   EXPECT_TRUE(Fit(reads, vertices({0xFFFE, 0}), 2, arrays));
-  // A stride of zero reads element 0 only.
   arrays.room[CPArray::Position] = 16;
   arrays.strides[CPArray::Position] = 0;
   EXPECT_TRUE(Fit(reads, vertices({0xFFFE, 7}), 2, arrays));
-  // No room at all (a base never set): nothing is read.
   arrays.room[CPArray::Position] = 0;
   EXPECT_FALSE(Fit(reads, vertices({0}), 2, arrays));
 }

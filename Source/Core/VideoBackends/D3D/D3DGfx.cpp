@@ -142,7 +142,6 @@ void Gfx::SetViewport(float x, float y, float width, float height, float near_de
 
 void Gfx::Draw(u32 base_vertex, u32 num_vertices)
 {
-  // Orca: nothing is drawn on a lost device while the run stops (D3DCommon/DeviceLost.h).
   if (D3DCommon::IsDeviceLost())
     return;
   D3D::stateman->Apply();
@@ -169,13 +168,9 @@ void Gfx::DispatchComputeShader(const AbstractShader* shader, u32 groupsize_x, u
 
 bool Gfx::BindBackbuffer(const ClearColor& clear_color)
 {
-  // Orca: a lost device shows no more pictures (D3DCommon/DeviceLost.h), and its swap chain may be
-  // gone.
   if (D3DCommon::IsDeviceLost())
     return false;
   CheckForSwapChainChanges();
-  // Orca: no back buffer after a resize the driver refused (D3DCommon::SwapChain::ResizeSwapChain):
-  // no picture this frame, and the resize is asked for again now and then.
   if (!m_swap_chain->GetFramebuffer())
   {
     if (m_swap_chain->ResizeRetryDue())

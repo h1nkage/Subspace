@@ -163,7 +163,6 @@ void JitBaseBlockCache::FinalizeBlock(JitBlock& block, bool block_link,
   block.fast_block_map_index = index;
 
   block.physical_addresses = code_block.m_physical_addresses;
-  // Orca: what RAM held when this block was compiled, so a crash dump can tell stale code apart.
   block.orca_code_hash =
       Orca::PanicDiag::CodeHash(Orca::PanicDiag::RamOf(m_jit.m_system), block.physical_addresses);
 
@@ -219,7 +218,6 @@ void JitBaseBlockCache::FinalizeBlock(JitBlock& block, bool block_link,
                                   "JIT_PPC_{:08x}", block.physicalAddress);
   }
 
-  // Orca: a match's first compiles are remembered, to compile them while the next one loads.
   Orca::JitWarm::OnBlockFinalized(block);
 }
 

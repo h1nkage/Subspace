@@ -33,6 +33,7 @@
 #include "Common/StringUtil.h"
 #include "Core/Boot/Boot.h"
 #include "Core/BootManager.h"
+#include "Core/Config/GraphicsSettings.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/Core.h"
 #include "Core/DolphinAnalytics.h"
@@ -320,9 +321,6 @@ static std::unique_ptr<Platform> GetPlatform(const optparse::Values& options)
 }
 
 #ifdef ORCA_MACOS_BUNDLE
-// Orca.app started with no disc: use the disc remembered in <user>/Config/Orca.ini if it still
-// checks out, otherwise ask the player to pick one (again after a wrong revision). Returns nullopt,
-// after reporting the error, if they give up.
 static std::optional<std::string> ChooseSessionDisc(const std::string& user_directory)
 {
   const std::string ini_path = user_directory + DIR_SEP "Config" DIR_SEP "Orca.ini";
@@ -422,8 +420,6 @@ static int SandboxProbe(const std::string& user_directory)
 static int Run(const int argc, char* argv[], const Embed::Options& embed)
 {
 #ifdef ORCA_MACOS_BUNDLE
-  // Orca.app always runs a session unless ORCA_SESSION is already set. Sessions start from an empty
-  // NAND, not the player's save. TODO: seed from a canonical save once one exists.
   setenv("ORCA_SESSION", "1", 0);
   Orca::SetSeedSessionSave(false);
 #endif
@@ -647,6 +643,7 @@ static int Run(const int argc, char* argv[], const Embed::Options& embed)
   UICommon::CreateDirectories();
   UICommon::Init();
   Orca::BootPhase::LogPending();
+  Config::SetCurrent(Config::GFX_SHOW_FPS, false);
   // When embedded, turn on the netplay and rollback logs at INFO so a player's bug report shows
   // what the room and match did. The app saves stderr to the game's log. A more verbose Logger.ini
   // wins.
@@ -660,13 +657,13 @@ static int Run(const int argc, char* argv[], const Embed::Options& embed)
   }
 #ifdef ORCA_MACOS_BUNDLE
   // Until the player has their own mapping, port 1 uses the keyboard and the first SDL gamepad
-  // (Sys/Orca/Input/GCPadNew.ini).
+  // (Sys/Subspace/Input/GCPadNew.ini).
   if (Orca::SessionActive())
   {
     const std::string pad_ini = File::GetUserPath(D_CONFIG_IDX) + "GCPadNew.ini";
     if (!File::Exists(pad_ini) &&
         !(File::CreateFullPath(pad_ini) &&
-          File::Copy(File::GetSysDirectory() + "Orca/Input/GCPadNew.ini", pad_ini)))
+          File::Copy(File::GetSysDirectory() + "Subspace/Input/GCPadNew.ini", pad_ini)))
     {
       fmt::print(stderr, "Orca: couldn't write the default controller mapping to {}\n", pad_ini);
     }

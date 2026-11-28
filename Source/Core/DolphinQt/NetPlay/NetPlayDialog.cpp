@@ -23,6 +23,7 @@
 #include <QProcessEnvironment>
 #include <QPushButton>
 #include <QSignalBlocker>
+#include <QCheckBox>
 #include <QSpinBox>
 #include <QSplitter>
 #include <QTableWidget>
@@ -45,6 +46,7 @@
 
 #include "Core/Boot/Boot.h"
 #include "Core/Config/GraphicsSettings.h"
+#include "Core/Config/MainSettings.h"
 #include "Core/Config/NetplaySettings.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
@@ -142,8 +144,6 @@ void NetPlayDialog::CreateMainLayout()
   m_game_button = new QPushButton;
   m_start_button = new QPushButton(tr("Start"));
   m_buffer_size_box = new QSpinBox;
-  // Subspace: the Buffer is the rollback input delay in frames: 1 to 12 (a delay of 0 can't be
-  // played, and 12 is the rollback session's max_delay).
   m_buffer_size_box->setMinimum(1);
   m_buffer_size_box->setMaximum(12);
   m_buffer_label = new QLabel(tr("Buffer:"));
@@ -333,6 +333,7 @@ void NetPlayDialog::CreatePlayersLayout()
 
 void NetPlayDialog::ConnectWidgets()
 {
+  connect(&Settings::Instance(), &Settings::ConfigChanged, this, [this] { SendOrcaShowPing(false); });
   // Players
   connect(m_room_box, &QComboBox::currentIndexChanged, this, &NetPlayDialog::UpdateGUI);
   connect(m_hostcode_action_button, &QPushButton::clicked, [this] {
@@ -824,16 +825,6 @@ void NetPlayDialog::DisplayMessage(const QString& msg, const std::string& color,
     m_chat_edit->append(QStringLiteral("<font color='%1'>%2</font>")
                             .arg(QString::fromStdString(color), msg.toHtmlEscaped()));
   });
-
-  const QColor c(color.empty() ? QStringLiteral("white") : QString::fromStdString(color));
-
-  if (Config::Get(Config::GFX_SHOW_NETPLAY_MESSAGES) &&
-      Core::IsRunning(Core::System::GetInstance()))
-  {
-    g_netplay_chat_ui->AppendChat(msg.toStdString(),
-                                  {static_cast<float>(c.redF()), static_cast<float>(c.greenF()),
-                                   static_cast<float>(c.blueF())});
-  }
 }
 
 void NetPlayDialog::AppendChat(const std::string& msg)
@@ -956,6 +947,55 @@ void NetPlayDialog::OnPadBufferChanged(u32 buffer)
                  "darkcyan");
 
   m_buffer_size = static_cast<int>(buffer);
+
+  QueueOnObject(this, [this, buffer] {
+    if (IsHosting() && m_orca_process && m_orca_process->state() == QProcess::Running)
+      m_orca_process->write(QStringLiteral("delay %1\n").arg(buffer).toUtf8());
+  });
+}
+
+void NetPlayDialog::SendOrcaShowPing(bool force)
+{
+  if (!m_orca_process || m_orca_process->state() == QProcess::NotRunning)
+    return;
+  // And the fight HUD's name settings (Configuration > NetPlay), with the same channel.
+  const auto send = [&](const char* command, int value, int* sent) {
+    if (!force && value == *sent)
+      return;
+    *sent = value;
+    m_orca_process->write(QStringLiteral("%1 %2\n").arg(QLatin1String(command)).arg(value).toUtf8());
+  };
+  send("ping", Config::Get(Config::NETPLAY_SUBSPACE_PING_DISPLAY) == 1 ? 1 : 0, &m_orca_ping_sent);
+  send("names", std::clamp(Config::Get(Config::NETPLAY_SUBSPACE_HUD_NAMES), 0, 4),
+       &m_orca_names_sent);
+  send("cornersprite", Config::Get(Config::NETPLAY_SUBSPACE_CORNER_SPRITE) ? 1 : 0,
+       &m_orca_corner_sprite_sent);
+  send("cornerfps", Config::Get(Config::NETPLAY_SUBSPACE_CORNER_FPS) ? 1 : 0,
+       &m_orca_corner_fps_sent);
+  send("framems", Config::Get(Config::NETPLAY_SUBSPACE_FRAME_MS) ? 1 : 0, &m_orca_frame_ms_sent);
+  send("cornerping", Config::Get(Config::NETPLAY_SUBSPACE_CORNER_PING) ? 1 : 0,
+       &m_orca_corner_ping_sent);
+}
+
+void NetPlayDialog::SendOrcaVolume(bool force)
+{
+  if (!m_orca_process || m_orca_process->state() == QProcess::NotRunning)
+    return;
+  const int volume =
+      Config::Get(Config::MAIN_AUDIO_MUTED) ? 0 : Config::Get(Config::MAIN_AUDIO_VOLUME);
+  if (!force && volume == m_orca_volume_sent)
+    return;
+  m_orca_volume_sent = volume;
+  m_orca_process->write(QStringLiteral("volume %1\n").arg(volume).toUtf8());
+}
+
+void NetPlayDialog::OrcaDelay(u32 frames, s32 at)
+{
+  // The host's own game already switches on that frame.
+  QueueOnObject(this, [this, frames, at] {
+    if (!IsHosting() && m_orca_process && m_orca_process->state() == QProcess::Running)
+      m_orca_process->write(QStringLiteral("delay %1 %2\n").arg(frames).arg(at).toUtf8());
+  });
 }
 
 void NetPlayDialog::OnHostInputAuthorityChanged(bool enabled)
@@ -1330,7 +1370,7 @@ void NetPlayDialog::SetHostWiiSyncData(std::vector<u64> titles, std::string redi
 
 bool NetPlayDialog::IsRollbackGame(const UICommon::GameFile& game)
 {
-  return File::Exists(File::GetSysDirectory() + "Orca/" + game.GetGameID() + ".ini");
+  return File::Exists(File::GetSysDirectory() + "Subspace/" + game.GetGameID() + ".ini");
 }
 
 // called from ---NETPLAY--- thread
@@ -1387,7 +1427,7 @@ bool CopyFolder(const QString& from, const QString& to)
 // The user folder the engine plays rollback games in (<user folder>/Rollback), made fresh for
 // every game. Every player's must hold the same things the engine's compatibility key reads, or
 // their games refuse each other (Orca/Session/Online.cpp CompatibilityKeyParts): so it gets the
-// build's standard save for the game (Sys/Orca/Saves/<game ID>, laid out as the save's title
+// build's standard save for the game (Sys/Subspace/Saves/<game ID>, laid out as the save's title
 // folder; no save when the build has none) and no per-game settings, never the player's own save
 // or INIs. The player's settings that don't change the game (controllers, hotkeys, video) are
 // copied in. Returns the folder, or "" with *error.
@@ -1422,7 +1462,7 @@ QString PrepareRollbackUserFolder(const std::string& game_id, QString* error)
         QString::fromLatin1(QByteArray::fromStdString(game_id.substr(0, 4)).toHex());
     QDir(title).removeRecursively();
     const QString standard = QString::fromStdString(File::GetSysDirectory()) +
-                             QStringLiteral("Orca/Saves/") + QString::fromStdString(game_id);
+                             QStringLiteral("Subspace/Saves/") + QString::fromStdString(game_id);
     if (QDir(standard).exists() && !CopyFolder(standard, title))
     {
       *error = QStringLiteral("can't copy the standard save");
@@ -1483,6 +1523,10 @@ void NetPlayDialog::StartOrcaEngine(const NetPlay::OrcaLaunch& launch)
   env.insert(QStringLiteral("ORCA_NAME"), QString::fromStdString(launch.name).left(32));
   // The host's GameCube port: every game in the room maps seats to ports with it.
   env.insert(QStringLiteral("ORCA_HOST_PORT"), QString::number(launch.host_port));
+  // Buffer changes reach the running game on stdin (OnPadBufferChanged, OrcaDelay).
+  env.insert(QStringLiteral("ORCA_SUBSPACE_COMMANDS"), QStringLiteral("1"));
+  env.insert(QStringLiteral("ORCA_SUBSPACE_HUD_NAMES"),
+             QString::number(std::clamp(Config::Get(Config::NETPLAY_SUBSPACE_HUD_NAMES), 0, 4)));
   // The lobby's Buffer is this player's rollback input delay, in frames (the game keeps it within
   // 1 to 12). The Buffer is never below 1; none yet leaves the game's default, 3.
   if (m_buffer_size > 0)
@@ -1530,6 +1574,20 @@ void NetPlayDialog::StartOrcaEngine(const NetPlay::OrcaLaunch& launch)
         m_orca_error = sentence > 0 ? line.mid(sentence + 1) : line.mid(11);
         m_orca_error_passed = false;
       }
+      // "orca delay <frames> <frame>": the host's game switches its delay on that frame; so do
+      // the other players' games.
+      else if (line.startsWith(QStringLiteral("orca delay ")))
+      {
+        const QStringList parts = line.split(QLatin1Char(' '), Qt::SkipEmptyParts);
+        bool frames_ok = false, at_ok = false;
+        const uint frames = parts.size() == 4 ? parts[2].toUInt(&frames_ok) : 0;
+        const int at = parts.size() == 4 ? parts[3].toInt(&at_ok) : -1;
+        if (frames_ok && at_ok && frames >= 1 && frames <= 12 && at >= 0 && IsHosting())
+        {
+          if (const auto server = Settings::Instance().GetNetPlayServer())
+            server->SendOrcaDelay(frames, at);
+        }
+      }
       // A non-fatal error (an assert the game survives) is followed by more of the game's states.
       else if (!m_orca_error.isEmpty() && line.startsWith(QStringLiteral("orca state ")) &&
                line != QStringLiteral("orca state ended"))
@@ -1576,6 +1634,14 @@ void NetPlayDialog::StartOrcaEngine(const NetPlay::OrcaLaunch& launch)
   m_assign_ports_button->setEnabled(false);
   // Only one program can hold a GameCube adapter: let go of it so the game can read it.
   GCAdapter::Shutdown();
+  // Dolphin's volume once the game starts, then whenever it changes (Options > Configuration >
+  // Audio, the volume hotkeys): the copied Dolphin.ini may not have the newest yet.
+  connect(m_orca_process, &QProcess::started, this, [this] {
+    SendOrcaVolume(true);
+    SendOrcaShowPing(true);
+  });
+  connect(&Settings::Instance(), &Settings::ConfigChanged, m_orca_process,
+          [this] { SendOrcaVolume(false); });
   m_orca_process->start(engine, arguments);
   // The host already got the Start message (OnStart).
   if (launch.joining)

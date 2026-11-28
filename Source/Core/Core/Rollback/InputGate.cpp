@@ -28,15 +28,13 @@ namespace
 std::mutex s_lock;
 Source s_source;
 Latch s_latch;
-// CPU thread only: set at the boundary, read when the SI polls.
 Masks s_current{};
-bool s_any = false;  // some mask in s_current is not empty
+bool s_any = false;
 
-// ORCA_TEST_GATE, parsed once.
 struct TestKnob
 {
   std::vector<TestRule> rules;
-  bool memory = false;  // some rule is `mem/<n>`
+  bool memory = false;
 };
 const std::optional<TestKnob>& Knob()
 {
@@ -70,7 +68,6 @@ u64 TestMemoryHash(const Core::CPUThreadGuard& guard)
   return XXH3_64bits(memory.GetRAM() + offset, TEST_HASH_SIZE);
 }
 
-// Splits at every `delim`, keeping empty fields so a stray separator is an error.
 std::vector<std::string> Split(std::string_view text, char delim)
 {
   std::vector<std::string> fields;
@@ -84,7 +81,6 @@ std::vector<std::string> Split(std::string_view text, char delim)
   }
 }
 
-// Every 600 first-run boundaries, logs how often each port was masked and the masks changed.
 void LogTest(const Masks& masks)
 {
   static Masks s_last{};
@@ -107,7 +103,7 @@ void LogTest(const Masks& masks)
   s_boundaries = s_changes = 0;
   s_masked = {};
 }
-}  // namespace
+}
 
 GCPadStatus Apply(const GCPadStatus& pad, const Mask& mask)
 {
@@ -118,7 +114,6 @@ GCPadStatus Apply(const GCPadStatus& pad, const Mask& mask)
   if (TriggerHeld((pad.button & PAD_TRIGGER_L) != 0, pad.triggerLeft) &&
       TriggerHeld((pad.button & PAD_TRIGGER_R) != 0, pad.triggerRight))
   {
-    // Only digital bits: L and R keep their analog values.
     buttons |= mask.drop_with_lr & ALL_BUTTONS & ~(PAD_TRIGGER_L | PAD_TRIGGER_R);
   }
   out.button = static_cast<u16>(pad.button & ~buttons);
@@ -343,4 +338,4 @@ Masks TestMasks(const std::vector<TestRule>& rules, u64 memory_hash)
   }
   return masks;
 }
-}  // namespace Rollback::InputGate
+}

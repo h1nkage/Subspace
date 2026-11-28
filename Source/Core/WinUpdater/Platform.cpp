@@ -118,111 +118,6 @@ struct BuildInfos
   BuildInfo next;
 };
 
-// This default value should be kept in sync with the value of VCToolsUpdateURL in
-// build_info.txt.in
-static const char* VCToolsUpdateURLDefault = "https://aka.ms/vc14/vc_redist.x64.exe";
-#define VC_RUNTIME_REGKEY R"(SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\)"
-
-static const char* VCRuntimeRegistrySubkey()
-{
-  return VC_RUNTIME_REGKEY
-#ifdef _M_X86_64
-      "x64";
-#elif _M_ARM_64
-      "arm64";
-#else
-#error unsupported architecture
-#endif
-}
-
-static bool ReadVCRuntimeVersionField(u32* value, const char* name)
-{
-  return WindowsRegistry::ReadValue(value, VCRuntimeRegistrySubkey(), name);
-}
-
-static std::optional<BuildVersion> GetInstalledVCRuntimeVersion()
-{
-  u32 installed;
-  if (!ReadVCRuntimeVersionField(&installed, "Installed") || !installed)
-    return {};
-  BuildVersion version;
-  if (!ReadVCRuntimeVersionField(&version.major, "Major") ||
-      !ReadVCRuntimeVersionField(&version.minor, "Minor") ||
-      !ReadVCRuntimeVersionField(&version.build, "Bld"))
-  {
-    return {};
-  }
-  return version;
-}
-
-static VersionCheckResult VCRuntimeVersionCheck(const BuildInfos& build_infos)
-{
-  VersionCheckResult result;
-  result.current_version = GetInstalledVCRuntimeVersion();
-  result.target_version = build_infos.next.GetVersion("VCToolsVersion");
-
-  auto existing_version = build_infos.current.GetVersion("VCToolsVersion");
-
-  if (!result.target_version.has_value())
-    result.status = VersionCheckStatus::UpdateOptional;
-  else if (!result.current_version.has_value() || result.current_version < result.target_version)
-    result.status = VersionCheckStatus::UpdateRequired;
-
-  // See if the current build was already running on acceptable version of the runtime. This could
-  // happen if the user manually copied the redist DLLs and got Dolphin running that way.
-  if (existing_version.has_value() && existing_version >= result.target_version)
-    result.status = VersionCheckStatus::NothingToDo;
-
-  return result;
-}
-
-static bool VCRuntimeUpdate(const BuildInfo& build_info)
-{
-  UI::SetDescription("Updating VC++ Redist, please wait...");
-
-  Common::HttpRequest req;
-  req.FollowRedirects(10);
-  auto resp = req.Get(build_info.GetString("VCToolsUpdateURL").value_or(VCToolsUpdateURLDefault));
-  if (!resp)
-    return false;
-
-  // Write it to current working directory.
-  auto redist_path = std::filesystem::current_path() / L"vc_redist.x64.exe";
-  auto redist_path_u8 = WStringToUTF8(redist_path.wstring());
-  File::IOFile redist_file;
-  redist_file.Open(redist_path_u8, "wb");
-  if (!redist_file.WriteBytes(resp->data(), resp->size()))
-    return false;
-  redist_file.Close();
-
-  Common::ScopeGuard redist_deleter([&] { File::Delete(redist_path_u8); });
-
-  // The installer also supports /passive and /quiet. We normally pass neither (the
-  // exception being test automation) to allow the user to see and interact with the installer.
-  std::wstring cmdline = redist_path.filename().wstring() + L" /install /norestart";
-  if (UI::IsTestMode())
-    cmdline += L" /passive /quiet";
-
-  STARTUPINFOW startup_info{.cb = sizeof(startup_info)};
-  PROCESS_INFORMATION process_info;
-  if (!CreateProcessW(redist_path.c_str(), cmdline.data(), nullptr, nullptr, TRUE, 0, nullptr,
-                      nullptr, &startup_info, &process_info))
-  {
-    return false;
-  }
-  CloseHandle(process_info.hThread);
-
-  // Wait for it to run
-  WaitForSingleObject(process_info.hProcess, INFINITE);
-  DWORD exit_code;
-  bool has_exit_code = GetExitCodeProcess(process_info.hProcess, &exit_code);
-  CloseHandle(process_info.hProcess);
-  // NOTE: Some nonzero exit codes can still be considered success (e.g. if installation was
-  // bypassed because the same version already installed).
-  return has_exit_code &&
-         (exit_code == ERROR_SUCCESS || exit_code == ERROR_SUCCESS_REBOOT_REQUIRED);
-}
-
 static BuildVersion CurrentOSVersion()
 {
   OSVERSIONINFOW info = WindowsRegistry::GetOSVersion();
@@ -286,30 +181,8 @@ static bool CheckBuildInfo(const BuildInfos& build_infos)
   auto os_check = OSVersionCheck(build_infos.next);
   if (os_check.status == VersionCheckStatus::UpdateRequired)
   {
-    UI::Error("Please update Windows in order to update Dolphin.");
+    UI::Error("Please update Windows in order to update Subspace.");
     return false;
-  }
-
-  // Check if application being launched needs more recent version of VC Redist. If so, download
-  // latest updater and execute it.
-  auto vc_check = VCRuntimeVersionCheck(build_infos);
-  const auto is_test_mode = UI::IsTestMode();
-  if (vc_check.status != VersionCheckStatus::NothingToDo || is_test_mode)
-  {
-    auto update_ok = VCRuntimeUpdate(build_infos.next);
-    if (!update_ok && is_test_mode)
-    {
-      // For now, only check return value when test automation is running.
-      // The vc_redist exe may return other non-zero status that we don't check for, yet.
-      return false;
-    }
-    vc_check = VCRuntimeVersionCheck(build_infos);
-    if (vc_check.status == VersionCheckStatus::UpdateRequired)
-    {
-      // The update is required and the install failed for some reason.
-      UI::Error("Please update VC++ Runtime in order to update Dolphin.");
-      return false;
-    }
   }
 
   return true;

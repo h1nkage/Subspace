@@ -22,7 +22,7 @@ State s_state = State::None;
 bool s_ranked = false;
 bool s_joining = false;
 std::optional<std::chrono::steady_clock::time_point> s_wait_started;
-}  // namespace
+}
 
 void Begin(bool ranked, std::chrono::steady_clock::time_point now)
 {
@@ -55,7 +55,6 @@ void Matched(bool hosting)
 {
   std::lock_guard lock(s_mutex);
   s_wait_started.reset();
-  // When joining, the join's own lines replace the search's until the host's game is loaded.
   s_joining = !hosting && s_state != State::None;
   s_state = hosting && s_state != State::None ? State::Found : State::None;
 }
@@ -130,5 +129,5 @@ std::pair<std::string, std::string> Lines()
   }
   return {};
 }
-}  // namespace Search
-}  // namespace Orca::UX
+}
+}

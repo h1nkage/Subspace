@@ -383,9 +383,6 @@ void JitArm64::ps_arith(UGeckoInstruction inst)
       SwitchToFarCode();
       SetJumpTarget(nan);
 
-      // Orca: a NaN made from non-NaN inputs must be PowerPC's positive default NaN. The host's
-      // differs only in sign (negative under FPCR.AH), so clear the sign of every NaN lane. Lanes
-      // with a NaN input are replaced by that input below.
       m_float_emit.FCMEQ(size, nan_temp_reg_paired, result_reg, result_reg);
       m_float_emit.NOT(nan_temp_reg_paired, nan_temp_reg_paired);
       m_float_emit.SHL(size, nan_temp_reg_paired, nan_temp_reg_paired, size - 1);
@@ -515,8 +512,6 @@ void JitArm64::ps_sumX(UGeckoInstruction inst)
 
   const bool upper = inst.SUBOP5 & 0x1;
 
-  // Orca: in a session the single path also needs c store-safe. It copies c's lane bit for bit,
-  // where Jit64 and the double path round it to single (a denormal flushes, an SNaN goes quiet).
   const bool singles = IsSingleForArithmetic(a, false) && IsSingleForArithmetic(b, false) &&
                        fpr.IsSingle(c) && (!m_orca_session || js.fpr_is_store_safe[c]);
   const RegType type = singles ? RegType::Single : RegType::Register;

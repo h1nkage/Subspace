@@ -58,8 +58,6 @@ static VertexLoaderMap s_vertex_loader_map;
 // TODO - change into array of pointers. Keep a map of all seen so far.
 
 Common::EnumMap<u8*, CPArray::TexCoord7> cached_arraybases;
-// Orca: for each cached base, the bytes readable from it and the bytes of RAM before it
-// (IndexedReadsFit).
 static Common::EnumMap<u32, CPArray::TexCoord7> s_array_room;
 static Common::EnumMap<u32, CPArray::TexCoord7> s_array_before;
 
@@ -85,10 +83,6 @@ void Clear()
   s_native_vertex_map.clear();
 }
 
-// Orca: what a base at `address` (known valid) may read: to the end of its RAM, plus as much of the
-// loaders' word over-read past it as the host mapping covers (MEM1 is mapped to the next power of
-// two, MEM2 exactly), so an element is checked against RAM's end exactly and the over-read never
-// leaves the mapping.
 static void SetArrayRoom(Memory::MemoryManager& memory, CPArray array, u32 address)
 {
   const std::span<u8> span = memory.GetSpanForAddress(address);
@@ -561,7 +555,6 @@ int RunVertices(int vtx_attr_group, OpcodeDecoder::Primitive primitive, int coun
     // Doing early return for the opposite case would be cleaner
     // but triggers a false unreachable code warning in MSVC debug builds.
 
-    // Orca: a draw with an element outside guest RAM is dropped (UpdateVertexArrayPointers).
     if (!loader->m_indexed_reads_known ||
         (loader->m_num_indexed_reads != 0 &&
          !IndexedReadsFit(std::span(loader->m_indexed_reads.data(), loader->m_num_indexed_reads),

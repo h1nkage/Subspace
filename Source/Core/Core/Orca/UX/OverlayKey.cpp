@@ -17,7 +17,7 @@ struct Lines
 };
 constexpr Lines KEYS{"orca overlay down keys", "orca overlay up keys", "orca overlay cancel keys"};
 constexpr Lines PAD{"orca overlay down pad", "orca overlay up pad", "orca overlay cancel pad"};
-}  // namespace
+}
 
 Ms NowMs()
 {
@@ -105,4 +105,4 @@ void Tap(Output output)
   Emit(Keys().Down(Status::Cap(Status::TALK_CAP)), output);
   Emit(Keys().Up(), output);
 }
-}  // namespace Orca::UX::OverlayKey
+}

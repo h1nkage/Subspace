@@ -130,7 +130,6 @@ public:
     // load vertices
     const u32 size = vertex_size * num_vertices;
 
-    // Orca: on a skipped frame, load nothing; the size is already known.
     const u32 bytes =
         (!is_preprocess && VideoCommon_IsSkippingRender()) ?
             size :

@@ -183,7 +183,6 @@ void LoadPatches()
   Common::IniFile localIni = sconfig.LoadLocalGameIni();
 
   LoadPatchSection("OnFrame", &s_on_frame, globalIni, localIni);
-  // Orca: a player's own game patches would write RAM on one machine only.
   if (Orca::SessionActive())
     s_on_frame.clear();
 

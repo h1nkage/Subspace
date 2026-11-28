@@ -13,7 +13,7 @@ constexpr StageMask Bit(int i)
 {
   return static_cast<StageMask>(1u << i);
 }
-}  // namespace
+}
 
 int CountBits(StageMask mask)
 {
@@ -50,7 +50,6 @@ Plan PlanGame(const Ruleset& rules, const SetView& set)
     legal &= static_cast<StageMask>(~Bit(rules.ic_banned_stage));
   }
   const int coin = set.coin == 1 ? 1 : 0;
-  // Meta Knight clause: exactly one Meta Knight; the other player picks any legal stage.
   if (rules.meta_knight >= 0 && is(0, rules.meta_knight) != is(1, rules.meta_knight))
   {
     const u8 other = is(0, rules.meta_knight) ? 1 : 0;
@@ -62,13 +61,11 @@ Plan PlanGame(const Ruleset& rules, const SetView& set)
   }
   if (set.game <= 1 || (set.last_winner != 0 && set.last_winner != 1))
   {
-    // Game 1, or no counted game yet: 1-2-1 on the starters, ending in a pick.
     plan.available = rules.starters & legal;
     plan.agreeable = plan.available;
     const u8 first = static_cast<u8>(coin);
     const u8 second = static_cast<u8>(1 - coin);
     const int n = CountBits(plan.available);
-    // With fewer than 5 starters, each step shrinks so one stage is always left to pick.
     const int s1 = std::min(1, std::max(0, n - 1));
     const int s2 = std::min(2, std::max(0, n - 1 - s1));
     if (s1 > 0)
@@ -83,11 +80,9 @@ Plan PlanGame(const Ruleset& rules, const SetView& set)
   const u8 winner = static_cast<u8>(set.last_winner);
   const u8 loser = static_cast<u8>(1 - set.last_winner);
   plan.available = legal;
-  // Agreement ignores DSR.
   plan.agreeable = legal;
   if (rules.dsr)
     plan.available &= static_cast<StageMask>(~set.won_on[loser]);
-  // Never more strikes than leave one stage to pick.
   const int n = CountBits(plan.available);
   const int count = std::min<int>(rules.later_count, std::max(0, n - 1));
   if (count > 0)
@@ -101,7 +96,6 @@ Plan PlanGame(const Ruleset& rules, const SetView& set)
 
 namespace
 {
-// murmur3's 32-bit finalizer.
 constexpr u32 Mix(u32 h)
 {
   h ^= h >> 16;
@@ -111,7 +105,7 @@ constexpr u32 Mix(u32 h)
   h ^= h >> 16;
   return h;
 }
-}  // namespace
+}
 
 u32 CasualSeed(u32 room, u8 coin, int game)
 {
@@ -130,7 +124,6 @@ Plan PlanCasual(const Ruleset& rules, const SetView& set, u32 seed)
   if (rules.ic_banned_stage >= 0 && (is(0, rules.ice_climbers) || is(1, rules.ice_climbers)))
     plan.available &= static_cast<StageMask>(~Bit(rules.ic_banned_stage));
   plan.agreeable = plan.available;
-  // Both players at once: one step, one timer.
   plan.steps.push_back({StepKind::Prefer, BOTH, 1, false, rules.casual_seconds});
   return plan;
 }
@@ -157,7 +150,6 @@ int CasualChoice(const Plan& plan)
 
 int CasualResult(const Plan& plan, std::array<s8, 2> prefs)
 {
-  // Random (PREF_RANDOM) and none (any other negative) both draw the port's default.
   for (int port = 0; port < 2; ++port)
   {
     if (prefs[port] < 0)
@@ -187,7 +179,6 @@ StageMask DefaultStrikes(const Plan& plan, int step, StageMask struck, int done)
   if (s.kind == StepKind::Pick || s.kind == StepKind::Prefer || s.optional)
     return 0;
   const StageMask allowed = Allowed(plan, step, struck);
-  // Never strike the last stage standing.
   const int owed = std::min(s.count - done, CountBits(allowed) - 1);
   return owed > 0 ? FirstBits(allowed, owed) : 0;
 }
@@ -222,7 +213,7 @@ void Enter(const Ruleset& rules, const Plan& plan, Progress* progress, size_t st
   progress->frames =
       step < plan.steps.size() ? static_cast<u16>(StepFrames(rules, plan.steps[step])) : u16(0);
 }
-}  // namespace
+}
 
 Progress Begin(const Ruleset& rules, const Plan& plan)
 {
@@ -257,7 +248,6 @@ bool Strike(const Ruleset& rules, const Plan& plan, Progress* progress, int stag
     return false;
   progress->struck = static_cast<StageMask>(progress->struck | Bit(stage));
   ++progress->done;
-  // A proposal on a struck stage is dropped.
   for (s8& pref : progress->prefs)
   {
     if (pref == stage)
@@ -305,7 +295,6 @@ bool Propose(const Plan& plan, Progress* progress, int port, int stage)
     return false;
   if (stage == PREF_RANDOM)
   {
-    // Casual only, and only while some stage is left to draw from.
     if (!plan.casual || Proposable(plan, *progress) == 0)
       return false;
   }
@@ -318,7 +307,7 @@ bool Propose(const Plan& plan, Progress* progress, int port, int stage)
   if (plan.casual && Named(prefs[0]) && Named(prefs[1]))
     progress->picked = static_cast<s8>(CasualResult(plan, prefs));
   else if (!plan.casual && prefs[0] >= 0 && prefs[0] == prefs[1])
-    progress->picked = prefs[0];  // matching proposals skip the remaining steps
+    progress->picked = prefs[0];
   return true;
 }
 
@@ -357,8 +346,6 @@ void Tick(const Ruleset& rules, const Plan& plan, Progress* progress)
   }
   if (step->kind == StepKind::Prefer)
   {
-    // Whoever named nothing gets a random legal stage, then the coin decides between the two. A
-    // Random stays Random (CasualResult draws the same stage for it).
     for (int port = 0; port < 2; ++port)
     {
       if (!Named(progress->prefs[port]))
@@ -381,7 +368,6 @@ void Tick(const Ruleset& rules, const Plan& plan, Progress* progress)
     if ((defaults & Bit(i)) && Current(plan, *progress) == step)
       Strike(rules, plan, progress, i);
   }
-  // Nothing left to strike: the step ends anyway.
   if (Current(plan, *progress) == step)
   {
     Enter(rules, plan, progress, progress->step + 1);
@@ -403,4 +389,4 @@ int SecondsShown(const Ruleset& rules, const Step& step, u16 frames)
     return 0;
   return (frames - grace + 59) / 60;
 }
-}  // namespace Orca::UX::Ranked
+}

@@ -26,7 +26,6 @@ std::string PadHex(const Orca::Net::Pad& pad)
   return hex;
 }
 
-// Parses the whole field as hex; false on any error (the build has exceptions off).
 template <typename T>
 bool ParseHex(std::string_view text, T* value)
 {
@@ -45,7 +44,7 @@ bool ParsePad(std::string_view hex, Orca::Net::Pad* pad)
   }
   return true;
 }
-}  // namespace
+}
 
 std::string FormatRecordedFrame(int frame, const Orca::Net::Pads& pads, u64 checksum)
 {
@@ -128,7 +127,6 @@ void VirtualRemote::TickWhileWaiting()
     ++m_ticks;
     return;
   }
-  // The remote runs at frame rate, but no further ahead than its rollback window allows.
   constexpr std::chrono::microseconds FRAME{16'683};
   const auto now = std::chrono::steady_clock::now();
   if (now - m_last_tick < FRAME || m_lead >= m_max_lead)
@@ -162,7 +160,6 @@ std::vector<Orca::Net::Packet> VirtualRemote::Receive()
   std::vector<Orca::Net::Packet> packets;
   if (m_spike_period.count() > 0)
   {
-    // The first spike starts one period in, and each lasts `length` of every period.
     const auto since = std::chrono::steady_clock::now() - m_spike_start;
     const bool held = since >= m_spike_period && since % m_spike_period < m_spike_length;
     if (held && !m_spiking)
@@ -173,7 +170,7 @@ std::vector<Orca::Net::Packet> VirtualRemote::Receive()
   }
   for (Seat& seat : m_seats)
   {
-    const int position = m_ticks - Lag(seat.seat);  // the frame this remote player is running
+    const int position = m_ticks - Lag(seat.seat);
     int newest = std::min(position + m_input_delay, static_cast<int>(m_recording.size()) - 1);
     if (m_silent_from >= 0)
       newest = std::min(newest, m_silent_from - 1);
@@ -203,4 +200,4 @@ std::vector<Orca::Net::Packet> VirtualRemote::Receive()
   }
   return packets;
 }
-}  // namespace Rollback::Loopback
+}

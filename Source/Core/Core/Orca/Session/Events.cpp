@@ -25,7 +25,7 @@ std::atomic<int> s_ux_compat{0};
 std::atomic<u64> s_resyncs{0};
 std::vector<u8> s_own_controls;
 std::vector<u8> s_own_queue;
-}  // namespace
+}
 
 void SetOwnControls(std::vector<u8> controls)
 {
@@ -116,7 +116,7 @@ void NotifyPlugIn(int frame, const std::vector<PortInfo>& ports)
   if (callback)
     callback(frame, ports);
 }
-}  // namespace Orca::Events
+}
 
 namespace Orca::Events
 {
@@ -208,4 +208,4 @@ int GameHeldFrames(double game_held_ms, double frame_ms, double& carry)
   carry = frames - whole;
   return whole;
 }
-}  // namespace Orca::Events
+}

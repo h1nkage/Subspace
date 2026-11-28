@@ -6,13 +6,8 @@
 #include "Core/Orca/Session/Session.h"
 #include "InputCommon/GCPadStatus.h"
 
-// Orca's 8-byte wire form of a GameCube pad; all zeros means connected, nothing pressed, sticks
-// centred. Both players decode every port, their own included, from these bytes, so whatever the
-// encoding drops (analog A/B, origin bits) is dropped on both machines alike.
 namespace Orca::Net
 {
-// Button and trigger bits a game can read. PAD_USE_ORIGIN and PAD_GET_ORIGIN are local calibration
-// state and never travel.
 constexpr u16 PAD_WIRE_BUTTONS = 0x1F7F;
 static_assert((PAD_WIRE_BUTTONS >> 8 & PAD_WIRE_UNPLUGGED) == 0,
               "the unplugged mark must not be a button bit");
@@ -35,7 +30,6 @@ inline GCPadStatus DecodePad(const Pad& pad)
   GCPadStatus status;
   if (IsUnplugged(pad))
   {
-    // A disconnected pad answers nothing, so the game sees an empty port.
     status.isConnected = false;
     return status;
   }
@@ -51,4 +45,4 @@ inline GCPadStatus DecodePad(const Pad& pad)
   status.isConnected = true;
   return status;
 }
-}  // namespace Orca::Net
+}

@@ -35,7 +35,7 @@ bool Refused(const std::string& text)
   const bool refused = !Orca::ParseLaunchIni(text, &error).has_value();
   return refused && !error.empty();
 }
-}  // namespace
+}
 
 TEST(OrcaLaunch, ParsesTheTwoKeys)
 {
@@ -73,7 +73,6 @@ TEST(OrcaLaunch, PathsStayInsideTheFolder)
   }
 }
 
-// A build folder whose name the Windows ANSI code page can't spell (paths are UTF-8 throughout).
 TEST(OrcaLaunch, ReadsAFolderWithANonAsciiName)
 {
   const std::string parent = File::CreateTempDir();
@@ -98,12 +97,10 @@ TEST(OrcaLaunch, ReadsTheFileNextToTheApp)
 {
   const std::string dir = File::CreateTempDir();
   std::string error;
-  // No file: a plain Orca.app, not an error.
   EXPECT_FALSE(Orca::ReadLaunchIni(dir, &error));
   EXPECT_TRUE(error.empty());
 
   ASSERT_TRUE(File::WriteStringToFile(dir + "/orca-launch.ini", GOOD));
-  // The loader isn't there yet.
   EXPECT_FALSE(Orca::ReadLaunchIni(dir, &error));
   EXPECT_FALSE(error.empty());
 
@@ -112,8 +109,6 @@ TEST(OrcaLaunch, ReadsTheFileNextToTheApp)
   const auto spec = Orca::ReadLaunchIni(dir, &error);
   ASSERT_TRUE(spec) << error;
   EXPECT_EQ(spec->profile, "PPLUS32");
-  // The loader's full path (separators and drive letters differ by platform): absolute, and the
-  // file written above.
   const std::filesystem::path executable = StringToPath(spec->executable);
   EXPECT_TRUE(executable.is_absolute()) << spec->executable;
   EXPECT_EQ(executable.filename().string(), "Project+ Netplay Launcher.dol");
@@ -123,7 +118,6 @@ TEST(OrcaLaunch, ReadsTheFileNextToTheApp)
       << spec->executable << " " << ec.message();
 
 #ifndef _WIN32
-  // A symlink that leads out of the folder is refused like a ".." path.
   const std::string outside = File::CreateTempDir();
   ASSERT_TRUE(File::WriteStringToFile(outside + "/evil.dol", "x"));
   File::Delete(dir + "/pplus/Project+ Netplay Launcher.dol");
@@ -138,8 +132,6 @@ TEST(OrcaLaunch, ReadsTheFileNextToTheApp)
   File::DeleteDirRecursively(dir);
 }
 
-// A launcher's disc that won't open says why, so a crash report tells a full disk or a OneDrive
-// copy Windows can't fetch from a file that isn't a disc image.
 TEST(OrcaLaunch, SaysWhyTheDiscDidNotOpen)
 {
   EXPECT_EQ(Orca::DiscOpenProblem(""), "no disc is set");
@@ -147,7 +139,6 @@ TEST(OrcaLaunch, SaysWhyTheDiscDidNotOpen)
   const std::string gone = Orca::DiscOpenProblem(dir + "/gone.iso");
   EXPECT_TRUE(gone.starts_with("its disc won't open: ")) << gone;
 #ifndef _WIN32
-  // A folder opens here and then won't read (Windows refuses the open instead).
   const std::string folder = Orca::DiscOpenProblem(dir);
   EXPECT_TRUE(folder.starts_with("its disc won't read: ")) << folder;
 #endif
@@ -158,7 +149,6 @@ TEST(OrcaLaunch, SaysWhyTheDiscDidNotOpen)
   ASSERT_TRUE(File::WriteStringToFile(text, std::string(64, 'x')));
   EXPECT_EQ(Orca::DiscOpenProblem(text),
             "its disc file (.txt, 64 bytes) isn't a disc image Orca reads");
-  // No extension of its own: nothing of the name goes in.
   const std::string odd = dir + "/Super Smash Bros. Brawl (USA)";
   ASSERT_TRUE(File::WriteStringToFile(odd, std::string(64, 'x')));
   EXPECT_EQ(Orca::DiscOpenProblem(odd),
@@ -166,8 +156,6 @@ TEST(OrcaLaunch, SaysWhyTheDiscDidNotOpen)
   File::DeleteDirRecursively(dir);
 }
 
-// The app passes a launcher's disc as -C Dolphin.Core.DefaultISO=<path>: a path holding '=' arrives
-// whole instead of cut at its first '='.
 TEST(OrcaLaunch, DiscPathWithEqualsArrivesWhole)
 {
   Config::Init();
@@ -180,8 +168,6 @@ TEST(OrcaLaunch, DiscPathWithEqualsArrivesWhole)
   Config::Shutdown();
 }
 
-// Profile.h jit_clear_frame: the JIT is cleared once per boot, at the end of that frame (the first
-// boundary ends frame 0). A profile without one never clears it.
 TEST(OrcaLaunch, JitClearOnceABoot)
 {
   Orca::Profile profile;
@@ -189,9 +175,9 @@ TEST(OrcaLaunch, JitClearOnceABoot)
   for (int boot = 0; boot < 2; ++boot)
   {
     Orca::SetActiveProfile(profile);
-    EXPECT_FALSE(Orca::JitClearDue());  // frame 0
-    EXPECT_FALSE(Orca::JitClearDue());  // frame 1
-    EXPECT_TRUE(Orca::JitClearDue());   // frame 2
+    EXPECT_FALSE(Orca::JitClearDue());
+    EXPECT_FALSE(Orca::JitClearDue());
+    EXPECT_TRUE(Orca::JitClearDue());
     for (int frame = 3; frame < 1000; ++frame)
       EXPECT_FALSE(Orca::JitClearDue()) << frame;
   }
@@ -203,8 +189,6 @@ TEST(OrcaLaunch, JitClearOnceABoot)
   EXPECT_FALSE(Orca::JitClearDue());
 }
 
-// Profile.h kept_code: an instruction fetch sees the game's original word only while memory holds
-// the loader's word at that physical address (either MEM1 mirror), and only with such a profile.
 TEST(OrcaLaunch, KeptGameCode)
 {
   Orca::Profile profile;
@@ -212,15 +196,12 @@ TEST(OrcaLaunch, KeptGameCode)
   Orca::SetActiveProfile(profile);
   EXPECT_EQ(Orca::KeptInstruction(0x00023B88, 0x60000000), 0x4182FF7Cu);
   EXPECT_EQ(Orca::KeptInstruction(0x00023B88, 0x4182FF7C), 0x4182FF7Cu);
-  EXPECT_EQ(Orca::KeptInstruction(0x00023B88, 0x38600000), 0x38600000u);  // something else
+  EXPECT_EQ(Orca::KeptInstruction(0x00023B88, 0x38600000), 0x38600000u);
   EXPECT_EQ(Orca::KeptInstruction(0x00023B8C, 0x60000000), 0x60000000u);
   Orca::SetActiveProfile(std::nullopt);
   EXPECT_EQ(Orca::KeptInstruction(0x00023B88, 0x60000000), 0x60000000u);
 }
 
-// PPLUS32.ini keeps Brawl's own words where Project+'s codes rewrite its code in frame 1 (ORCA.md
-// "Code the JIT doesn't see"), except its v-sync move, which every machine runs after the one JIT
-// clear once they land.
 TEST(OrcaLaunch, ProjectPlusKeepsBrawlsCode)
 {
   const std::string sys =

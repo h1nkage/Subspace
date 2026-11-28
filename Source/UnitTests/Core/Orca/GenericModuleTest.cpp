@@ -31,7 +31,7 @@ struct BootDone
     SetActiveProfile(std::nullopt);
   }
 };
-}  // namespace
+}
 
 TEST(OrcaGenericModule, ContractHasNoGameRulesScenesOrResults)
 {
@@ -284,7 +284,6 @@ TEST(OrcaGenericModule, NoBrawlWarmupOrSceneReadsEvenOnBrawlsDisc)
   SetModule(&module);
   Core::DeclareAsCPUThread();
   const Core::CPUThreadGuard guard(Core::System::GetInstance());
-  // No guest memory is initialized. All scene entry points must return before any read.
   for (const char* disc : {"GALE01", "RSBE01"})
   {
     Profile profile;

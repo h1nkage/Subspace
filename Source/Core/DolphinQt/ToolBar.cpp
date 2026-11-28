@@ -126,14 +126,15 @@ void ToolBar::MakeActions()
 
   addSeparator();
 
-  m_config_action = addAction(tr("Config"), this, &ToolBar::SettingsPressed);
+  m_config_action = addAction(tr("Settings"), this, &ToolBar::SettingsPressed);
   m_graphics_action = addAction(tr("Graphics"), this, &ToolBar::GraphicsPressed);
   m_controllers_action = addAction(tr("Controllers"), this, &ToolBar::ControllersPressed);
+  m_netplay_action = addAction(tr("NetPlay"), this, &ToolBar::NetPlayPressed);
 
   // Ensure every button has about the same width
   std::vector<QWidget*> items;
   for (const auto& action :
-       {m_open_action, m_pause_play_action, m_stop_action, m_stop_action, m_fullscreen_action,
+       {m_open_action, m_netplay_action, m_pause_play_action, m_stop_action, m_stop_action, m_fullscreen_action,
         m_screenshot_action, m_config_action, m_graphics_action, m_controllers_action,
         m_step_action, m_step_over_action, m_step_out_action, m_skip_action, m_show_pc_action,
         m_set_pc_action})
@@ -179,6 +180,7 @@ void ToolBar::UpdateIcons()
 
   m_open_action->setIcon(Resources::GetThemeIcon("open"));
   m_refresh_action->setIcon(Resources::GetThemeIcon("refresh"));
+  m_netplay_action->setIcon(Resources::GetThemeIcon("netplay"));
 
   const Core::State state = Core::GetState(Core::System::GetInstance());
   const bool playing = state != Core::State::Uninitialized && state != Core::State::Paused;

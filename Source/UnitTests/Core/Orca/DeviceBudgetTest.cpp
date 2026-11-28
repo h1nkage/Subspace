@@ -7,8 +7,6 @@
 
 #include "Core/IOS/IOS.h"
 
-// The session device budget (IOS::HLE::SessionAllowsDevice): a guest in an Orca session opens only
-// what Brawl and Project+ open, whichever IOS it reloads into.
 TEST(OrcaDeviceBudget, WhatTheGamesOpenIsAllowed)
 {
   for (const std::string_view path :
@@ -22,8 +20,6 @@ TEST(OrcaDeviceBudget, WhatTheGamesOpenIsAllowed)
 
 TEST(OrcaDeviceBudget, EverythingElseIsAbsent)
 {
-  // WFS (host files under <user>/WFS after a reload into IOS59), USB, the keyboard, the network
-  // stack, Wi-Fi, Dolphin's own device, cIOS names, and near misses.
   for (const std::string_view path :
        {"/dev/usb/wfssrv", "/dev/wfsi", "/dev/usb/hid", "/dev/usb/ven", "/dev/usb/kbd",
         "/dev/usb/oh0", "/dev/usb/oh0/57e/308", "/dev/net/ip/top", "/dev/net/ssl",
@@ -36,7 +32,6 @@ TEST(OrcaDeviceBudget, EverythingElseIsAbsent)
 
 TEST(OrcaDeviceBudget, NandPathsAreNotDevices)
 {
-  // Files go through /dev/fs, which keeps them in the session NAND.
   EXPECT_TRUE(IOS::HLE::SessionAllowsDevice("/title/00010000/52534245/data/advsv0.bin"));
   EXPECT_TRUE(IOS::HLE::SessionAllowsDevice("/shared2/sys/SYSCONF"));
   EXPECT_TRUE(IOS::HLE::SessionAllowsDevice("/tmp/0765"));
